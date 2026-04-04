@@ -4619,6 +4619,7 @@ finish</field>
 							<object type="Goal" id="243">
 							    <base type="Entity">
 								<field name="name">Buscar Pedido Entregados Hace Tiiempo</field>
+								<field name="description">Evento temporal: han pasado X d�as desde la fecha estimada de entrega del pedido</field>
 								<field name="uniqueId">91</field>
 							    </base>
 
@@ -4717,7 +4718,7 @@ finish</field>
 							<object type="Percept" id="253">
 							    <base type="Interaction">
 								<base type="Entity">
-								    <field name="name">Despues de un periodo (P)</field>
+								    <field name="name">Momento de Recomendar (P)</field>
 								    <field name="description">Evento temporal peri�dico que activa el proceso de generaci�n de recomendaciones</field>
 								    <field name="uniqueId">90</field>
 								    <field name="connectTo"><list>
@@ -7930,8 +7931,8 @@ finish</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="709">
-			    <field name="x">349</field>
-			    <field name="y">696</field>
+			    <field name="x">331</field>
+			    <field name="y">700</field>
 			</object>
 		    </field>
 		</object>
