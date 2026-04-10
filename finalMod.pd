@@ -6,9 +6,9 @@
     <field name="projectData">
 	<object type="ProjectData" id="1">
 	    <field name="name">default</field>
-	    <field name="fileNameLastSavedAs">finalMod.pd</field>
-	    <field name="filePathLastSavedIn">G:\Mi unidad\GEI\III\Q6\ECSDI\Laboratori\GitHub_ECSDI\ECSDI</field>
-	    <field name="openedAs">G:\Mi unidad\GEI\III\Q6\ECSDI\Laboratori\GitHub_ECSDI\ECSDI\finalMod.pd</field>
+	    <field name="fileNameLastSavedAs">finalModDesc.pd</field>
+	    <field name="filePathLastSavedIn">C:\Users\oriol\OneDrive\Escritorio\ecsdi\Practica</field>
+	    <field name="openedAs">C:\Users\oriol\OneDrive\Escritorio\ecsdi\Practica\finalMod.pd</field>
 	    <field name="applicationVersion">3.3b_internal</field>
 	</object>
     </field>
@@ -9566,7 +9566,7 @@ finish</field>
 				<object type="Step" id="898">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=446&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se obtiene la informacion de direccion, prioridad y metodo de pago para la compra.</field>
 					<field name="uniqueId">446</field>
 				    </base>
 
@@ -9602,7 +9602,7 @@ finish</field>
 				<object type="Step" id="901">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=459&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se prepara el pedido con los datos de compra proporcionados.</field>
 					<field name="uniqueId">459</field>
 				    </base>
 
@@ -9614,7 +9614,7 @@ finish</field>
 				<object type="Step" id="902">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=449&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se guarda el historial de compra del usuario para futuras recomendaciones.</field>
 					<field name="uniqueId">449</field>
 				    </base>
 
@@ -9638,7 +9638,7 @@ finish</field>
 				<object type="Step" id="904">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=448&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se cobra al usuario a traves del proveedor de pagos con el metodo de pago especificado.</field>
 					<field name="uniqueId">448</field>
 				    </base>
 
@@ -9650,7 +9650,7 @@ finish</field>
 				<object type="Step" id="905">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=452&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se realiza una transaccion ya sea cobro o pago con el proveedor de pagos.</field>
 					<field name="uniqueId">452</field>
 				    </base>
 
@@ -9675,7 +9675,7 @@ finish</field>
 				<object type="Step" id="907">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=447&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se informa al asistente de los datos de envio, la fecha estimada y el transportista elegido.</field>
 					<field name="uniqueId">447</field>
 				    </base>
 
@@ -9687,7 +9687,7 @@ finish</field>
 				<object type="Step" id="908">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=455&gt;</field>
-					<field name="description"></field>
+					<field name="description">Subescenario interno de gestion de envio para coordinar la logistica y transporte.</field>
 					<field name="uniqueId">455</field>
 				    </base>
 
@@ -9702,7 +9702,7 @@ finish</field>
 						<object type="Step" id="910">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=427&gt;</field>
-							<field name="description"></field>
+							<field name="description">Evento temporal: se revisan los lotes pendientes de envio a ciertas horas del dia.</field>
 							<field name="uniqueId">427</field>
 						    </base>
 
@@ -9714,7 +9714,7 @@ finish</field>
 						<object type="Step" id="911">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=443&gt;</field>
-							<field name="description"></field>
+							<field name="description">Selecciona el centro logistico desde donde saldra el envio.</field>
 							<field name="uniqueId">443</field>
 						    </base>
 
@@ -9726,7 +9726,7 @@ finish</field>
 						<object type="Step" id="912">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=440&gt;</field>
-							<field name="description"></field>
+							<field name="description">Asigna el paquete o producto actual a un lote del centro logistico.</field>
 							<field name="uniqueId">440</field>
 						    </base>
 
@@ -9738,7 +9738,7 @@ finish</field>
 						<object type="Step" id="913">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=444&gt;</field>
-							<field name="description"></field>
+							<field name="description">Organiza los productos en lotes para preparar el envio.</field>
 							<field name="uniqueId">444</field>
 						    </base>
 
@@ -9750,7 +9750,7 @@ finish</field>
 						<object type="Step" id="914">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=441&gt;</field>
-							<field name="description"></field>
+							<field name="description">Busca el transportista adecuado para ese lote de envio.</field>
 							<field name="uniqueId">441</field>
 						    </base>
 
@@ -9762,7 +9762,7 @@ finish</field>
 						<object type="Step" id="915">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=442&gt;</field>
-							<field name="description"></field>
+							<field name="description">Negocia con los transportistas para obtener las mejores condiciones de envio.</field>
 							<field name="uniqueId">442</field>
 						    </base>
 
@@ -9774,7 +9774,7 @@ finish</field>
 						<object type="Step" id="916">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=428&gt;</field>
-							<field name="description"></field>
+							<field name="description">Se envia la propuesta de lote y entrega a los transportistas para recibir ofertas.</field>
 							<field name="uniqueId">428</field>
 						    </base>
 
@@ -9786,7 +9786,7 @@ finish</field>
 						<object type="Step" id="917">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=429&gt;</field>
-							<field name="description"></field>
+							<field name="description">Los transportistas responden con sus ofertas de precio y plazo para el envio propuesto.</field>
 							<field name="uniqueId">429</field>
 						    </base>
 
@@ -9798,7 +9798,7 @@ finish</field>
 						<object type="Step" id="918">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=430&gt;</field>
-							<field name="description"></field>
+							<field name="description">Se negocia el precio definitivo con el transportista seleccionado.</field>
 							<field name="uniqueId">430</field>
 						    </base>
 
@@ -9810,7 +9810,7 @@ finish</field>
 						<object type="Step" id="919">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=431&gt;</field>
-							<field name="description"></field>
+							<field name="description">El transportista elegido confirma formalmente el encargo de envio.</field>
 							<field name="uniqueId">431</field>
 						    </base>
 
@@ -9831,7 +9831,7 @@ finish</field>
 				<object type="Step" id="920">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=454&gt;</field>
-					<field name="description"></field>
+					<field name="description">Subescenario externo de gestion de envio manejado por el vendedor externo.</field>
 					<field name="uniqueId">454</field>
 				    </base>
 
@@ -9846,7 +9846,7 @@ finish</field>
 						<object type="Step" id="922">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=434&gt;</field>
-							<field name="description"></field>
+							<field name="description">Se comunica al vendedor externo los productos y detalles que debe enviar.</field>
 							<field name="uniqueId">434</field>
 						    </base>
 
@@ -9858,7 +9858,7 @@ finish</field>
 						<object type="Step" id="923">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=436&gt;</field>
-							<field name="description"></field>
+							<field name="description">Ese producto es enviado por el propio vendedor externo.</field>
 							<field name="uniqueId">436</field>
 						    </base>
 
@@ -9870,7 +9870,7 @@ finish</field>
 						<object type="Step" id="924">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=435&gt;</field>
-							<field name="description"></field>
+							<field name="description">El vendedor externo confirma que se encargara del envio del producto.</field>
 							<field name="uniqueId">435</field>
 						    </base>
 
@@ -9882,7 +9882,7 @@ finish</field>
 						<object type="Step" id="925">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=437&gt;</field>
-							<field name="description"></field>
+							<field name="description">Se paga al vendedor externo el importe correspondiente por su producto.</field>
 							<field name="uniqueId">437</field>
 						    </base>
 
@@ -9894,7 +9894,7 @@ finish</field>
 						<object type="Step" id="926">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=456&gt;</field>
-							<field name="description"></field>
+							<field name="description">Se realiza una transaccion con el proveedor de pagos para completar el proceso.</field>
 							<field name="uniqueId">456</field>
 						    </base>
 
@@ -9906,7 +9906,7 @@ finish</field>
 						<object type="Step" id="927">
 						    <base type="Entity">
 							<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=457&gt;</field>
-							<field name="description"></field>
+							<field name="description">El proveedor de pagos confirma que la operacion economica se ha completado.</field>
 							<field name="uniqueId">457</field>
 						    </base>
 
@@ -9927,7 +9927,7 @@ finish</field>
 				<object type="Step" id="928">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=453&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se confirma el envio por parte del transporte o vendedor externo.</field>
 					<field name="uniqueId">453</field>
 				    </base>
 
@@ -9939,7 +9939,7 @@ finish</field>
 				<object type="Step" id="929">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=450&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se guarda el historial de compras del usuario para posteriores recomendaciones.</field>
 					<field name="uniqueId">450</field>
 				    </base>
 
@@ -10310,7 +10310,7 @@ finish</field>
 				<object type="Step" id="967">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=45&gt;</field>
-					<field name="description"></field>
+					<field name="description">El asistente solicita la devolución de un producto indicando el motivo.</field>
 					<field name="uniqueId">45</field>
 				    </base>
 
@@ -10322,7 +10322,7 @@ finish</field>
 				<object type="Step" id="968">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=417&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se valida que la solicitud de devolución sea correcta antes de iniciarla.</field>
 					<field name="uniqueId">417</field>
 				    </base>
 
@@ -10334,6 +10334,7 @@ finish</field>
 				<object type="Step" id="969">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=47&gt;</field>
+					<field name="description">Se notifica que la devolucion ha sido aceptada y esta en proceso</field>
 					<field name="uniqueId">47</field>
 				    </base>
 
@@ -10345,7 +10346,7 @@ finish</field>
 				<object type="Step" id="970">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=419&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se gestiona cómo recoger el producto con el sistema de mensajería.</field>
 					<field name="uniqueId">419</field>
 				    </base>
 
@@ -10369,6 +10370,8 @@ finish</field>
 				<object type="Step" id="972">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=49&gt;</field>
+					<field name="description">Se confirma que la empresa de mensajeria ha recogido el paquete en la fecha prevista
+</field>
 					<field name="uniqueId">49</field>
 				    </base>
 
@@ -10380,7 +10383,7 @@ finish</field>
 				<object type="Step" id="973">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=418&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se valida que la devolución se haya completado.</field>
 					<field name="uniqueId">418</field>
 				    </base>
 
@@ -10392,7 +10395,7 @@ finish</field>
 				<object type="Step" id="974">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=422&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se registra la devolución en la base de datos.</field>
 					<field name="uniqueId">422</field>
 				    </base>
 
@@ -10404,7 +10407,7 @@ finish</field>
 				<object type="Step" id="975">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=420&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se devuelve el importe del producto al usuario.</field>
 					<field name="uniqueId">420</field>
 				    </base>
 
@@ -10416,7 +10419,7 @@ finish</field>
 				<object type="Step" id="976">
 				    <base type="Entity">
 					<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=51&gt;</field>
-					<field name="description"></field>
+					<field name="description">Se consulta a tiendas externas para obtener disponibilidad y opciones de productos externos.</field>
 					<field name="uniqueId">51</field>
 				    </base>
 
@@ -12194,7 +12197,7 @@ finish</field>
 		<object type="Step" id="1155">
 		    <base type="Entity">
 			<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=82&gt;</field>
-			<field name="description"></field>
+			<field name="description">Se gestiona la respuesta de la tienda externa y se prepara el listado de productos disponibles.</field>
 			<field name="uniqueId">82</field>
 		    </base>
 
@@ -12223,7 +12226,7 @@ finish</field>
 		<object type="Step" id="1158">
 		    <base type="Entity">
 			<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=115&gt;</field>
-			<field name="description"></field>
+			<field name="description">Se obtiene la confirmación de si el vendedor externo dispone de transporte propio para el envío.</field>
 			<field name="uniqueId">115</field>
 		    </base>
 
@@ -12391,6 +12394,7 @@ finish</field>
 		<object type="Step" id="1176">
 		    <base type="Entity">
 			<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=192&gt;</field>
+			<field name="description">Se prepara la información del envío para generar las ofertas de transporte y organizar los lotes.</field>
 			<field name="uniqueId">192</field>
 		    </base>
 
@@ -12527,7 +12531,7 @@ finish</field>
 		<object type="Step" id="1186">
 		    <base type="Entity">
 			<field name="name">&lt;Prometheus unique entity name au.edu.rmit.cs.prometheus.datamodel.jacob.Step ID=410&gt;</field>
-			<field name="description"></field>
+			<field name="description">Se inicia la petición de opinión al usuario después de que haya pasado el tiempo estimado de entrega.</field>
 			<field name="uniqueId">410</field>
 		    </base>
 
