@@ -1,0 +1,133 @@
+@prefix : <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico> rdf:type owl:Ontology ;
+                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones." .
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Accion
+:Accion rdf:type owl:Class ;
+        rdfs:comment "Representa una acción o petición intercambiada entre agentes" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Actor
+:Actor rdf:type owl:Class ;
+       rdfs:comment "Representa los actores con los que interactua la tienda" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#AsistenteVirtual
+:AsistenteVirtual rdf:type owl:Class ;
+                  rdfs:subClassOf :Actor ;
+                  rdfs:comment "Representa el agente asistente del usuario, encargado de iniciar búsquedas, compras, devoluciones y recibir información de la tienda" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ConfirmacionEnvio
+:ConfirmacionEnvio rdf:type owl:Class ;
+                   rdfs:subClassOf :Respuesta ;
+                   rdfs:comment "Respuesta que confirma que un envío ha sido planificado o aceptado, indicando los datos necesarios para informar al usuario o continuar el proceso logístico" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ConfirmacionTransaccion
+:ConfirmacionTransaccion rdf:type owl:Class ;
+                         rdfs:subClassOf :Respuesta ;
+                         rdfs:comment "Representa la confirmación de que una operación económica se ha completado correctamente" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Envio
+:Envio rdf:type owl:Class ;
+       rdfs:comment "Representa un proceso de entrega o recogida asociado a un pedido, lote o devolución" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#EnvioDevolucion
+:EnvioDevolucion rdf:type owl:Class ;
+                 rdfs:subClassOf :Envio ;
+                 rdfs:comment "Representa un envío para recoger un producto devuelto por el cliente" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#EnvioExterno
+:EnvioExterno rdf:type owl:Class ;
+              rdfs:subClassOf :Envio ;
+              rdfs:comment "Representa un envío gestionado directamente por un vendedor externo" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#EnvioInterno
+:EnvioInterno rdf:type owl:Class ;
+              rdfs:subClassOf :Envio ;
+              rdfs:comment "Representa un envío gestionado por la tienda desde un centro logístico propio" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#OfertaTransporte
+:OfertaTransporte rdf:type owl:Class ;
+                  rdfs:comment "Representa una propuesta económica y temporal realizada por un transportista para encargarse de un envío" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#OperacionPago
+:OperacionPago rdf:type owl:Class ;
+               rdfs:comment "Representa una operación económica solicitada al proveedor de pagos" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Pedido
+:Pedido rdf:type owl:Class ;
+        rdfs:comment "Representa una orden de compra hecha por el asistente virtual." .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Producto
+:Producto rdf:type owl:Class ;
+          rdfs:comment "Definición de Producto" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ProductoExterno
+:ProductoExterno rdf:type owl:Class ;
+                 rdfs:subClassOf :Producto ;
+                 rdfs:comment "Representa un producto anunciado por un vendedor externo. Puede ser enviado por la tienda o por el propio vendedor externo" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ProductoInterno
+:ProductoInterno rdf:type owl:Class ;
+                 rdfs:subClassOf :Producto ;
+                 rdfs:comment "Representa un producto gestionado directamente por la tienda y disponible en uno o varios centros logísticos propios" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ProveedorPagos
+:ProveedorPagos rdf:type owl:Class ;
+                rdfs:subClassOf :Actor ;
+                rdfs:comment "Representa la entidad externa encargada de ejecutar operaciones económicas como cobros, transferencias y reembolsos" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#ResolucionDevolucion
+:ResolucionDevolucion rdf:type owl:Class ;
+                      rdfs:subClassOf :Respuesta ;
+                      rdfs:comment "Representa la decisión tomada sobre una solicitud de devolución, indicando si ha sido aceptada o rechazada" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Respuesta
+:Respuesta rdf:type owl:Class ;
+           rdfs:comment "Representa las respuestas generades por los agentes después de procesar una acción o petición" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#RestriccionBusqueda
+:RestriccionBusqueda rdf:type owl:Class ;
+                     rdfs:comment "Representa un criterio de filtrado aplicado sobre el catálogo de productos" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#Transportista
+:Transportista rdf:type owl:Class ;
+               rdfs:subClassOf :Actor ;
+               rdfs:comment "Representa una empresa de transporte que recibe propuestas de envío y responde con ofertas" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#VendedorExterno
+:VendedorExterno rdf:type owl:Class ;
+                 rdfs:subClassOf :Actor ;
+                 rdfs:comment "Representa una empresa externa que anuncia productos en la tienda y puede gestionar el envío de sus propios productos" .
+
+
+###  Generated by the OWL API (version 4.5.29.2024-05-13T12:11:03Z) https://github.com/owlcs/owlapi
