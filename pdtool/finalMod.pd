@@ -12890,8 +12890,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="1214">
-			    <field name="x">516</field>
-			    <field name="y">171</field>
+			    <field name="x">504</field>
+			    <field name="y">123</field>
 			</object>
 		    </field>
 		</object>
@@ -12926,8 +12926,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="1220">
-			    <field name="x">308</field>
-			    <field name="y">157</field>
+			    <field name="x">315</field>
+			    <field name="y">119</field>
 			</object>
 		    </field>
 		</object>
@@ -13221,8 +13221,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="1270">
-			    <field name="x">292</field>
-			    <field name="y">259</field>
+			    <field name="x">280</field>
+			    <field name="y">294</field>
 			</object>
 		    </field>
 		</object>
