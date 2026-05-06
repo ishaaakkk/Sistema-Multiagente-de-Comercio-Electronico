@@ -8580,8 +8580,8 @@ finish</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="524">
-			    <field name="x">2</field>
-			    <field name="y">379</field>
+			    <field name="x">16</field>
+			    <field name="y">348</field>
 			</object>
 		    </field>
 		</object>
@@ -8604,8 +8604,8 @@ finish</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="528">
-			    <field name="x">24</field>
-			    <field name="y">333</field>
+			    <field name="x">43</field>
+			    <field name="y">261</field>
 			</object>
 		    </field>
 		</object>
