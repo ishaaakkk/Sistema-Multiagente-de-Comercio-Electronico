@@ -151,6 +151,33 @@ def build_shipping_confirmation(
     return build_message(graph, confirmation, ACL.inform, sender, receiver)
 
 
+def build_payment_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido: URIRef,
+    importe: Decimal,
+) -> tuple[Graph, URIRef]:
+    """Construye el mensaje ACL request con SolicitarOperacionPago + CobroCliente.
+
+    Devuelve (graph, operacion) para que la tienda pueda enlazar la operación
+    al pedido con pedidoTieneOperacionPago una vez confirmada.
+    """
+    graph = Graph()
+    bind_namespaces(graph)
+
+    operacion = DATA[f"pago/cobro/{uuid4()}"]
+    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+
+    action = DATA[f"action/pago/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.SolicitarOperacionPago))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+
+    message = build_message(graph, action, ACL.request, sender, receiver)
+    return message, operacion
+
+
 def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef, text: str) -> None:
     restriction = DATA[f"restriction/text/{uuid4()}"]
     graph.add((restriction, RDF.type, restriction_type))

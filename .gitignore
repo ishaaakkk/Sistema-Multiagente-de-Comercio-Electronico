@@ -1,1 +1,6 @@
 [Dd]esktop.ini
+.env
+.venv
+/__pycache__/
+*.pyc
+*.log
