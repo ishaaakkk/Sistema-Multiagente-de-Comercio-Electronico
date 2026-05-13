@@ -107,7 +107,28 @@ def _handle_order(
 
     order_graph = _build_enriched_order_graph(catalog, graph, action, pedido, center, product_quantities)
 
-    # --- PAGO: debe ocurrir antes de planificar el envío ---
+    
+    # Planificar Envio
+
+    logistics_message = build_message(order_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona)
+    shipping_response = post_graph(logistics_url, logistics_message)
+
+    # Primero se envia, luego se cobra al cliente
+    confirmacion_envio = next(
+        shipping_response.subjects(ECSDI.respuestaDeAccion, action),
+        None
+    )
+    
+
+    if confirmacion_envio is None:
+        return build_failure(
+            agent_uri,
+            receiver,
+            action,
+            "No se pudo planificar el envio"
+        )
+    
+    # --- Cobro de los productos  ---
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
     payment_message, operacion = build_payment_request(agent_uri, AGENTS.ProveedorPagos, pedido, total)
     payment_response = post_graph(payments_url, payment_message)
@@ -120,7 +141,7 @@ def _handle_order(
     if estado_op != "confirmada":
         return build_failure(agent_uri, receiver, action, f"Pago rechazado (estado: {estado_op})")
 
-    # Incorporar SOLO la información relevante del pago
+    # Incorporar SOLO la información relevante del Cobro
     for triple in payment_response.triples((operacion, None, None)):
         order_graph.add(triple)
 
@@ -134,10 +155,6 @@ def _handle_order(
             order_graph.add(triple)
 
     order_graph.add((pedido, ECSDI.pedidoTieneOperacionPago, operacion))
-    # ------------------------------------------------------
-
-    logistics_message = build_message(order_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona)
-    shipping_response = post_graph(logistics_url, logistics_message)
 
     reserve_stock(catalog, center, product_quantities)
     for triple in shipping_response:
