@@ -36,6 +36,9 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, transport_url="http://127.0.0.1:9003
 
     @app.post("/comm")
     def comm():
+        # Plan: AgruparPedidoEnLote (AgenteLogistico / AgruparEnLotes)
+        # Msg entrante: AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
+        # Recibe RealizarPedido, construye un LoteEnvio y negocia el transporte.
         try:
             graph = graph_from_request()
             message = get_message(graph)
@@ -53,6 +56,8 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, transport_url="http://127.0.0.1:9003
                 return rdf_response(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
 
             lote_graph, lote = _build_lote_graph(graph, pedido, center)
+            # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales (AgenteLogistico / NegociarConTransportistas)
+            # Se solicita presupuesto al transportista y se acepta la oferta recibida.
             request_to_transport = build_transport_request(agent_uri, AGENTS.TransportistaExpress, lote_graph, lote)
             offer_graph = post_graph(transport_url, request_to_transport)
 
@@ -63,6 +68,8 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, transport_url="http://127.0.0.1:9003
             offer_graph.set((offer, ECSDI.estadoOferta, Literal("aceptada")))
             _merge_graphs(offer_graph, lote_graph)
 
+            # Plan: SeleccionOfertaIniciales → InformarDatosEnvioMsg (AgenteLogistico → AgenteComerciante)
+            # Oferta aceptada; se construye ConfirmacionEnvio para notificar al Comerciante.
             response = build_shipping_confirmation(
                 sender=URIRef(agent_uri),
                 receiver=message.sender,

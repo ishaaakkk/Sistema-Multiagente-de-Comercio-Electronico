@@ -32,6 +32,9 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
 
     @app.post("/comm")
     def comm():
+        # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales (AgenteLogistico / NegociarConTransportistas)
+        # Accion: ProponerLoteAEntregar — recibe SolicitarPresupuestoTransporte con un LoteEnvio
+        # y devuelve OfertaTransporte con precio y plazo calculados según peso y prioridad.
         try:
             graph = graph_from_request()
             message = get_message(graph)
