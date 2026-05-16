@@ -9,9 +9,7 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
-
-from utilities.builders import build_payment_request, build_search_response
-
+from utilities.builders import build_cobro_request, build_search_response
 from utilities.catalog import (
     build_catalog_graph,
     choose_single_center,
@@ -42,7 +40,7 @@ from utilities.runtime import (
 DEFAULT_AGENT_URI = AGENTS.TiendaAgent
 
 
-def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002/comm", payments_url="http://127.0.0.1:9004/comm"):
+def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002/comm", financiero_url="http://127.0.0.1:9005/comm"):
     app = Flask(__name__)
     catalog = build_catalog_graph()
 
@@ -68,7 +66,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002
             if (action, RDF.type, ECSDI.BuscarProductos) in graph:
                 return rdf_response(_handle_search(catalog, agent_uri, message.sender, action, graph))
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(catalog, agent_uri, message.sender, action, graph, logistics_url, payments_url))
+                return rdf_response(_handle_order(catalog, agent_uri, message.sender, action, graph, logistics_url, financiero_url))
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por TiendaAgent"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
@@ -77,6 +75,8 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002
 
 
 def _handle_search(catalog: Graph, agent_uri: URIRef, receiver: URIRef, action: URIRef, graph: Graph) -> Graph:
+    # Plan: BuscarEnCatalogo → FiltrarProductos → MostrarProductos (AgenteComerciante / AgenteCatalogo)
+    # Recibe BuscarProductos, filtra con restricciones y devuelve ResultadoBusqueda al solicitante.
     constraints = extract_search_constraints(graph, action)
     products = filter_products(catalog, constraints)
     return build_search_response(agent_uri, receiver, action, products, catalog)
@@ -89,8 +89,10 @@ def _handle_order(
     action: URIRef,
     graph: Graph,
     logistics_url: str,
-    payments_url: str,
+    financiero_url: str,
 ) -> Graph:
+    # Plan: PreguntarDatosCompra → RegistrarPedidoPendiente → EscogerCL (AgenteComerciante / PrepararPedido)
+    # Recibe RealizarPedido, construye el pedido enriquecido y coordina logística y cobro.
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     if pedido is None:
         return build_failure(agent_uri, receiver, action, "Falta accionSobrePedido")
@@ -101,66 +103,32 @@ def _handle_order(
 
     address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
     city = str(next(graph.objects(address, ECSDI.ciudad), "")) if address is not None else ""
+
+    # Plan: EscogerCL — heurística para elegir el centro logístico con stock suficiente más cercano.
     center = choose_single_center(catalog, product_quantities, city)
     if center is None:
         return build_failure(agent_uri, receiver, action, "No hay un unico centro logistico con stock suficiente")
 
+    # Plan: RegistrarPedidoPendiente — construye el grafo del pedido con factura incluida.
     order_graph = _build_enriched_order_graph(catalog, graph, action, pedido, center, product_quantities)
 
-    
-    # Planificar Envio
-
+    # Plan: Notificador → AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
+    # Se manda RealizarPedido al CentroLogistico para que agrupe en lote y negocie transporte.
     logistics_message = build_message(order_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona)
     shipping_response = post_graph(logistics_url, logistics_message)
-
-    # Primero se envia, luego se cobra al cliente
-    confirmacion_envio = next(
-        shipping_response.subjects(ECSDI.respuestaDeAccion, action),
-        None
-    )
-    
-
-    if confirmacion_envio is None:
-        return build_failure(
-            agent_uri,
-            receiver,
-            action,
-            "No se pudo planificar el envio"
-        )
-    
-    # --- Cobro de los productos  ---
-    total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
-    payment_message, operacion = build_payment_request(agent_uri, AGENTS.ProveedorPagos, pedido, total)
-    payment_response = post_graph(payments_url, payment_message)
-
-    confirmacion_pago = next(payment_response.subjects(RDF.type, ECSDI.ConfirmacionTransaccion), None)
-    if confirmacion_pago is None:
-        return build_failure(agent_uri, receiver, action, "El proveedor de pagos no devolvio confirmacion")
-
-    estado_op = str(next(payment_response.objects(operacion, ECSDI.estadoOperacion), ""))
-    if estado_op != "confirmada":
-        return build_failure(agent_uri, receiver, action, f"Pago rechazado (estado: {estado_op})")
-
-    # Incorporar SOLO la información relevante del Cobro
-    for triple in payment_response.triples((operacion, None, None)):
-        order_graph.add(triple)
-
-    confirmacion_pago = next(
-        payment_response.subjects(RDF.type, ECSDI.ConfirmacionTransaccion),
-        None
-    )
-
-    if confirmacion_pago is not None:
-        for triple in payment_response.triples((confirmacion_pago, None, None)):
-            order_graph.add(triple)
-
-    order_graph.add((pedido, ECSDI.pedidoTieneOperacionPago, operacion))
 
     reserve_stock(catalog, center, product_quantities)
     for triple in shipping_response:
         order_graph.add(triple)
 
     order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
+
+    # Plan: RecibirDatosEnvio → RealizarCobro (AgenteComerciante / FinalizarCompra)
+    # El envío ya está planificado; se notifica al AgenteFinanciero para que cobre (fire-and-forget).
+    total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
+    cobro_message = build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total)
+    post_graph(financiero_url, cobro_message)
+
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
 
@@ -231,22 +199,22 @@ def main():
     parser.add_argument("--port", type=int, default=9001)
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
     parser.add_argument("--logistics-url", default=None)
-    parser.add_argument("--payments-url", default=None)
+    parser.add_argument("--financiero-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
     logistics_base = args.logistics_url or search_service(args.dir, "CENTRO_LOGISTICO") or "http://127.0.0.1:9002"
     logistics_url = _comm_url(logistics_base)
-    payments_base = args.payments_url or search_service(args.dir, "PROVEEDOR_PAGOS") or "http://127.0.0.1:9004"
-    payments_url = _comm_url(payments_base)
+    financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO") or "http://127.0.0.1:9005"
+    financiero_url = _comm_url(financiero_base)
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("TIENDA", advertised_host, args.port)
     registered = register_service(args.dir, service_id, "TIENDA", address, f"tienda-{args.port}")
     try:
-        log(f"tienda-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, payments={payments_url}")
-        create_app(logistics_url=logistics_url, payments_url=payments_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(f"tienda-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}")
+        create_app(logistics_url=logistics_url, financiero_url=financiero_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"tienda-{args.port}")
