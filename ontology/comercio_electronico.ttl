@@ -13,32 +13,18 @@
 #    Object Properties
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#accionSobreLote
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobreLote
 :accionSobreLote rdf:type owl:ObjectProperty ;
                  rdfs:domain :Accion ;
                  rdfs:range :LoteEnvio ;
                  rdfs:comment "Relación que indica el lote de envío sobre el que actúa una acción logística" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#accionSobreOferta
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobreOferta
 :accionSobreOferta rdf:type owl:ObjectProperty ;
                    rdfs:domain :Accion ;
                    rdfs:range :OfertaTransporte ;
                    rdfs:comment "Relación que indica la oferta de transporte sobre la que actúa una acción" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#confirmacionEnvio
-:confirmacionEnvio rdf:type owl:ObjectProperty ;
-                   rdfs:domain :ConfirmacionEnvio ;
-                   rdfs:range :Envio ;
-                   rdfs:comment "Relación que vincula una confirmación de envío con el envío confirmado" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#resolucionDeDevolucion
-:resolucionDeDevolucion rdf:type owl:ObjectProperty ;
-                        rdfs:domain :ResolucionDevolucion ;
-                        rdfs:range :Devolucion ;
-                        rdfs:comment "Relación que vincula una resolución con la devolución que resuelve" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobrePedido
@@ -81,6 +67,13 @@
                          rdfs:domain :ConfirmacionTransaccion ;
                          rdfs:range :OperacionPago ;
                          rdfs:comment "Relación que indica la operación de pago confirmada por una respuesta de transacción" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/confirmacionEnvio
+:confirmacionEnvio rdf:type owl:ObjectProperty ;
+                   rdfs:domain :ConfirmacionEnvio ;
+                   rdfs:range :Envio ;
+                   rdfs:comment "Relación que vincula una confirmación de envío con el envío confirmado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/devolucionDePedido
@@ -234,6 +227,13 @@
                             rdfs:domain :Recomendacion ;
                             rdfs:range :AsistenteVirtual ;
                             rdfs:comment "Relación que indica el AsistenteVirtual destinatario de una recomendación" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/resolucionDeDevolucion
+:resolucionDeDevolucion rdf:type owl:ObjectProperty ;
+                        rdfs:domain :ResolucionDevolucion ;
+                        rdfs:range :Devolucion ;
+                        rdfs:comment "Relación que vincula una resolución con la devolución que resuelve" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/respuestaDeAccion
@@ -727,7 +727,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
-        rdfs:comment "Representa una acción o petición intercambiada entre agentes" .
+        rdfs:comment "Representa una solicitud de ejecución de una funcionalidad que un agente proporciona a otro agente. Se usa como contenido de mensajes de tipo request, no para simples comunicaciones de información" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/AceptarOfertaTransporte
@@ -762,12 +762,6 @@
 :CobroCliente rdf:type owl:Class ;
               rdfs:subClassOf :OperacionPago ;
               rdfs:comment "Operación mediante la cual se cobra al AsistenteVirtual el importe de un pedido enviado" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ComunicarVentaExterna
-:ComunicarVentaExterna rdf:type owl:Class ;
-                       rdfs:subClassOf :Accion ;
-                       rdfs:comment "Acción mediante la cual se comunica a un vendedor externo que se ha realizado una venta de uno de sus productos" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ConfirmacionEnvio
@@ -897,22 +891,10 @@
                rdfs:comment "Sugerencia de productos generada a partir del historial de compras, búsquedas y valoraciones" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/RecomendarProductos
-:RecomendarProductos rdf:type owl:Class ;
-                     rdfs:subClassOf :Accion ;
-                     rdfs:comment "Acción mediante la cual el sistema genera y comunica recomendaciones de productos a partir del historial de compras, búsquedas y valoraciones" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ReembolsoCliente
 :ReembolsoCliente rdf:type owl:Class ;
                   rdfs:subClassOf :OperacionPago ;
                   rdfs:comment "Operación mediante la cual se devuelve al AsistenteVirtual el importe de un producto cuya devolución ha sido aceptada" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/RegistrarValoracion
-:RegistrarValoracion rdf:type owl:Class ;
-                     rdfs:subClassOf :Accion ;
-                     rdfs:comment "Acción mediante la cual se procesa y guarda la valoración emitida sobre un producto comprado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ResolucionDevolucion
@@ -1010,11 +992,6 @@
 #################################################################
 #    Individuals
 #################################################################
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#solicitarDevolucioniPhone19
-:solicitarDevolucioniPhone19 rdf:type owl:NamedIndividual ,
-                                      :SolicitarDevolucion .
-
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/aceptarOfertaGSL
 :aceptarOfertaGSL rdf:type owl:NamedIndividual ,
@@ -1243,6 +1220,11 @@
                                   :ResultadoBusqueda ;
                          :respuestaDeAccion :buscarProductosiPhone ;
                          :resultadoContieneProducto :productoiPhone19 .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/solicitarDevolucioniPhone19
+:solicitarDevolucioniPhone19 rdf:type owl:NamedIndividual ,
+                                      :SolicitarDevolucion .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/solicitarPresupuestoGSL
