@@ -162,19 +162,6 @@ def build_cobro_request(sender: URIRef, receiver: URIRef, pedido: URIRef, import
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
-def build_operacion_pago_request(sender: URIRef, receiver: URIRef, pedido: URIRef, importe: Decimal) -> tuple[Graph, URIRef]:
-    """AgenteFinanciero → ProveedorPagos: SolicitarOperacionPago + CobroCliente."""
-    graph = Graph()
-    bind_namespaces(graph)
-    operacion = DATA[f"pago/cobro/{uuid4()}"]
-    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
-    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
-    action = DATA[f"action/pago/{uuid4()}"]
-    graph.add((action, RDF.type, ECSDI.SolicitarOperacionPago))
-    graph.add((action, ECSDI.accionSobrePedido, pedido))
-    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
-    return build_message(graph, action, ACL.request, sender, receiver), operacion
-
 
 
 def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef, text: str) -> None:

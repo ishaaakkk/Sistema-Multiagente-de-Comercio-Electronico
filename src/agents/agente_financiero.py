@@ -1,13 +1,17 @@
 import argparse
+from datetime import datetime
+from decimal import Decimal
 from threading import Thread
+from uuid import uuid4
 
 from flask import Flask
-from rdflib.namespace import RDF
+from rdflib import Graph, Literal, URIRef
+from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
-from utilities.builders import build_operacion_pago_request
-from utilities.http import graph_from_request, post_graph, rdf_response
-from utilities.namespaces import ACL, AGENTS, ECSDI
+from utilities.catalog import decimal_literal
+from utilities.http import graph_from_request, rdf_response
+from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -15,7 +19,6 @@ from utilities.runtime import (
     configure_flask_logging,
     log,
     register_service,
-    search_service,
     unregister_service,
 )
 
@@ -23,7 +26,7 @@ from utilities.runtime import (
 DEFAULT_AGENT_URI = AGENTS.AgenteFinanciero
 
 
-def create_app(agent_uri=DEFAULT_AGENT_URI, payments_url="http://127.0.0.1:9004/comm"):
+def create_app(agent_uri=DEFAULT_AGENT_URI):
     app = Flask(__name__)
 
     @app.get("/")
@@ -45,7 +48,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, payments_url="http://127.0.0.1:9004/
             # Capacidad CobrarAlUsuario — Plan: RealizarCobro
             # Msg entrante: SolicitarCobro (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarCobro) in graph:
-                return _handle_cobro(graph, agent_uri, message.sender, action, payments_url)
+                return _handle_cobro(graph, agent_uri, message.sender, action)
 
             # Capacidad ReembolsoAlUsuario — Plan: ReembolsoAlUsuario (pendiente de implementar)
             # Msg entrante: SolicitarReembolso (AgenteDevolucion → AgenteFinanciero)
@@ -69,14 +72,12 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, payments_url="http://127.0.0.1:9004/
     return app
 
 
-def _handle_cobro(graph, agent_uri, sender, action, payments_url):
+def _handle_cobro(graph, agent_uri, sender, action):
     """Plan: RealizarCobro (AgenteComerciante / FinalizarCompra).
 
-    Recibe SolicitarCobro del Comerciante (TiendaAgent) una vez el pedido
-    ya está en envío (InformarDatosEnvio → RealizarCobro en el diseño).
-    Fire-and-forget: ACK inmediato al Comerciante; el cobro real al
-    ProveedorPagos ocurre en hilo separado (Realizar Transaccion).
-    Se asume que siempre va bien (diseño).
+    Recibe SolicitarCobro del Comerciante una vez el pedido ya esta en envio.
+    Fire-and-forget: ACK inmediato; la transaccion con el proveedor externo
+    se simula en hilo separado. Se asume que siempre va bien (diseno).
     """
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     importe = next(graph.objects(action, ECSDI.importeCobro), None)
@@ -84,10 +85,10 @@ def _handle_cobro(graph, agent_uri, sender, action, payments_url):
     if pedido is None or importe is None:
         return rdf_response(build_failure(agent_uri, sender, action, "Faltan pedido o importe en SolicitarCobro"))
 
-    # Plan: RealizarCobro → SolicitarCobro → ProveedorPagos (asíncrono)
+    # Accion: Realizar Transaccion — se lanza en hilo para no bloquear la respuesta
     Thread(
-        target=_ejecutar_cobro,
-        args=(agent_uri, pedido, importe, payments_url),
+        target=_realizar_transaccion,
+        args=(pedido, Decimal(str(importe))),
         daemon=True,
     ).start()
 
@@ -98,20 +99,24 @@ def _handle_cobro(graph, agent_uri, sender, action, payments_url):
     return rdf_response(ack)
 
 
-def _ejecutar_cobro(agent_uri, pedido, importe, payments_url):
-    """Plan: CobrarAlUsuario — Accion: Realizar Transaccion (AgenteFinanciero).
+def _realizar_transaccion(pedido: URIRef, importe: Decimal) -> None:
+    """Accion: Realizar Transaccion — Percepcion: ConfirmacionTransaccionProveedorPagos.
 
-    Llama al ProveedorPagos con SolicitarOperacionPago + CobroCliente
-    y espera ConfirmacionTransaccionProveedorPagos (percepción del diseño).
+    Simula el cobro con el proveedor de pagos externo. En produccion aqui
+    iria la llamada real a la pasarela de pago. Se asume exito siempre.
     """
-    try:
-        from decimal import Decimal
-        cobro_message, _ = build_operacion_pago_request(agent_uri, AGENTS.ProveedorPagos, pedido, Decimal(str(importe)))
-        response = post_graph(payments_url, cobro_message)
-        confirmacion = next(response.subjects(RDF.type, ECSDI.ConfirmacionTransaccion), None)
-        log("financiero", f"Cobro completado para pedido {pedido}: confirmacion={confirmacion}")
-    except Exception as exc:
-        log("financiero", f"ERROR en cobro asíncrono para pedido {pedido}: {exc}")
+    operacion = DATA[f"pago/cobro/{uuid4()}"]
+    graph = Graph()
+    bind_namespaces(graph)
+    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
+    graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
+    graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
+    graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+
+    ref = next(graph.objects(operacion, ECSDI.referenciaPago))
+    log("financiero", f"Transaccion completada: pedido={pedido} importe={importe} ref={ref}")
 
 
 def main():
@@ -121,20 +126,17 @@ def main():
     parser.add_argument("--open", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=9005)
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
-    parser.add_argument("--payments-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
-    payments_base = args.payments_url or search_service(args.dir, "PROVEEDOR_PAGOS") or "http://127.0.0.1:9004"
-    payments_url = payments_base if payments_base.endswith("/comm") else payments_base.rstrip("/") + "/comm"
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_FINANCIERO", advertised_host, args.port)
     registered = register_service(args.dir, service_id, "AGENTE_FINANCIERO", address, f"financiero-{args.port}")
     try:
-        log(f"financiero-{args.port}", f"listening on {bind_host}:{args.port}, payments={payments_url}")
-        create_app(payments_url=payments_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(f"financiero-{args.port}", f"listening on {bind_host}:{args.port}")
+        create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"financiero-{args.port}")
