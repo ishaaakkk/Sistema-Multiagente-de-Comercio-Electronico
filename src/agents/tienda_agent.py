@@ -1,28 +1,15 @@
 import argparse
 from datetime import datetime
-from uuid import uuid4
-
 from decimal import Decimal
+from uuid import uuid4
 
 from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
-from utilities.builders import build_cobro_request, build_search_response
-from utilities.catalog import (
-    build_catalog_graph,
-    choose_single_center,
-    copy_center,
-    copy_product,
-    decimal_literal,
-    describe_product,
-    extract_search_constraints,
-    filter_products,
-    order_total,
-    product_uri,
-    reserve_stock,
-)
+from utilities.builders import build_cobro_request
+from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
@@ -42,15 +29,10 @@ DEFAULT_AGENT_URI = AGENTS.TiendaAgent
 
 def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002/comm", financiero_url="http://127.0.0.1:9005/comm"):
     app = Flask(__name__)
-    catalog = build_catalog_graph()
 
     @app.get("/")
     def index():
         return "TiendaAgent listo"
-
-    @app.get("/catalog")
-    def catalog_route():
-        return rdf_response(catalog)
 
     @app.post("/comm")
     def comm():
@@ -63,10 +45,13 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
-            if (action, RDF.type, ECSDI.BuscarProductos) in graph:
-                return rdf_response(_handle_search(catalog, agent_uri, message.sender, action, graph))
+
+            # Plan: PreguntarDatosCompra → EscogerCL → Notificador (AgenteComerciante / PrepararPedido)
+            # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
+            # El asistente ya incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(catalog, agent_uri, message.sender, action, graph, logistics_url, financiero_url))
+                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url))
+
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por TiendaAgent"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
@@ -74,16 +59,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002
     return app
 
 
-def _handle_search(catalog: Graph, agent_uri: URIRef, receiver: URIRef, action: URIRef, graph: Graph) -> Graph:
-    # Plan: BuscarEnCatalogo → FiltrarProductos → MostrarProductos (AgenteComerciante / AgenteCatalogo)
-    # Recibe BuscarProductos, filtra con restricciones y devuelve ResultadoBusqueda al solicitante.
-    constraints = extract_search_constraints(graph, action)
-    products = filter_products(catalog, constraints)
-    return build_search_response(agent_uri, receiver, action, products, catalog)
-
-
 def _handle_order(
-    catalog: Graph,
     agent_uri: URIRef,
     receiver: URIRef,
     action: URIRef,
@@ -91,55 +67,48 @@ def _handle_order(
     logistics_url: str,
     financiero_url: str,
 ) -> Graph:
-    # Plan: PreguntarDatosCompra → RegistrarPedidoPendiente → EscogerCL (AgenteComerciante / PrepararPedido)
-    # Recibe RealizarPedido, construye el pedido enriquecido y coordina logística y cobro.
+    """Plan: PreguntarDatosCompra → RegistrarPedidoPendiente → EscogerCL (AgenteComerciante / PrepararPedido).
+
+    Recibe RealizarPedido del asistente con los productos ya elegidos (idProducto, precio,
+    vendedor, quienEnvia). Construye la factura a partir de los precios recibidos,
+    coordina el envio con el centro logistico y notifica el cobro al financiero.
+    """
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     if pedido is None:
         return build_failure(agent_uri, receiver, action, "Falta accionSobrePedido")
 
-    product_quantities = _extract_product_quantities(graph, pedido)
-    if not product_quantities:
+    lines = list(graph.objects(pedido, ECSDI.pedidoTieneLinea))
+    if not lines:
         return build_failure(agent_uri, receiver, action, "El pedido no contiene lineas")
 
-    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
-    city = str(next(graph.objects(address, ECSDI.ciudad), "")) if address is not None else ""
+    # Plan: RegistrarPedidoPendiente — construye grafo enriquecido con factura
+    order_graph = _build_order_graph(graph, action, pedido, lines)
 
-    # Plan: EscogerCL — heurística para elegir el centro logístico con stock suficiente más cercano.
-    center = choose_single_center(catalog, product_quantities, city)
-    if center is None:
-        return build_failure(agent_uri, receiver, action, "No hay un unico centro logistico con stock suficiente")
-
-    # Plan: RegistrarPedidoPendiente — construye el grafo del pedido con factura incluida.
-    order_graph = _build_enriched_order_graph(catalog, graph, action, pedido, center, product_quantities)
-
-    # Plan: Notificador → AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
-    # Se manda RealizarPedido al CentroLogistico para que agrupe en lote y negocie transporte.
+    # Plan: EscogerCL + Notificador → AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
+    # Se delega al CentroLogistico que agrupe en lote y negocie transporte.
     logistics_message = build_message(order_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona)
     shipping_response = post_graph(logistics_url, logistics_message)
 
-    reserve_stock(catalog, center, product_quantities)
     for triple in shipping_response:
         order_graph.add(triple)
 
     order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
 
     # Plan: RecibirDatosEnvio → RealizarCobro (AgenteComerciante / FinalizarCompra)
-    # El envío ya está planificado; se notifica al AgenteFinanciero para que cobre (fire-and-forget).
+    # Envio planificado; se notifica al AgenteFinanciero para cobrar (fire-and-forget).
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
-    cobro_message = build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total)
-    post_graph(financiero_url, cobro_message)
+    post_graph(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total))
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
 
-def _build_enriched_order_graph(
-    catalog: Graph,
+def _build_order_graph(
     request_graph: Graph,
     action: URIRef,
     pedido: URIRef,
-    center: URIRef,
-    product_quantities: dict[str, int],
+    lines: list,
 ) -> Graph:
+    """Plan: RegistrarPedidoPendiente — genera factura a partir de precios enviados por el asistente."""
     graph = Graph()
     bind_namespaces(graph)
     _copy_subject(request_graph, graph, action)
@@ -149,16 +118,17 @@ def _build_enriched_order_graph(
     if address is not None:
         _copy_subject(request_graph, graph, address)
 
-    for line in request_graph.objects(pedido, ECSDI.pedidoTieneLinea):
+    total = Decimal("0")
+    for line in lines:
         _copy_subject(request_graph, graph, line)
         product = next(request_graph.objects(line, ECSDI.lineaDeProducto), None)
         if product is not None:
-            copy_product(catalog, graph, product)
-            price = describe_product(catalog, product)["price"]
-            graph.add((line, ECSDI.precioUnitario, decimal_literal(price)))
+            _copy_subject(request_graph, graph, product)
+        # El precio unitario lo manda el asistente en la linea
+        price = Decimal(str(next(request_graph.objects(line, ECSDI.precioUnitario), "0")))
+        quantity = int(next(request_graph.objects(line, ECSDI.cantidad), 1))
+        total += price * quantity
 
-    copy_center(catalog, graph, center)
-    total = order_total(catalog, product_quantities)
     invoice = DATA[f"factura/{uuid4()}"]
     graph.add((invoice, RDF.type, ECSDI.Factura))
     graph.add((invoice, ECSDI.idFactura, Literal(f"FAC-{uuid4().hex[:8].upper()}")))
@@ -169,21 +139,6 @@ def _build_enriched_order_graph(
     graph.add((pedido, ECSDI.importeTotalPedido, decimal_literal(total)))
     graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_sin_pago")))
     return graph
-
-
-def _extract_product_quantities(graph: Graph, pedido: URIRef) -> dict[str, int]:
-    quantities = {}
-    for line in graph.objects(pedido, ECSDI.pedidoTieneLinea):
-        product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
-        quantity = int(next(graph.objects(line, ECSDI.cantidad), 1))
-        if product is None:
-            continue
-        product_id = str(product).rstrip("/").split("/")[-1]
-        if product_id.startswith("P-"):
-            quantities[product_id] = quantities.get(product_id, 0) + quantity
-        else:
-            quantities[str(next(graph.objects(product, ECSDI.idProducto), product_id))] = quantity
-    return quantities
 
 
 def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:

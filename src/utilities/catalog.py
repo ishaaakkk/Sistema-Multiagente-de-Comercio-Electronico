@@ -6,51 +6,6 @@ from rdflib.namespace import RDF, XSD
 from .namespaces import DATA, ECSDI, bind_namespaces
 
 
-CATALOG_PRODUCTS = [
-    {
-        "id": "P-IPHONE19",
-        "name": "iPhone 19",
-        "brand": "Apple",
-        "description": "Smartphone interno de gama alta con 256 GB",
-        "price": Decimal("1199.00"),
-        "rating": Decimal("4.75"),
-        "weight": Decimal("0.45"),
-        "center": "CL-BCN",
-        "stock": 25,
-    },
-    {
-        "id": "P-EBOOK-AURORA",
-        "name": "Ebook Reader Aurora",
-        "brand": "Readly",
-        "description": "Lector de libros electronicos con pantalla mate",
-        "price": Decimal("149.90"),
-        "rating": Decimal("4.40"),
-        "weight": Decimal("0.30"),
-        "center": "CL-BCN",
-        "stock": 18,
-    },
-    {
-        "id": "P-BATIDORA-MINI",
-        "name": "Batidora Mini",
-        "brand": "HomeUp",
-        "description": "Pequeno electrodomestico interno para cocina",
-        "price": Decimal("44.50"),
-        "rating": Decimal("4.10"),
-        "weight": Decimal("1.20"),
-        "center": "CL-BCN",
-        "stock": 11,
-    },
-]
-
-LOGISTIC_CENTERS = [
-    {
-        "id": "CL-BCN",
-        "name": "Centro Logistico Barcelona",
-        "city": "Barcelona",
-    }
-]
-
-
 def product_uri(product_id: str) -> URIRef:
     return DATA[f"producto/{product_id}"]
 
@@ -61,38 +16,6 @@ def center_uri(center_id: str) -> URIRef:
 
 def stock_uri(product_id: str, center_id: str) -> URIRef:
     return DATA[f"stock/{product_id}/{center_id}"]
-
-
-def build_catalog_graph() -> Graph:
-    graph = Graph()
-    bind_namespaces(graph)
-
-    for center in LOGISTIC_CENTERS:
-        node = center_uri(center["id"])
-        graph.add((node, RDF.type, ECSDI.CentroLogistico))
-        graph.add((node, ECSDI.idCentroLogistico, Literal(center["id"])))
-        graph.add((node, ECSDI.nombreCentroLogistico, Literal(center["name"])))
-        graph.add((node, ECSDI.ciudadCentroLogistico, Literal(center["city"])))
-
-    for product in CATALOG_PRODUCTS:
-        pnode = product_uri(product["id"])
-        graph.add((pnode, RDF.type, ECSDI.ProductoInterno))
-        graph.add((pnode, RDF.type, ECSDI.Producto))
-        graph.add((pnode, ECSDI.idProducto, Literal(product["id"])))
-        graph.add((pnode, ECSDI.nombreProducto, Literal(product["name"])))
-        graph.add((pnode, ECSDI.marcaProducto, Literal(product["brand"])))
-        graph.add((pnode, ECSDI.descripcionProducto, Literal(product["description"])))
-        graph.add((pnode, ECSDI.precioProducto, decimal_literal(product["price"])))
-        graph.add((pnode, ECSDI.valoracionMedia, decimal_literal(product["rating"])))
-        graph.add((pnode, ECSDI.pesoProducto, decimal_literal(product["weight"])))
-
-        snode = stock_uri(product["id"], product["center"])
-        graph.add((snode, RDF.type, ECSDI.StockProducto))
-        graph.add((snode, ECSDI.stockDeProducto, pnode))
-        graph.add((snode, ECSDI.stockEnCentro, center_uri(product["center"])))
-        graph.add((snode, ECSDI.cantidadDisponible, Literal(product["stock"], datatype=XSD.integer)))
-
-    return graph
 
 
 def filter_products(graph: Graph, constraints: dict) -> list[URIRef]:

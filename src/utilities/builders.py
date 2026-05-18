@@ -42,6 +42,7 @@ def build_order_message(
     sender: URIRef,
     receiver: URIRef,
     product_quantities: dict[str, int],
+    product_prices: dict[str, Decimal],
     city: str,
     street: str,
     postal_code: str,
@@ -78,6 +79,8 @@ def build_order_message(
         graph.add((line, RDF.type, ECSDI.LineaPedido))
         graph.add((line, ECSDI.lineaDeProducto, product_uri(product_id)))
         graph.add((line, ECSDI.cantidad, Literal(quantity, datatype=XSD.integer)))
+        if product_id in product_prices:
+            graph.add((line, ECSDI.precioUnitario, decimal_literal(product_prices[product_id])))
         graph.add((pedido, ECSDI.pedidoTieneLinea, line))
 
     return build_message(graph, action, ACL.request, sender, receiver)

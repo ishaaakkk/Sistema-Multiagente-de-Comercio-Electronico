@@ -10,6 +10,7 @@ from utilities.namespaces import AGENTS, ECSDI
 
 def main():
     parser = argparse.ArgumentParser(description="Demo de fase 2: busqueda y compra simple.")
+    parser.add_argument("--catalog-url", default="http://127.0.0.1:9006/comm")
     parser.add_argument("--shop-url", default="http://127.0.0.1:9001/comm")
     parser.add_argument("--search-name", default="iphone")
     parser.add_argument("--max-price", type=Decimal, default=Decimal("1300"))
@@ -20,12 +21,13 @@ def main():
     parser.add_argument("--priority", type=int, default=1)
     args = parser.parse_args()
 
+    # 1. Busqueda → AgenteCatalogo
     search_message = build_search_message(
         sender=AGENTS.AsistenteVirtual,
-        receiver=AGENTS.TiendaAgent,
+        receiver=AGENTS.AgenteCatalogo,
         constraints={"name": args.search_name, "max_price": args.max_price},
     )
-    search_response = post_graph(args.shop_url, search_message)
+    search_response = post_graph(args.catalog_url, search_message)
     products = list(search_response.objects(None, ECSDI.resultadoContieneProducto))
 
     print("Productos encontrados:")
@@ -38,11 +40,17 @@ def main():
         print("No hay productos para comprar.")
         return
 
-    product_id = str(next(search_response.objects(products[0], ECSDI.idProducto)))
+    # 2. El asistente elige el primer producto y conoce su precio del catalogo
+    chosen = products[0]
+    product_id = str(next(search_response.objects(chosen, ECSDI.idProducto)))
+    price = Decimal(str(next(search_response.objects(chosen, ECSDI.precioProducto), "0")))
+
+    # 3. Pedido → AgenteComerciante (TiendaAgent) con precio incluido en cada linea
     order_message = build_order_message(
         sender=AGENTS.AsistenteVirtual,
         receiver=AGENTS.TiendaAgent,
         product_quantities={product_id: 1},
+        product_prices={product_id: price},
         city=args.city,
         street=args.street,
         postal_code=args.postal_code,
