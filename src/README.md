@@ -58,3 +58,10 @@ bash develop.sh
 ```
 
 Para una demostracion distribuida, cada agente puede arrancarse en una maquina distinta usando `--open --hostaddr <ip>` y pasando `--dir http://<ip-directorio>:9000`.
+
+
+Update, en windows:
+
+
+
+Demo: $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
