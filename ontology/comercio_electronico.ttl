@@ -7,6 +7,7 @@
 @base <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico> rdf:type owl:Ontology ;
+                                                         rdfs:label "Ontologia de comercio electronico" ;
                                                          rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones." .
 
 #################################################################
@@ -44,8 +45,8 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSolicitadaPor
 :accionSolicitadaPor rdf:type owl:ObjectProperty ;
                      rdfs:domain :Accion ;
-                     rdfs:range :AsistenteVirtual ;
-                     rdfs:comment "Relación que indica el AsistenteVirtual que solicita una acción al sistema" .
+                     rdfs:range :Actor ;
+                     rdfs:comment "Actor que solicita la ejecución de una acción" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionTieneOperacionPago
@@ -727,7 +728,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
-        rdfs:comment "Representa una solicitud de ejecución de una funcionalidad que un agente proporciona a otro agente. Se usa como contenido de mensajes de tipo request, no para simples comunicaciones de información" .
+        rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/AceptarOfertaTransporte
