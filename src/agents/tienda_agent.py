@@ -8,7 +8,7 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
-from utilities.builders import build_cobro_request
+from utilities.builders import build_cobro_request, build_notify_purchase_completed
 from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -27,7 +27,12 @@ from utilities.runtime import (
 DEFAULT_AGENT_URI = AGENTS.TiendaAgent
 
 
-def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002/comm", financiero_url="http://127.0.0.1:9005/comm"):
+def create_app(
+    agent_uri=DEFAULT_AGENT_URI,
+    logistics_url="http://127.0.0.1:9002/comm",
+    financiero_url="http://127.0.0.1:9005/comm",
+    feedback_url="http://127.0.0.1:9007/comm",
+):
     app = Flask(__name__)
 
     @app.get("/")
@@ -50,7 +55,9 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, logistics_url="http://127.0.0.1:9002
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
             # El asistente ya incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url))
+                return rdf_response(
+                    _handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url)
+                )
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por TiendaAgent"))
         except Exception as exc:
@@ -66,6 +73,7 @@ def _handle_order(
     graph: Graph,
     logistics_url: str,
     financiero_url: str,
+    feedback_url: str,
 ) -> Graph:
     """Plan: PreguntarDatosCompra → RegistrarPedidoPendiente → EscogerCL (AgenteComerciante / PrepararPedido).
 
@@ -98,6 +106,9 @@ def _handle_order(
     # Envio planificado; se notifica al AgenteFinanciero para cobrar (fire-and-forget).
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
     post_graph(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total))
+
+    # Protocolo Notificacion Compra: Comerciante → AgenteFeedback (fire-and-forget)
+    post_graph(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido))
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
@@ -155,6 +166,7 @@ def main():
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
     parser.add_argument("--logistics-url", default=None)
     parser.add_argument("--financiero-url", default=None)
+    parser.add_argument("--feedback-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -163,13 +175,22 @@ def main():
     logistics_url = _comm_url(logistics_base)
     financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO") or "http://127.0.0.1:9005"
     financiero_url = _comm_url(financiero_base)
+    feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK") or "http://127.0.0.1:9007"
+    feedback_url = _comm_url(feedback_base)
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("TIENDA", advertised_host, args.port)
     registered = register_service(args.dir, service_id, "TIENDA", address, f"tienda-{args.port}")
     try:
-        log(f"tienda-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}")
-        create_app(logistics_url=logistics_url, financiero_url=financiero_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(
+            f"tienda-{args.port}",
+            f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}, feedback={feedback_url}",
+        )
+        create_app(
+            logistics_url=logistics_url,
+            financiero_url=financiero_url,
+            feedback_url=feedback_url,
+        ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"tienda-{args.port}")
