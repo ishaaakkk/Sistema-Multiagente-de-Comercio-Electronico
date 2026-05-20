@@ -165,6 +165,60 @@ def build_cobro_request(sender: URIRef, receiver: URIRef, pedido: URIRef, import
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
+def build_notify_purchase_completed(
+    sender: URIRef,
+    receiver: URIRef,
+    order_graph: Graph,
+    pedido: URIRef,
+) -> Graph:
+    """Comerciante → AgenteFeedback: NotificarCompraCompletada (fire-and-forget)."""
+    graph = Graph()
+    bind_namespaces(graph)
+    for triple in order_graph:
+        graph.add(triple)
+    action = DATA[f"action/notify-purchase/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.NotificarCompraCompletada))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_valoracion_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido_id: str,
+    product_id: str,
+    puntuacion: int,
+    comentario: str,
+) -> Graph:
+    """AsistenteVirtual → AgenteFeedback: RegistrarValoracion."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/valoracion/{uuid4()}"]
+    valoracion = DATA[f"valoracion/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.RegistrarValoracion))
+    graph.add((action, ECSDI.accionSobreProducto, product_uri(product_id)))
+    graph.add((valoracion, RDF.type, ECSDI.Valoracion))
+    graph.add((valoracion, ECSDI.valoracionDeProducto, product_uri(product_id)))
+    graph.add((valoracion, ECSDI.valoracionEnviadaPor, sender))
+    graph.add((valoracion, ECSDI.valoracionDePedido, Literal(pedido_id)))
+    graph.add((valoracion, ECSDI.puntuacion, Literal(puntuacion, datatype=XSD.integer)))
+    graph.add((valoracion, ECSDI.comentario, Literal(comentario)))
+    graph.add((action, ECSDI.accionTieneValoracion, valoracion))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_valoracion_response(
+    sender: URIRef,
+    receiver: URIRef,
+    valoracion: URIRef,
+    valoracion_graph: Graph,
+) -> Graph:
+    """AgenteFeedback → AsistenteVirtual: inform con Valoracion registrada."""
+    graph = Graph()
+    bind_namespaces(graph)
+    for triple in valoracion_graph.triples((valoracion, None, None)):
+        graph.add(triple)
+    return build_message(graph, valoracion, ACL.inform, sender, receiver)
 
 
 def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef, text: str) -> None:
