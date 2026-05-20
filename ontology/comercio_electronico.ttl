@@ -7,8 +7,8 @@
 @base <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico> rdf:type owl:Ontology ;
-                                                         rdfs:label "Ontologia de comercio electronico" ;
-                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones." .
+                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones." ;
+                                                         rdfs:label "Ontologia de comercio electronico" .
 
 #################################################################
 #    Object Properties
@@ -731,12 +731,6 @@
         rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/AceptarOfertaTransporte
-:AceptarOfertaTransporte rdf:type owl:Class ;
-                         rdfs:subClassOf :Accion ;
-                         rdfs:comment "Acción mediante la cual el centro logístico acepta una oferta de transporte y confirma al transportista seleccionado la realización del envío" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor
 :Actor rdf:type owl:Class ;
        rdfs:comment "Representa los actores externos con los que interactúa la tienda" .
@@ -994,12 +988,6 @@
 #    Individuals
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/aceptarOfertaGSL
-:aceptarOfertaGSL rdf:type owl:NamedIndividual ,
-                           :AceptarOfertaTransporte ;
-                  :accionSobreOferta :ofertaGSLiPhone19Barceluna .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/asistenteUsuario
 :asistenteUsuario rdf:type owl:NamedIndividual ,
                            :AsistenteVirtual .
@@ -1039,8 +1027,7 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/confirmacionEnvioiPhone
 :confirmacionEnvioiPhone rdf:type owl:NamedIndividual ,
                                   :ConfirmacionEnvio ;
-                         :confirmacionEnvio :envioiPhone19Barceluna ;
-                         :respuestaDeAccion :aceptarOfertaGSL .
+                         :confirmacionEnvio :envioiPhone19Barceluna .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/devolucioniPhone19
