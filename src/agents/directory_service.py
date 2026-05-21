@@ -1,15 +1,26 @@
 import argparse
 import json
 from random import randint
+from uuid import uuid4
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
+from rdflib import Graph, Literal
+from rdflib.namespace import FOAF, RDF
 
+from utilities.acl import build_message, build_not_understood, get_message, parse_graph, serialize_graph
+from utilities.http import graph_from_request, rdf_response
+from utilities.namespaces import ACL, AGENTS, DATA, DSO, bind_namespaces
 from utilities.runtime import binding_from_args, configure_flask_logging, log
 
 
 def create_app(schedule: str = "equaljobs"):
     app = Flask(__name__)
-    directory: dict[str, tuple[str, str]] = {}
+
+    # Grafo RDF de registro — equivalente al dsgraph del profesor
+    # Futura sustitucion: persistencia via SPARQL endpoint
+    dsgraph = Graph()
+    bind_namespaces(dsgraph)
+
     loadbalance: dict[str, int] = {}
     prefix = "directorio"
 
@@ -17,70 +28,156 @@ def create_app(schedule: str = "equaljobs"):
     def index():
         return "DirectoryService listo"
 
-    @app.get("/message")
-    def message():
-        raw = request.args.get("message", "")
-        if "|" not in raw:
-            return "ERROR: INVALID MESSAGE"
+    @app.post("/comm")
+    def comm():
+        """Punto de entrada FIPA-ACL para registro y busqueda de agentes.
 
-        msg_type, params = raw.split("|", 1)
-        if msg_type == "REGISTER":
-            parts = params.split(",", 2)
-            if len(parts) != 3:
-                return "ERROR: REGISTER INVALID PARAMETERS"
-            service_id, service_type, address = parts
-            if service_id in directory:
-                return "ERROR: ID ALREADY REGISTERED"
-            directory[service_id] = (service_type, address)
-            loadbalance[service_id] = 0
-            log(prefix, f"REGISTER {service_id} type={service_type} @ {address}")
-            return "OK: REGISTER SUCCESS"
+        Acciones soportadas:
+          DSO.RegistrarAgente  — registra un agente en el directorio (equivale a DSO.Register)
+          DSO.BuscarAgente     — busca agentes por tipo (equivale a DSO.Search)
+          DSO.EliminarAgente   — elimina un agente del directorio (equivale a DSO.Unregister)
+        """
+        try:
+            graph = graph_from_request()
+            message = get_message(graph)
+            if message is None or message.content is None:
+                return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender if message else AGENTS.Unknown, "Mensaje ACL no reconocido"))
+            if message.performative != ACL.request:
+                return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender, "Se esperaba performativa request"))
 
-        if msg_type == "SEARCH":
-            found = [(sid, address) for sid, (stype, address) in directory.items() if stype == params]
-            if not found:
-                log(prefix, f"SEARCH {params} -> NOT FOUND")
-                return "ERROR: NOT FOUND"
-            if schedule == "equaljobs":
-                selected = min(found, key=lambda item: loadbalance[item[0]])
-            elif schedule == "random":
-                selected = found[randint(0, len(found) - 1)]
-            else:
-                selected = found[0]
-            loadbalance[selected[0]] += 1
-            log(prefix, f"SEARCH {params} -> {selected[0]} @ {selected[1]}")
-            return "OK: " + selected[1]
+            action = message.content
 
-        if msg_type == "SEARCHALL":
-            found = [address for _, (stype, address) in directory.items() if stype == params]
-            if not found:
-                return "ERROR: NOT FOUND"
-            return "OK: " + json.dumps(found)
+            # Accion: RegistrarAgente (equivale a DSO.Register del profesor)
+            if (action, RDF.type, DSO.RegistrarAgente) in graph:
+                return rdf_response(_handle_register(dsgraph, loadbalance, graph, action, message.sender, prefix))
 
-        if msg_type == "UNREGISTER":
-            if params not in directory:
-                return "ERROR: NOT REGISTERED"
-            log(prefix, f"UNREGISTER {params}")
-            del directory[params]
-            loadbalance.pop(params, None)
-            return "OK: UNREGISTER SUCCESS"
+            # Accion: BuscarAgente (equivale a DSO.Search del profesor)
+            if (action, RDF.type, DSO.BuscarAgente) in graph:
+                return rdf_response(_handle_search(dsgraph, loadbalance, graph, action, message.sender, schedule, prefix))
 
-        return "ERROR: NO SUCH ACTION"
+            # Accion: EliminarAgente (equivale a DSO.Unregister del profesor)
+            if (action, RDF.type, DSO.EliminarAgente) in graph:
+                return rdf_response(_handle_unregister(dsgraph, loadbalance, graph, action, message.sender, prefix))
+
+            return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender, "Accion de directorio no reconocida"))
+
+        except Exception as exc:
+            log(prefix, f"ERROR en /comm: {exc}")
+            return rdf_response(build_not_understood(AGENTS.DirectoryService, AGENTS.Unknown, str(exc)), 500)
 
     @app.get("/info")
     def info():
-        return jsonify(
-            {
-                sid: {
-                    "type": stype,
-                    "address": address,
-                    "jobs": loadbalance.get(sid, 0),
-                }
-                for sid, (stype, address) in directory.items()
+        """Muestra el estado del directorio en formato JSON."""
+        agents = {}
+        for agent_uri in set(dsgraph.subjects(RDF.type, FOAF.Agent)):
+            name = str(next(dsgraph.objects(agent_uri, FOAF.name), ""))
+            address = str(next(dsgraph.objects(agent_uri, DSO.Address), ""))
+            agent_type = str(next(dsgraph.objects(agent_uri, DSO.AgentType), ""))
+            agents[str(agent_uri)] = {
+                "name": name,
+                "type": agent_type,
+                "address": address,
+                "jobs": loadbalance.get(str(agent_uri), 0),
             }
-        )
+        return jsonify(agents)
 
     return app
+
+
+def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
+    """Registra un agente en el directorio RDF.
+
+    Extrae Address, FOAF.name, DSO.Uri y DSO.AgentType del mensaje,
+    igual que process_register() en el ejemplo del profesor.
+    Responde con ACL.confirm si tiene exito.
+    """
+    agent_uri = next(graph.objects(action, DSO.Uri), None)
+    agent_name = next(graph.objects(action, FOAF.name), None)
+    agent_address = next(graph.objects(action, DSO.Address), None)
+    agent_type = next(graph.objects(action, DSO.AgentType), None)
+
+    if None in (agent_uri, agent_name, agent_address, agent_type):
+        return _build_response(ACL.failure, action, sender, "Faltan campos en RegistrarAgente")
+
+    if (agent_uri, RDF.type, FOAF.Agent) in dsgraph:
+        return _build_response(ACL.failure, action, sender, f"Agente ya registrado: {agent_uri}")
+
+    dsgraph.add((agent_uri, RDF.type, FOAF.Agent))
+    dsgraph.add((agent_uri, FOAF.name, agent_name))
+    dsgraph.add((agent_uri, DSO.Address, agent_address))
+    dsgraph.add((agent_uri, DSO.AgentType, agent_type))
+    loadbalance[str(agent_uri)] = 0
+
+    log(prefix, f"REGISTER {agent_name} type={agent_type} @ {agent_address}")
+    return _build_response(ACL.confirm, action, sender)
+
+
+def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix):
+    """Busca agentes por tipo en el directorio RDF.
+
+    Equivale a process_search() del profesor.
+    Responde con ACL.inform con DSO.Address y DSO.Uri del agente encontrado.
+    """
+    agent_type = next(graph.objects(action, DSO.AgentType), None)
+    if agent_type is None:
+        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType en BuscarAgente")
+
+    candidates = [
+        uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
+        if (uri, RDF.type, FOAF.Agent) in dsgraph
+    ]
+
+    if not candidates:
+        log(prefix, f"SEARCH {agent_type} -> NOT FOUND")
+        return _build_response(ACL.failure, action, sender, f"No hay agentes de tipo {agent_type}")
+
+    if schedule == "equaljobs":
+        selected = min(candidates, key=lambda u: loadbalance.get(str(u), 0))
+    elif schedule == "random":
+        selected = candidates[randint(0, len(candidates) - 1)]
+    else:
+        selected = candidates[0]
+
+    loadbalance[str(selected)] = loadbalance.get(str(selected), 0) + 1
+    address = next(dsgraph.objects(selected, DSO.Address), None)
+
+    log(prefix, f"SEARCH {agent_type} -> {selected} @ {address}")
+
+    response_graph = Graph()
+    bind_namespaces(response_graph)
+    result = DATA[f"directory/response/{uuid4()}"]
+    response_graph.add((result, RDF.type, DSO.RespuestaBusqueda))
+    response_graph.add((result, DSO.Uri, selected))
+    response_graph.add((result, DSO.Address, address))
+    response_graph.add((result, DSO.AgentType, agent_type))
+    return build_message(response_graph, result, ACL.inform, AGENTS.DirectoryService, sender)
+
+
+def _handle_unregister(dsgraph, loadbalance, graph, action, sender, prefix):
+    """Elimina un agente del directorio RDF."""
+    agent_uri = next(graph.objects(action, DSO.Uri), None)
+    if agent_uri is None:
+        return _build_response(ACL.failure, action, sender, "Falta DSO.Uri en EliminarAgente")
+
+    if (agent_uri, RDF.type, FOAF.Agent) not in dsgraph:
+        return _build_response(ACL.failure, action, sender, f"Agente no registrado: {agent_uri}")
+
+    dsgraph.remove((agent_uri, None, None))
+    loadbalance.pop(str(agent_uri), None)
+    log(prefix, f"UNREGISTER {agent_uri}")
+    return _build_response(ACL.confirm, action, sender)
+
+
+def _build_response(performative, action, receiver, reason=None):
+    graph = Graph()
+    bind_namespaces(graph)
+    response = DATA[f"directory/ack/{uuid4()}"]
+    graph.add((response, RDF.type, DSO.RespuestaDirectorio))
+    graph.add((response, DSO.respuestaDeAccion, action))
+    if reason:
+        from rdflib import Literal
+        graph.add((response, DSO.motivo, Literal(reason)))
+    return build_message(graph, response, performative, AGENTS.DirectoryService, receiver)
 
 
 def main():
