@@ -171,12 +171,21 @@ def build_notify_purchase_completed(
     order_graph: Graph,
     pedido: URIRef,
 ) -> Graph:
-    """Comerciante → AgenteFeedback: NotificarCompraCompletada (fire-and-forget)."""
+    """Plan: FinalizarPedido → NotificarCompraCompletada (AgenteComerciante → AgenteFeedback).
+
+    Fire-and-forget: informa al AgenteFeedback de que una compra se ha completado
+    para que registre el pedido en OpinionesDB con opinion=NULL.
+    Se incluye el grafo completo del pedido para que Feedback tenga toda la info.
+    """
     graph = Graph()
     bind_namespaces(graph)
+    # Copiar solo los triples de datos, excluyendo el mensaje ACL interno
     for triple in order_graph:
-        graph.add(triple)
-    action = DATA[f"action/notify-purchase/{uuid4()}"]
+        s, p, o = triple
+        if p not in (ACL.performative, ACL.sender, ACL.receiver, ACL.content):
+            if not (s, RDF.type, ACL.FipaAclMessage) in order_graph:
+                graph.add(triple)
+    action = DATA[f"action/feedback/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.NotificarCompraCompletada))
     graph.add((action, ECSDI.accionSobrePedido, pedido))
     return build_message(graph, action, ACL.request, sender, receiver)

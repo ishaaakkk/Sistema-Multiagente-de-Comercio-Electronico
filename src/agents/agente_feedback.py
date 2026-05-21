@@ -48,6 +48,10 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
         try:
             graph = graph_from_request()
             message = get_message(graph)
+            # DEBUG
+            import sys
+            print(f"[DEBUG] performative={message.performative if message else None}", file=sys.stderr)
+            print(f"[DEBUG] content type={list(graph.objects(message.content, RDF.type)) if message and message.content else None}", file=sys.stderr)
             if message is None or message.content is None:
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido")

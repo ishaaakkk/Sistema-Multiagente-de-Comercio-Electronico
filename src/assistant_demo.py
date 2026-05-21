@@ -45,10 +45,10 @@ def main():
     product_id = str(next(search_response.objects(chosen, ECSDI.idProducto)))
     price = Decimal(str(next(search_response.objects(chosen, ECSDI.precioProducto), "0")))
 
-    # 3. Pedido → AgenteComerciante (TiendaAgent) con precio incluido en cada linea
+    # 3. Pedido → AgenteComerciante (AgenteComerciante) con precio incluido en cada linea
     order_message = build_order_message(
         sender=AGENTS.AsistenteVirtual,
-        receiver=AGENTS.TiendaAgent,
+        receiver=AGENTS.AgenteComerciante,
         product_quantities={product_id: 1},
         product_prices={product_id: price},
         city=args.city,

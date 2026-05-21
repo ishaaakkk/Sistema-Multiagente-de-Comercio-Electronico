@@ -29,7 +29,7 @@ def main():
     if args.simulate_notify or pedido_id is None:
         order_message = build_order_message(
             sender=AGENTS.AsistenteVirtual,
-            receiver=AGENTS.TiendaAgent,
+            receiver=AGENTS.AgenteComerciante,
             product_quantities={args.product_id: 1},
             product_prices={args.product_id: Decimal("1199.00")},
             city="Barcelona",
@@ -41,7 +41,7 @@ def main():
         pedido = next(order_message.subjects(RDF.type, ECSDI.Pedido), None)
         pedido_id = str(next(order_message.objects(pedido, ECSDI.idPedido), ""))
         notify_graph = build_notify_purchase_completed(
-            AGENTS.TiendaAgent,
+            AGENTS.AgenteComerciante,
             AGENTS.AgenteFeedback,
             order_message,
             pedido,

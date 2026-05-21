@@ -31,7 +31,7 @@ Agentes principales:
 
 - `agents.directory_service`: directorio de registro y descubrimiento de agentes.
 - `agents.agente_catalogo`: busqueda de productos en el catalogo RDF en memoria.
-- `agents.tienda_agent`: agente comerciante; recibe pedidos, genera factura y coordina logistica y cobro.
+- `agents.agente_comerciante`: agente comerciante; recibe pedidos, genera factura y coordina logistica y cobro.
 - `agents.centro_logistico_agent`: crea lotes de envio y solicita ofertas de transporte.
 - `agents.transportista_agent`: devuelve ofertas de transporte para lotes.
 - `agents.agente_financiero`: simula el cobro del pedido.
@@ -42,7 +42,7 @@ Flujo principal de la demo:
 
 1. `assistant_demo.py` solicita una busqueda a `AgenteCatalogo`.
 2. El catalogo devuelve productos que cumplen las restricciones.
-3. El asistente escoge el primer producto y envia un pedido a `TiendaAgent`.
+3. El asistente escoge el primer producto y envia un pedido a `AgenteComerciante`.
 4. La tienda genera factura y delega la preparacion del envio al centro logistico.
 5. El centro logistico solicita una oferta al transportista.
 6. La tienda notifica el cobro al agente financiero y la compra completada al agente feedback.
@@ -105,7 +105,7 @@ Terminal 5 - Tienda:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.tienda_agent --port 9001 --dir http://127.0.0.1:9000
+PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
 ```
 
 Terminal 6 - Catalogo:
@@ -173,7 +173,7 @@ $env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
 $env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.tienda_agent --port 9001 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000
 ```
@@ -190,7 +190,7 @@ $env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9
 | Puerto | Componente |
 | --- | --- |
 | 9000 | `DirectoryService` |
-| 9001 | `TiendaAgent` |
+| 9001 | `AgenteComerciante` |
 | 9002 | `CentroLogisticoAgent` |
 | 9003 | `TransportistaAgent` |
 | 9004 | `ProveedorPagosAgent` |

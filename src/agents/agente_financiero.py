@@ -39,7 +39,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             graph = graph_from_request()
             message = get_message(graph)
             if message is None or message.content is None:
-                return rdf_response(build_not_understood(agent_uri, AGENTS.TiendaAgent, "Mensaje ACL no reconocido"))
+                return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido"))
             if message.performative != ACL.request:
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -67,7 +67,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFinanciero"))
 
         except Exception as exc:
-            return rdf_response(build_failure(agent_uri, AGENTS.TiendaAgent, None, str(exc)), status=500)
+            return rdf_response(build_failure(agent_uri, AGENTS.AgenteComerciante, None, str(exc)), status=500)
 
     return app
 

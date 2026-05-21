@@ -61,7 +61,7 @@ start_agent "Transportista" "$PYTHON" -m agents.transportista_agent --port 9003 
 sleep 0.5
 start_agent "CentroLogistico" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
-start_agent "Tienda" "$PYTHON" -m agents.tienda_agent --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+start_agent "Tienda" "$PYTHON" -m agents.agente_comerciante --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 
 echo
 echo "Agents are running."

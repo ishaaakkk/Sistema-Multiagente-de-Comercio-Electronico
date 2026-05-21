@@ -24,7 +24,7 @@ from utilities.runtime import (
 )
 
 
-DEFAULT_AGENT_URI = AGENTS.TiendaAgent
+DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
 
 
 def create_app(
@@ -37,7 +37,7 @@ def create_app(
 
     @app.get("/")
     def index():
-        return "TiendaAgent listo"
+        return "AgenteComerciante listo"
 
     @app.post("/comm")
     def comm():
@@ -53,13 +53,11 @@ def create_app(
 
             # Plan: PreguntarDatosCompra → EscogerCL → Notificador (AgenteComerciante / PrepararPedido)
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
-            # El asistente ya incluye idProducto, precio, vendedor y quienEnvia por cada linea.
+            # El asistente incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(
-                    _handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url)
-                )
+                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url))
 
-            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por TiendaAgent"))
+            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
@@ -77,9 +75,9 @@ def _handle_order(
 ) -> Graph:
     """Plan: PreguntarDatosCompra → RegistrarPedidoPendiente → EscogerCL (AgenteComerciante / PrepararPedido).
 
-    Recibe RealizarPedido del asistente con los productos ya elegidos (idProducto, precio,
-    vendedor, quienEnvia). Construye la factura a partir de los precios recibidos,
-    coordina el envio con el centro logistico y notifica el cobro al financiero.
+    Recibe RealizarPedido del asistente con productos ya elegidos (idProducto, precio,
+    vendedor, quienEnvia). Construye la factura, coordina el envio, notifica cobro
+    al Financiero y compra completada al Feedback (ambos fire-and-forget).
     """
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     if pedido is None:
@@ -107,7 +105,8 @@ def _handle_order(
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
     post_graph(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total))
 
-    # Protocolo Notificacion Compra: Comerciante → AgenteFeedback (fire-and-forget)
+    # Plan: FinalizarPedido → build_notify_purchase_completed (AgenteComerciante → AgenteFeedback)
+    # Se notifica al AgenteFeedback para que registre el pedido con opinion=NULL (fire-and-forget).
     post_graph(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido))
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
@@ -179,21 +178,14 @@ def main():
     feedback_url = _comm_url(feedback_base)
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
-    service_id = agent_id("TIENDA", advertised_host, args.port)
-    registered = register_service(args.dir, service_id, "TIENDA", address, f"tienda-{args.port}")
+    service_id = agent_id("AGENTE_COMERCIANTE", advertised_host, args.port)
+    registered = register_service(args.dir, service_id, "AGENTE_COMERCIANTE", address, f"comerciante-{args.port}")
     try:
-        log(
-            f"tienda-{args.port}",
-            f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}, feedback={feedback_url}",
-        )
-        create_app(
-            logistics_url=logistics_url,
-            financiero_url=financiero_url,
-            feedback_url=feedback_url,
-        ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(f"comerciante-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}, feedback={feedback_url}")
+        create_app(logistics_url=logistics_url, financiero_url=financiero_url, feedback_url=feedback_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
-            unregister_service(args.dir, service_id, f"tienda-{args.port}")
+            unregister_service(args.dir, service_id, f"comerciante-{args.port}")
 
 
 def _comm_url(base_url: str) -> str:
