@@ -61,13 +61,7 @@ def create_app(
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
             # El asistente incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                import traceback
-                try:
-                    result = _handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url)
-                    return rdf_response(result)
-                except Exception as _inner:
-                    traceback.print_exc()
-                    raise
+                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url))
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
         except Exception as exc:
@@ -118,7 +112,7 @@ def _handle_order(
     # Plan: EscogerCL + Notificador → AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
     lines_for_logistics = internal_lines + ext_envio_tienda
     if lines_for_logistics:
-        logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
+        logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics, action)
         logistics_message = build_message(
             logistics_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona
         )
@@ -148,10 +142,10 @@ def _handle_order(
 
     # Plan: RealizarCobro → SolicitarCobro (AgenteComerciante → AgenteFinanciero)
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
-    post_graph(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total))
+    _post_safe(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total), "cobro")
 
     # Plan: FinalizarPedido → NotificarCompraCompletada (AgenteComerciante → AgenteFeedback)
-    post_graph(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido))
+    _post_safe(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido), "feedback")
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
@@ -204,9 +198,10 @@ def _gestionar_productos_externos(
         product_id = str(next(source_graph.objects(product, ECSDI.idProducto), str(product)))
 
         # Pago al vendedor — siempre, independientemente de quien gestione el envio
-        post_graph(
+        _post_safe(
             financiero_url,
             build_pago_externo_request(agent_uri, AGENTS.AgenteFinanciero, pedido, product, vendedor, importe),
+            "pago_externo",
         )
         log("comerciante", f"Pago externo solicitado: producto={product_id} vendedor={vendedor} importe={importe}")
 
@@ -218,9 +213,10 @@ def _gestionar_productos_externos(
         product_id = str(next(source_graph.objects(product, ECSDI.idProducto), str(product)))
 
         # Aviso al vendedor con la direccion de entrega — solo si el gestiona el envio
-        post_graph(
+        _post_safe(
             vendedor_externo_url,
             build_aviso_vendedor_externo(agent_uri, vendedor, pedido, product, address, address_graph),
+            "aviso_vendedor",
         )
         # Registrar EnvioExterno enlazado al pedido para que el cliente pueda encontrarlo
         envio_ext = DATA[f"envio/externo/{uuid4()}"]
@@ -231,10 +227,32 @@ def _gestionar_productos_externos(
         log("comerciante", f"Aviso envio externo enviado: producto={product_id} vendedor={vendedor}")
 
 
-def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list) -> Graph:
-    """Subgrafo del pedido con solo las lineas indicadas para el logistico."""
+def _post_safe(url: str, graph, tag: str) -> None:
+    """Fire-and-forget: envia el grafo y absorbe cualquier error de conexion.
+
+    Los mensajes al Financiero, Feedback y VendedorExterno son fire-and-forget
+    por diseño; si el agente destino no esta disponible el flujo principal
+    no debe verse afectado.
+    """
+    try:
+        post_graph(url, graph)
+    except Exception as exc:
+        log("comerciante", f"[{tag}] aviso fire-and-forget fallido ({url}): {exc}")
+
+
+
+def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list, action: URIRef | None = None) -> Graph:
+    """Subgrafo del pedido con solo las lineas indicadas para el logistico.
+
+    Incluye el nodo action (RealizarPedido) porque el logistico lo necesita
+    para reconocer el tipo de mensaje entrante.
+    """
     graph = Graph()
     bind_namespaces(graph)
+    # Copiar el nodo action completo para que el logistico encuentre RealizarPedido
+    if action is not None:
+        for triple in full_graph.triples((action, None, None)):
+            graph.add(triple)
     for triple in full_graph.triples((pedido, None, None)):
         if triple[1] == ECSDI.pedidoTieneLinea and triple[2] not in lines:
             continue
