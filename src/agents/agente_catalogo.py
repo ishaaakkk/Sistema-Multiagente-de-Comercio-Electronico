@@ -1,6 +1,8 @@
 import argparse
 from decimal import Decimal
 
+from uuid import uuid4
+
 from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
@@ -17,7 +19,7 @@ from utilities.catalog import (
     stock_uri,
 )
 from utilities.http import graph_from_request, rdf_response
-from utilities.namespaces import ACL, AGENTS, ECSDI, bind_namespaces
+from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -69,6 +71,47 @@ CATALOG_PRODUCTS = [
     },
 ]
 
+EXTERNAL_VENDORS = [
+    {
+        "id": "VEND-TECHWORLD",
+        "name": "TechWorld SL",
+        "uri": "VEND-TECHWORLD",
+    },
+    {
+        "id": "VEND-HOMEGADGETS",
+        "name": "HomeGadgets Europe",
+        "uri": "VEND-HOMEGADGETS",
+    },
+]
+
+# Productos externos de demo:
+#   - P-SMARTWATCH-X: vendedor gestiona el envio (gestionEnvioExterno=true)
+#   - P-AURICULARES-BT: la tienda gestiona el envio (gestionEnvioExterno=false)
+EXTERNAL_PRODUCTS = [
+    {
+        "id": "P-SMARTWATCH-X",
+        "name": "SmartWatch X Pro",
+        "brand": "TechWorld",
+        "description": "Reloj inteligente externo con GPS y monitor cardiaco",
+        "price": Decimal("299.00"),
+        "rating": Decimal("4.50"),
+        "weight": Decimal("0.15"),
+        "vendor": "VEND-TECHWORLD",
+        "shipping_external": True,   # El vendedor gestiona el envio
+    },
+    {
+        "id": "P-AURICULARES-BT",
+        "name": "Auriculares BT Pro",
+        "brand": "HomeGadgets",
+        "description": "Auriculares inalambricos externos con cancelacion de ruido",
+        "price": Decimal("89.90"),
+        "rating": Decimal("4.20"),
+        "weight": Decimal("0.25"),
+        "vendor": "VEND-HOMEGADGETS",
+        "shipping_external": False,  # La tienda gestiona el envio
+    },
+]
+
 LOGISTIC_CENTERS = [
     {
         "id": "CL-BCN",
@@ -109,6 +152,27 @@ def build_catalog_graph() -> Graph:
         graph.add((snode, ECSDI.stockDeProducto, pnode))
         graph.add((snode, ECSDI.stockEnCentro, center_uri(product["center"])))
         graph.add((snode, ECSDI.cantidadDisponible, Literal(product["stock"], datatype=XSD.integer)))
+
+    for vendor in EXTERNAL_VENDORS:
+        vnode = AGENTS[vendor["uri"]]
+        graph.add((vnode, RDF.type, ECSDI.VendedorExterno))
+        graph.add((vnode, ECSDI.idVendedor, Literal(vendor["id"])))
+        graph.add((vnode, ECSDI.nombreVendedor, Literal(vendor["name"])))
+
+    for product in EXTERNAL_PRODUCTS:
+        pnode = product_uri(product["id"])
+        vendor_node = AGENTS[product["vendor"]]
+        graph.add((pnode, RDF.type, ECSDI.ProductoExterno))
+        graph.add((pnode, RDF.type, ECSDI.Producto))
+        graph.add((pnode, ECSDI.idProducto, Literal(product["id"])))
+        graph.add((pnode, ECSDI.nombreProducto, Literal(product["name"])))
+        graph.add((pnode, ECSDI.marcaProducto, Literal(product["brand"])))
+        graph.add((pnode, ECSDI.descripcionProducto, Literal(product["description"])))
+        graph.add((pnode, ECSDI.precioProducto, decimal_literal(product["price"])))
+        graph.add((pnode, ECSDI.valoracionMedia, decimal_literal(product["rating"])))
+        graph.add((pnode, ECSDI.pesoProducto, decimal_literal(product["weight"])))
+        graph.add((pnode, ECSDI.gestionEnvioExterno, Literal(product["shipping_external"])))
+        graph.add((pnode, ECSDI.productoOfrecidoPor, vendor_node))
 
     return graph
 

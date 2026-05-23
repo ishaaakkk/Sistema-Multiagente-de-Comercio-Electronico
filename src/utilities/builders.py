@@ -48,7 +48,15 @@ def build_order_message(
     postal_code: str,
     country: str,
     priority: int,
+    catalog_graph: Graph | None = None,
 ) -> Graph:
+    """Construye el mensaje RealizarPedido para el AgenteComerciante.
+
+    Si se pasa catalog_graph, copia todos los triples de cada producto
+    (incluyendo RDF.type ProductoInterno/ProductoExterno, gestionEnvioExterno,
+    productoOfrecidoPor, etc.) para que el comerciante pueda clasificar
+    correctamente las lineas sin necesidad de consultar el catalogo.
+    """
     graph = Graph()
     bind_namespaces(graph)
     order_id = f"PED-{uuid4().hex[:8].upper()}"
@@ -75,13 +83,20 @@ def build_order_message(
     graph.add((address, ECSDI.pais, Literal(country)))
 
     for product_id, quantity in product_quantities.items():
+        pnode = product_uri(product_id)
         line = DATA[f"linea/{order_id}/{product_id}"]
         graph.add((line, RDF.type, ECSDI.LineaPedido))
-        graph.add((line, ECSDI.lineaDeProducto, product_uri(product_id)))
+        graph.add((line, ECSDI.lineaDeProducto, pnode))
         graph.add((line, ECSDI.cantidad, Literal(quantity, datatype=XSD.integer)))
         if product_id in product_prices:
             graph.add((line, ECSDI.precioUnitario, decimal_literal(product_prices[product_id])))
         graph.add((pedido, ECSDI.pedidoTieneLinea, line))
+
+        # Copiar todos los triples del producto desde el catalogo para que el
+        # comerciante pueda clasificar la linea (interno/externo, gestionEnvioExterno...)
+        if catalog_graph is not None:
+            for triple in catalog_graph.triples((pnode, None, None)):
+                graph.add(triple)
 
     return build_message(graph, action, ACL.request, sender, receiver)
 
@@ -199,20 +214,25 @@ def build_valoracion_request(
     puntuacion: int,
     comentario: str,
 ) -> Graph:
-    """AsistenteVirtual → AgenteFeedback: RegistrarValoracion."""
+    """AsistenteVirtual → AgenteFeedback: EnviarOpinion.
+
+    Plan: RegistrarOpinionProducto (AgenteFeedback / ObtenerOpinionProductoComprado).
+    La accion es EnviarOpinion; la Valoracion viaja como contenido directo
+    sin accionTieneValoracion (clase inexistente en la ontologia).
+    """
     graph = Graph()
     bind_namespaces(graph)
     action = DATA[f"action/valoracion/{uuid4()}"]
     valoracion = DATA[f"valoracion/{uuid4()}"]
-    graph.add((action, RDF.type, ECSDI.RegistrarValoracion))
+    graph.add((action, RDF.type, ECSDI.EnviarOpinion))
     graph.add((action, ECSDI.accionSobreProducto, product_uri(product_id)))
+    graph.add((action, ECSDI.accionTieneValoracion, valoracion))
     graph.add((valoracion, RDF.type, ECSDI.Valoracion))
     graph.add((valoracion, ECSDI.valoracionDeProducto, product_uri(product_id)))
     graph.add((valoracion, ECSDI.valoracionEnviadaPor, sender))
     graph.add((valoracion, ECSDI.valoracionDePedido, Literal(pedido_id)))
     graph.add((valoracion, ECSDI.puntuacion, Literal(puntuacion, datatype=XSD.integer)))
     graph.add((valoracion, ECSDI.comentario, Literal(comentario)))
-    graph.add((action, ECSDI.accionTieneValoracion, valoracion))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -228,6 +248,59 @@ def build_valoracion_response(
     for triple in valoracion_graph.triples((valoracion, None, None)):
         graph.add(triple)
     return build_message(graph, valoracion, ACL.inform, sender, receiver)
+
+
+def build_pago_externo_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    vendedor: URIRef,
+    importe: Decimal,
+) -> Graph:
+    """AgenteComerciante → AgenteFinanciero: PagarProductoExterno.
+
+    Plan: ComunicarVendedoresExternos (AgenteComerciante / ComunicarConVendedoresExternos).
+    Msg saliente: PagarProdExterno.
+    """
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/pago/externo/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.PagarProductoExterno))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+    graph.add((action, ECSDI.importeCobro, decimal_literal(importe)))
+    graph.add((action, ECSDI.vendedorDestinatario, vendedor))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_aviso_vendedor_externo(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    address: URIRef | None,
+    address_graph: Graph | None,
+) -> Graph:
+    """AgenteComerciante → AgenteVendedorExterno: ComunicarProductosExternosPedidos.
+
+    Plan: ComunicarVendedoresExternos (AgenteComerciante / ComunicarConVendedoresExternos).
+    Solo se llama cuando gestionEnvioExterno=true; se le dice al vendedor
+    el producto pedido y donde tiene que enviarlo.
+    Fire-and-forget: se asume que siempre va bien (diseño).
+    """
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/aviso/vendedor/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.ComunicarProductosExternosPedidos))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+    if address is not None:
+        graph.add((action, ECSDI.envioDestinoDir, address))
+        if address_graph is not None:
+            for triple in address_graph.triples((address, None, None)):
+                graph.add(triple)
+    return build_message(graph, action, ACL.request, sender, receiver)
 
 
 def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef, text: str) -> None:

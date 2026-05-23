@@ -61,15 +61,16 @@ Para una demostracion distribuida, cada agente puede arrancarse en una maquina d
 
 
 Update, en windows:
+.\.venv\Scripts\Activate.ps1
 
 Agentes:
 $env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
-$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
-
+$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --vebose
 
 Demo:
 $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
