@@ -22,19 +22,32 @@ from utilities.runtime import (
 
 DEFAULT_AGENT_URI = AGENTS.TransportistaExpress
 
+# Tarifas por defecto (se sobreescriben via argparse)
+DEFAULT_TARIFA_BASE = Decimal("4.50")
+DEFAULT_TARIFA_KG = Decimal("1.75")
+DEFAULT_TARIFA_DIA = Decimal("0.80")
 
-def create_app(agent_uri=DEFAULT_AGENT_URI):
+
+def create_app(
+    agent_uri=DEFAULT_AGENT_URI,
+    tarifa_base: Decimal = DEFAULT_TARIFA_BASE,
+    tarifa_kg: Decimal = DEFAULT_TARIFA_KG,
+    tarifa_dia: Decimal = DEFAULT_TARIFA_DIA,
+):
     app = Flask(__name__)
 
     @app.get("/")
     def index():
-        return "TransportistaAgent listo"
+        return (
+            f"TransportistaAgent listo — "
+            f"tarifa_base={tarifa_base} €, tarifa_kg={tarifa_kg} €/kg, tarifa_dia={tarifa_dia} €/dia"
+        )
 
     @app.post("/comm")
     def comm():
         # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales (AgenteLogistico / NegociarConTransportistas)
-        # Accion: ProponerLoteAEntregar — recibe SolicitarPresupuestoTransporte con un LoteEnvio
-        # y devuelve OfertaTransporte con precio y plazo calculados según peso y prioridad.
+        # Accion: SolicitarPresupuestoTransporte — recibe un LoteEnvio
+        # y devuelve OfertaTransporte con precio y plazo calculados segun peso, prioridad y tarifa propia.
         try:
             graph = graph_from_request()
             message = get_message(graph)
@@ -54,7 +67,14 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             weight = Decimal(str(next(graph.objects(lote, ECSDI.pesoTotalLote), "1.0")))
             priority = int(next(graph.objects(lote, ECSDI.prioridadLote), 3))
             max_days = _days_for_priority(priority)
-            price = Decimal("4.50") + weight * Decimal("1.75") + Decimal(max_days) * Decimal("0.80")
+
+            # Precio = tarifa_base + peso * tarifa_kg + dias * tarifa_dia
+            price = tarifa_base + weight * tarifa_kg + Decimal(max_days) * tarifa_dia
+
+            log(
+                str(agent_uri).split("/")[-1],
+                f"Oferta: peso={weight}kg prioridad={priority} dias={max_days} precio={price:.2f}€"
+            )
 
             response = build_transport_offer(
                 sender=URIRef(agent_uri),
@@ -88,6 +108,19 @@ def main():
     parser.add_argument("--port", type=int, default=9003)
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
     parser.add_argument("--verbose", action="store_true", default=False)
+    # Tarifas configurables para poder lanzar multiples instancias con condiciones distintas
+    parser.add_argument(
+        "--tarifa-base", type=Decimal, default=DEFAULT_TARIFA_BASE,
+        help="Coste fijo por envio en euros (default: 4.50)",
+    )
+    parser.add_argument(
+        "--tarifa-kg", type=Decimal, default=DEFAULT_TARIFA_KG,
+        help="Coste por kg en euros (default: 1.75)",
+    )
+    parser.add_argument(
+        "--tarifa-dia", type=Decimal, default=DEFAULT_TARIFA_DIA,
+        help="Coste adicional por dia de plazo en euros (default: 0.80)",
+    )
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
@@ -96,8 +129,16 @@ def main():
     service_id = agent_id("TRANSPORTISTA", advertised_host, args.port)
     registered = register_service(args.dir, service_id, "TRANSPORTISTA", address, f"transportista-{args.port}")
     try:
-        log(f"transportista-{args.port}", f"listening on {bind_host}:{args.port}")
-        create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(
+            f"transportista-{args.port}",
+            f"listening on {bind_host}:{args.port} — "
+            f"tarifa_base={args.tarifa_base}€ tarifa_kg={args.tarifa_kg}€/kg tarifa_dia={args.tarifa_dia}€/dia"
+        )
+        create_app(
+            tarifa_base=args.tarifa_base,
+            tarifa_kg=args.tarifa_kg,
+            tarifa_dia=args.tarifa_dia,
+        ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"transportista-{args.port}")

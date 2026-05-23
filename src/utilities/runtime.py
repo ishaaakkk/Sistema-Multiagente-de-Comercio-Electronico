@@ -140,3 +140,45 @@ def search_service(directory_url: str | None, service_type: str) -> str | None:
     except Exception:
         return None
     return None
+
+
+def search_all_services(directory_url: str | None, service_type: str) -> list[str]:
+    """Busca TODOS los agentes de un tipo en el directorio via FIPA-ACL (DSO.BuscarTodosAgentes).
+
+    A diferencia de search_service (que devuelve uno con balanceo de carga),
+    esta funcion devuelve las direcciones de todos los agentes registrados
+    del tipo indicado. Util para que el centro logistico contacte con todos
+    los transportistas disponibles y elija la mejor oferta.
+
+    Respuesta esperada: ACL.inform con uno o mas DSO.RespuestaBusqueda.
+    """
+    if not directory_url:
+        return []
+
+    from utilities.acl import build_message, get_message
+    from utilities.http import post_graph
+    from utilities.namespaces import ACL, AGENTS, DATA, DSO, bind_namespaces
+    from uuid import uuid4
+
+    comm_url = directory_url if directory_url.endswith("/comm") else directory_url.rstrip("/") + "/comm"
+
+    try:
+        graph = Graph()
+        bind_namespaces(graph)
+        action = DATA[f"directory/search/all/{uuid4()}"]
+        graph.add((action, RDF.type, DSO.BuscarTodosAgentes))
+        graph.add((action, DSO.AgentType, Literal(service_type)))
+        message = build_message(graph, action, ACL.request, AGENTS.Unknown, AGENTS.DirectoryService)
+        response = post_graph(comm_url, message)
+
+        msg = get_message(response)
+        if msg and msg.performative == ACL.inform:
+            addresses = []
+            for result in response.subjects(RDF.type, DSO.RespuestaBusqueda):
+                address = next(response.objects(result, DSO.Address), None)
+                if address is not None:
+                    addresses.append(str(address))
+            return addresses
+    except Exception:
+        return []
+    return []

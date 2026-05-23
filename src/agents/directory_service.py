@@ -17,7 +17,6 @@ def create_app(schedule: str = "equaljobs"):
     app = Flask(__name__)
 
     # Grafo RDF de registro — equivalente al dsgraph del profesor
-    # Futura sustitucion: persistencia via SPARQL endpoint
     dsgraph = Graph()
     bind_namespaces(dsgraph)
 
@@ -33,9 +32,10 @@ def create_app(schedule: str = "equaljobs"):
         """Punto de entrada FIPA-ACL para registro y busqueda de agentes.
 
         Acciones soportadas:
-          DSO.RegistrarAgente  — registra un agente en el directorio (equivale a DSO.Register)
-          DSO.BuscarAgente     — busca agentes por tipo (equivale a DSO.Search)
-          DSO.EliminarAgente   — elimina un agente del directorio (equivale a DSO.Unregister)
+          DSO.RegistrarAgente   — registra un agente en el directorio
+          DSO.BuscarAgente      — busca un agente por tipo (con balanceo de carga)
+          DSO.BuscarTodosAgentes — devuelve TODOS los agentes de un tipo
+          DSO.EliminarAgente    — elimina un agente del directorio
         """
         try:
             graph = graph_from_request()
@@ -47,15 +47,16 @@ def create_app(schedule: str = "equaljobs"):
 
             action = message.content
 
-            # Accion: RegistrarAgente (equivale a DSO.Register del profesor)
             if (action, RDF.type, DSO.RegistrarAgente) in graph:
                 return rdf_response(_handle_register(dsgraph, loadbalance, graph, action, message.sender, prefix))
 
-            # Accion: BuscarAgente (equivale a DSO.Search del profesor)
             if (action, RDF.type, DSO.BuscarAgente) in graph:
                 return rdf_response(_handle_search(dsgraph, loadbalance, graph, action, message.sender, schedule, prefix))
 
-            # Accion: EliminarAgente (equivale a DSO.Unregister del profesor)
+            # Nueva accion: devuelve todos los agentes del tipo indicado
+            if (action, RDF.type, DSO.BuscarTodosAgentes) in graph:
+                return rdf_response(_handle_search_all(dsgraph, graph, action, message.sender, prefix))
+
             if (action, RDF.type, DSO.EliminarAgente) in graph:
                 return rdf_response(_handle_unregister(dsgraph, loadbalance, graph, action, message.sender, prefix))
 
@@ -85,12 +86,7 @@ def create_app(schedule: str = "equaljobs"):
 
 
 def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
-    """Registra un agente en el directorio RDF.
-
-    Extrae Address, FOAF.name, DSO.Uri y DSO.AgentType del mensaje,
-    igual que process_register() en el ejemplo del profesor.
-    Responde con ACL.confirm si tiene exito.
-    """
+    """Registra un agente en el directorio RDF."""
     agent_uri = next(graph.objects(action, DSO.Uri), None)
     agent_name = next(graph.objects(action, FOAF.name), None)
     agent_address = next(graph.objects(action, DSO.Address), None)
@@ -113,11 +109,7 @@ def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
 
 
 def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix):
-    """Busca agentes por tipo en el directorio RDF.
-
-    Equivale a process_search() del profesor.
-    Responde con ACL.inform con DSO.Address y DSO.Uri del agente encontrado.
-    """
+    """Busca un agente por tipo (con balanceo de carga). Devuelve uno solo."""
     agent_type = next(graph.objects(action, DSO.AgentType), None)
     if agent_type is None:
         return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType en BuscarAgente")
@@ -151,6 +143,50 @@ def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix
     response_graph.add((result, DSO.Address, address))
     response_graph.add((result, DSO.AgentType, agent_type))
     return build_message(response_graph, result, ACL.inform, AGENTS.DirectoryService, sender)
+
+
+def _handle_search_all(dsgraph, graph, action, sender, prefix):
+    """Devuelve TODOS los agentes registrados de un tipo.
+
+    A diferencia de _handle_search, no aplica balanceo de carga y retorna
+    una entrada DSO.RespuestaBusqueda por cada agente encontrado.
+    Usado por el centro logistico para contactar con todos los transportistas
+    y poder comparar sus ofertas.
+    """
+    agent_type = next(graph.objects(action, DSO.AgentType), None)
+    if agent_type is None:
+        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType en BuscarTodosAgentes")
+
+    candidates = [
+        uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
+        if (uri, RDF.type, FOAF.Agent) in dsgraph
+    ]
+
+    if not candidates:
+        log(prefix, f"SEARCH_ALL {agent_type} -> NOT FOUND")
+        return _build_response(ACL.failure, action, sender, f"No hay agentes de tipo {agent_type}")
+
+    response_graph = Graph()
+    bind_namespaces(response_graph)
+
+    # Un nodo raiz para el mensaje; los resultados individuales cuelgan de el
+    root = DATA[f"directory/response/all/{uuid4()}"]
+    response_graph.add((root, RDF.type, DSO.RespuestaBusquedaMultiple))
+    response_graph.add((root, DSO.AgentType, agent_type))
+
+    for uri in candidates:
+        address = next(dsgraph.objects(uri, DSO.Address), None)
+        if address is None:
+            continue
+        result = DATA[f"directory/response/{uuid4()}"]
+        response_graph.add((result, RDF.type, DSO.RespuestaBusqueda))
+        response_graph.add((result, DSO.Uri, uri))
+        response_graph.add((result, DSO.Address, address))
+        response_graph.add((result, DSO.AgentType, agent_type))
+        response_graph.add((root, DSO.resultadoContiene, result))
+
+    log(prefix, f"SEARCH_ALL {agent_type} -> {len(candidates)} agente(s)")
+    return build_message(response_graph, root, ACL.inform, AGENTS.DirectoryService, sender)
 
 
 def _handle_unregister(dsgraph, loadbalance, graph, action, sender, prefix):
