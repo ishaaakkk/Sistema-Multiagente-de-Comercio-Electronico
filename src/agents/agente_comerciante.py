@@ -61,7 +61,13 @@ def create_app(
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
             # El asistente incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url))
+                import traceback
+                try:
+                    result = _handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url)
+                    return rdf_response(result)
+                except Exception as _inner:
+                    traceback.print_exc()
+                    raise
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
         except Exception as exc:
