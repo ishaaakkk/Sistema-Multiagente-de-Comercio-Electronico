@@ -19,11 +19,16 @@ def stock_uri(product_id: str, center_id: str) -> URIRef:
 
 
 def filter_products(graph: Graph, constraints: dict) -> list[URIRef]:
+    seen = set()
     matches = []
-    for product in graph.subjects(RDF.type, ECSDI.ProductoInterno):
-        data = describe_product(graph, product)
-        if _matches(data, constraints):
-            matches.append(product)
+    for rdf_type in (ECSDI.ProductoInterno, ECSDI.ProductoExterno):
+        for product in graph.subjects(RDF.type, rdf_type):
+            if product in seen:
+                continue
+            seen.add(product)
+            data = describe_product(graph, product)
+            if _matches(data, constraints):
+                matches.append(product)
     return matches
 
 
