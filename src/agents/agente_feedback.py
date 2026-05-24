@@ -48,10 +48,6 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
         try:
             graph = graph_from_request()
             message = get_message(graph)
-            # DEBUG
-            import sys
-            print(f"[DEBUG] performative={message.performative if message else None}", file=sys.stderr)
-            print(f"[DEBUG] content type={list(graph.objects(message.content, RDF.type)) if message and message.content else None}", file=sys.stderr)
             if message is None or message.content is None:
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido")
@@ -64,7 +60,8 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             if (action, RDF.type, ECSDI.NotificarCompraCompletada) in graph:
                 return rdf_response(_handle_notify_purchase(opinions_db, agent_uri, message.sender, action, graph))
 
-            if (action, RDF.type, ECSDI.RegistrarValoracion) in graph:
+            # builders.py construye ECSDI.EnviarOpinion — aceptamos ambos nombres por compatibilidad
+            if (action, RDF.type, ECSDI.EnviarOpinion) in graph or (action, RDF.type, ECSDI.RegistrarValoracion) in graph:
                 return rdf_response(_handle_registrar_valoracion(opinions_db, agent_uri, message.sender, action, graph))
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFeedback"))
