@@ -71,8 +71,11 @@ $env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
+ $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --vebose
 
 Demo:
 $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
 $env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+
+$env:PYTHONPATH="src"; python -m agents.agente_asistente --port 9010
