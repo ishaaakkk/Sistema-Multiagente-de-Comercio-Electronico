@@ -11,6 +11,7 @@ from rdflib.namespace import RDF, XSD
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
 from utilities.builders import build_provider_payment_request
 from utilities.catalog import decimal_literal
+from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
@@ -236,17 +237,24 @@ def main():
     service_id = agent_id("AGENTE_FINANCIERO", advertised_host, args.port)
     provider_base = args.provider_url or search_service(args.dir, "PROVEEDOR_PAGOS", service_id)
     provider_url = _comm_url(provider_base) if provider_base else None
-    registered = register_service(args.dir, service_id, "AGENTE_FINANCIERO", address, f"financiero-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "AGENTE_FINANCIERO",
+        address,
+        f"financiero-{args.port}",
+        capabilities=[
+            ECSDI.SolicitarCobro,
+            ECSDI.SolicitarReembolso,
+            ECSDI.PagarProductoExterno,
+        ],
+    )
     try:
         log(f"financiero-{args.port}", f"listening on {bind_host}:{args.port}, provider={provider_url or 'simulado'}")
         create_app(provider_url=provider_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"financiero-{args.port}")
-
-
-def _comm_url(base_url: str) -> str:
-    return base_url if base_url.endswith("/comm") else base_url.rstrip("/") + "/comm"
 
 
 if __name__ == "__main__":

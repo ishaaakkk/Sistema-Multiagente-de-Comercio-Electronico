@@ -86,7 +86,14 @@ def create_app(schedule: str = "equaljobs"):
 
 
 def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
-    """Registra un agente en el directorio RDF."""
+    """Registra un agente en el directorio RDF.
+
+    Acepta opcionalmente una o varias `dso:Capability` cuyo valor es una URI
+    de la ontología ECSDI (por ejemplo `ecsdi:BuscarEnCatalogo`). Esto
+    aproxima el registro a un perfil de servicio OWL-S (cap. 8.5.2 de los
+    apuntes): un agente declara qué acciones de la ontología sabe atender.
+    """
+
     agent_uri = next(graph.objects(action, DSO.Uri), None)
     agent_name = next(graph.objects(action, FOAF.name), None)
     agent_address = next(graph.objects(action, DSO.Address), None)
@@ -102,22 +109,50 @@ def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
     dsgraph.add((agent_uri, FOAF.name, agent_name))
     dsgraph.add((agent_uri, DSO.Address, agent_address))
     dsgraph.add((agent_uri, DSO.AgentType, agent_type))
+    capabilities = list(graph.objects(action, DSO.Capability))
+    for capability in capabilities:
+        dsgraph.add((agent_uri, DSO.Capability, capability))
     loadbalance[str(agent_uri)] = 0
 
-    log(prefix, f"REGISTER {agent_name} type={agent_type} @ {agent_address}")
+    log(
+        prefix,
+        f"REGISTER {agent_name} type={agent_type} caps={[str(c) for c in capabilities]} @ {agent_address}",
+    )
     return _build_response(ACL.confirm, action, sender)
 
 
 def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix):
-    """Busca un agente por tipo (con balanceo de carga). Devuelve uno solo."""
-    agent_type = next(graph.objects(action, DSO.AgentType), None)
-    if agent_type is None:
-        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType en BuscarAgente")
+    """Busca un agente por tipo o capacidad (con balanceo de carga).
 
-    candidates = [
-        uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
-        if (uri, RDF.type, FOAF.Agent) in dsgraph
-    ]
+    Si la acción incluye `dso:Capability` (URI de la ontología), filtra
+    además por la capacidad declarada por el agente en el registro. Devuelve
+    una sola dirección.
+    """
+    agent_type = next(graph.objects(action, DSO.AgentType), None)
+    requested_capability = next(graph.objects(action, DSO.Capability), None)
+    if agent_type is None and requested_capability is None:
+        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType o DSO.Capability en BuscarAgente")
+
+    if requested_capability is not None:
+        candidates_by_cap = {
+            uri for uri in dsgraph.subjects(DSO.Capability, requested_capability)
+            if (uri, RDF.type, FOAF.Agent) in dsgraph
+        }
+    else:
+        candidates_by_cap = None
+
+    if agent_type is not None:
+        candidates_by_type = {
+            uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
+            if (uri, RDF.type, FOAF.Agent) in dsgraph
+        }
+    else:
+        candidates_by_type = None
+
+    if candidates_by_cap is not None and candidates_by_type is not None:
+        candidates = list(candidates_by_cap & candidates_by_type)
+    else:
+        candidates = list(candidates_by_cap or candidates_by_type or [])
 
     if not candidates:
         log(prefix, f"SEARCH {agent_type} -> NOT FOUND")
@@ -146,21 +181,37 @@ def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix
 
 
 def _handle_search_all(dsgraph, graph, action, sender, prefix):
-    """Devuelve TODOS los agentes registrados de un tipo.
+    """Devuelve TODOS los agentes registrados de un tipo o capacidad.
 
-    A diferencia de _handle_search, no aplica balanceo de carga y retorna
-    una entrada DSO.RespuestaBusqueda por cada agente encontrado.
-    Usado por el centro logistico para contactar con todos los transportistas
-    y poder comparar sus ofertas.
+    Soporta también filtrado por `dso:Capability` (URI), siguiendo el mismo
+    criterio que `_handle_search`. Usado por el centro logístico para
+    contactar con todos los transportistas y comparar sus ofertas.
     """
     agent_type = next(graph.objects(action, DSO.AgentType), None)
-    if agent_type is None:
-        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType en BuscarTodosAgentes")
+    requested_capability = next(graph.objects(action, DSO.Capability), None)
+    if agent_type is None and requested_capability is None:
+        return _build_response(ACL.failure, action, sender, "Falta DSO.AgentType o DSO.Capability en BuscarTodosAgentes")
 
-    candidates = [
-        uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
-        if (uri, RDF.type, FOAF.Agent) in dsgraph
-    ]
+    if requested_capability is not None:
+        candidates_by_cap = {
+            uri for uri in dsgraph.subjects(DSO.Capability, requested_capability)
+            if (uri, RDF.type, FOAF.Agent) in dsgraph
+        }
+    else:
+        candidates_by_cap = None
+
+    if agent_type is not None:
+        candidates_by_type = {
+            uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
+            if (uri, RDF.type, FOAF.Agent) in dsgraph
+        }
+    else:
+        candidates_by_type = None
+
+    if candidates_by_cap is not None and candidates_by_type is not None:
+        candidates = list(candidates_by_cap & candidates_by_type)
+    else:
+        candidates = list(candidates_by_cap or candidates_by_type or [])
 
     if not candidates:
         log(prefix, f"SEARCH_ALL {agent_type} -> NOT FOUND")

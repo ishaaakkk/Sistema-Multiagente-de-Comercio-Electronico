@@ -1,4 +1,5 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -17,6 +18,7 @@ from utilities.builders import (
     build_pago_externo_request,
 )
 from utilities.catalog import decimal_literal
+from utilities.comm import comm_url as _comm_url, copy_subject as _copy_subject
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
@@ -26,10 +28,11 @@ from utilities.runtime import (
     configure_flask_logging,
     log,
     register_service,
+    search_all_services,
     search_service,
     unregister_service,
 )
-from utilities.storage import load_graph_collection, save_graph_item
+from utilities.storage import load_graph_collection, save_graph_item, save_named_graph
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
@@ -37,13 +40,15 @@ DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
 
 def create_app(
     agent_uri=DEFAULT_AGENT_URI,
-    logistics_url="http://127.0.0.1:9002/comm",
+    logistics_urls: list[str] | None = None,
+    directory_url: str | None = None,
     financiero_url="http://127.0.0.1:9005/comm",
     feedback_url="http://127.0.0.1:9007/comm",
     vendedor_externo_url="http://127.0.0.1:9008/comm",
 ):
     app = Flask(__name__)
     completed_orders: dict[str, Graph] = load_graph_collection("completed_orders")
+    fallback_logistics_urls = list(logistics_urls or [])
 
     @app.get("/")
     def index():
@@ -65,7 +70,22 @@ def create_app(
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
             # El asistente incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url, completed_orders))
+                logistics_urls_now = _discover_logistics_centers(
+                    directory_url, fallback_logistics_urls, agent_uri
+                )
+                return rdf_response(
+                    _handle_order(
+                        agent_uri,
+                        message.sender,
+                        action,
+                        graph,
+                        logistics_urls_now,
+                        financiero_url,
+                        feedback_url,
+                        vendedor_externo_url,
+                        completed_orders,
+                    )
+                )
 
             # Protocolo InfoPedidoCompletado — AgenteDevolucion valida una compra ya completada.
             if (action, RDF.type, ECSDI.PeticionInfoPedidoCompletado) in graph:
@@ -83,79 +103,210 @@ def _handle_order(
     receiver: URIRef,
     action: URIRef,
     graph: Graph,
-    logistics_url: str,
+    logistics_urls: list[str],
     financiero_url: str,
     feedback_url: str,
     vendedor_externo_url: str,
     completed_orders: dict[str, Graph],
 ) -> Graph:
-    """Plan: PreguntarDatosCompra → bifurcacion por linea de pedido.
+    """Orquestador del Plan «RealizarPedido» del Agente Comerciante.
 
-    Flujo por tipo de producto y gestion de envio:
+    Cada paso del plan se delega en una capacidad concreta (subfunción)
+    siguiendo el desglose del PD:
 
-      Interno                        → EscogerCL (logistico)
-      Externo + gestionEnvioExterno=false  → EscogerCL (logistico) + pago al vendedor
-      Externo + gestionEnvioExterno=true   → pago al vendedor + aviso al vendedor con direccion
+      1. `_capability_preguntar_datos_compra`  → valida y normaliza el pedido.
+      2. `_capability_registrar_pedido_pendiente` → construye el grafo del pedido.
+      3. `_capability_escoger_cl` → contacta con los centros logísticos.
+      4. `_capability_gestionar_vendedores_externos` → pago + aviso vendedor.
+      5. `_capability_realizar_cobro` → orden de cobro al cliente.
+      6. `_capability_finalizar_pedido` → notifica compra completada + persiste.
     """
-    pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
-    if pedido is None:
-        return build_failure(agent_uri, receiver, action, "Falta accionSobrePedido")
 
-    lines = list(graph.objects(pedido, ECSDI.pedidoTieneLinea))
-    if not lines:
-        return build_failure(agent_uri, receiver, action, "El pedido no contiene lineas")
+    pedido, lines, error = _capability_preguntar_datos_compra(
+        agent_uri, receiver, action, graph
+    )
+    if error is not None:
+        return error
 
-    # Plan: RegistrarPedidoPendiente
-    order_graph = _build_order_graph(graph, action, pedido, lines)
+    order_graph = _capability_registrar_pedido_pendiente(graph, action, pedido, lines)
 
-    # Clasificar lineas
     internal_lines, ext_envio_tienda, ext_envio_propio = _classify_lines(graph, lines)
-
     log("comerciante", (
         f"Pedido clasificado: {len(internal_lines)} internas, "
         f"{len(ext_envio_tienda)} ext-envio-tienda, "
         f"{len(ext_envio_propio)} ext-envio-propio"
     ))
 
-    # --- Lineas que necesitan logistico: internas + externas con envio por tienda ---
-    # Plan: EscogerCL + Notificador → AvisarCL (AgenteComerciante → AgenteLogistico)
-    lines_for_logistics = internal_lines + ext_envio_tienda
-    if lines_for_logistics:
-        logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
-        logistics_message = build_logistics_request(agent_uri, AGENTS.CentroLogisticoBarcelona, logistics_graph, pedido)
-        shipping_response = post_graph(logistics_url, logistics_message)
-        for triple in shipping_response:
-            order_graph.add(triple)
-        # Enlazar ConfirmacionEnvio al pedido para que el cliente pueda encontrarla
-        confirmacion = next(shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None)
-        if confirmacion is not None:
-            order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
-        log("comerciante", f"Envio logistico planificado para {len(lines_for_logistics)} linea(s)")
+    cl_error = _capability_escoger_cl(
+        agent_uri,
+        receiver,
+        action,
+        order_graph,
+        pedido,
+        internal_lines + ext_envio_tienda,
+        logistics_urls,
+    )
+    if cl_error is not None:
+        return cl_error
 
-    # --- Productos externos: pago al vendedor + aviso si gestiona el envio ---
-    # Plan: ComunicarVendedoresExternos (AgenteComerciante / ComunicarConVendedoresExternos)
-    all_external = ext_envio_tienda + ext_envio_propio
-    if all_external:
-        address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
-        address_graph = order_graph if address is not None else None
-        _gestionar_productos_externos(
-            agent_uri, order_graph, pedido, graph,
-            ext_envio_tienda, ext_envio_propio,
-            address, address_graph,
-            financiero_url, vendedor_externo_url,
-        )
+    _capability_gestionar_vendedores_externos(
+        agent_uri,
+        order_graph,
+        graph,
+        pedido,
+        ext_envio_tienda,
+        ext_envio_propio,
+        financiero_url,
+        vendedor_externo_url,
+    )
 
     order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
 
-    # Plan: RealizarCobro → SolicitarCobro (AgenteComerciante → AgenteFinanciero)
-    total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
-    _post_safe(financiero_url, build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total), "cobro")
+    _capability_realizar_cobro(agent_uri, order_graph, pedido, financiero_url)
+    _capability_finalizar_pedido(
+        agent_uri, order_graph, pedido, feedback_url, completed_orders
+    )
 
-    # Plan: FinalizarPedido → NotificarCompraCompletada (AgenteComerciante → AgenteFeedback)
-    _post_safe(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido), "feedback")
-
-    _store_completed_order(completed_orders, order_graph, pedido)
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
+
+
+# --- Capacidades del Agente Comerciante (subfunciones nombradas como en el PD) ---
+
+
+def _capability_preguntar_datos_compra(
+    agent_uri: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    graph: Graph,
+) -> tuple[URIRef | None, list, Graph | None]:
+    """Valida que el mensaje contenga el pedido y al menos una línea."""
+
+    pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
+    if pedido is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta accionSobrePedido")
+    lines = list(graph.objects(pedido, ECSDI.pedidoTieneLinea))
+    if not lines:
+        return None, [], build_failure(agent_uri, receiver, action, "El pedido no contiene lineas")
+    return pedido, lines, None
+
+
+def _capability_registrar_pedido_pendiente(
+    request_graph: Graph, action: URIRef, pedido: URIRef, lines: list
+) -> Graph:
+    """Plan RegistrarPedidoPendiente: genera factura y deja el pedido en
+    estado `aceptado_sin_pago`."""
+
+    return _build_order_graph(request_graph, action, pedido, lines)
+
+
+def _capability_escoger_cl(
+    agent_uri: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    order_graph: Graph,
+    pedido: URIRef,
+    lines_for_logistics: list,
+    logistics_urls: list[str],
+) -> Graph | None:
+    """Plan EscogerCL: contacta con TODOS los centros logísticos en paralelo
+    (extensión avanzada #3 multi-CL). Devuelve `None` si se planificó al
+    menos un envío, o un mensaje de fallo si no hay forma de servir.
+    """
+
+    if not lines_for_logistics:
+        return None
+    if not logistics_urls:
+        return build_failure(
+            agent_uri,
+            receiver,
+            action,
+            "No hay centros logísticos disponibles para planificar el envío",
+        )
+
+    logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
+    confirmaciones = _dispatch_to_logistics(
+        agent_uri, logistics_graph, pedido, logistics_urls
+    )
+    if not confirmaciones:
+        return build_failure(
+            agent_uri,
+            receiver,
+            action,
+            "Ningún centro logístico pudo planificar el envío",
+        )
+    for shipping_response in confirmaciones:
+        for triple in shipping_response:
+            order_graph.add(triple)
+        confirmacion = next(
+            shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None
+        )
+        if confirmacion is not None:
+            order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+    log(
+        "comerciante",
+        f"Envíos planificados por {len(confirmaciones)} centro(s) para {len(lines_for_logistics)} línea(s)",
+    )
+    return None
+
+
+def _capability_gestionar_vendedores_externos(
+    agent_uri: URIRef,
+    order_graph: Graph,
+    request_graph: Graph,
+    pedido: URIRef,
+    ext_envio_tienda: list,
+    ext_envio_propio: list,
+    financiero_url: str,
+    vendedor_externo_url: str,
+) -> None:
+    """Plan ComunicarVendedoresExternos: pago al vendedor + aviso si gestiona el envío."""
+
+    if not (ext_envio_tienda or ext_envio_propio):
+        return
+    address = next(request_graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    address_graph = order_graph if address is not None else None
+    _gestionar_productos_externos(
+        agent_uri, order_graph, pedido, request_graph,
+        ext_envio_tienda, ext_envio_propio,
+        address, address_graph,
+        financiero_url, vendedor_externo_url,
+    )
+
+
+def _capability_realizar_cobro(
+    agent_uri: URIRef,
+    order_graph: Graph,
+    pedido: URIRef,
+    financiero_url: str,
+) -> None:
+    """Plan RealizarCobro: dispara SolicitarCobro al Agente Financiero."""
+
+    total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
+    _post_safe(
+        financiero_url,
+        build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total),
+        "cobro",
+    )
+
+
+def _capability_finalizar_pedido(
+    agent_uri: URIRef,
+    order_graph: Graph,
+    pedido: URIRef,
+    feedback_url: str,
+    completed_orders: dict[str, Graph],
+) -> None:
+    """Plan FinalizarPedido: notifica al Agente Feedback (NotificarCompraCompletada)
+    y persiste el pedido completado."""
+
+    _post_safe(
+        feedback_url,
+        build_notify_purchase_completed(
+            agent_uri, AGENTS.AgenteFeedback, order_graph, pedido
+        ),
+        "feedback",
+    )
+    _store_completed_order(completed_orders, order_graph, pedido)
 
 
 def _handle_completed_order_info(
@@ -177,6 +328,67 @@ def _handle_completed_order_info(
     stored_pedido = next(order_graph.subjects(ECSDI.idPedido, Literal(pedido_id)), pedido)
     log("comerciante", f"Consulta pedido completado: {pedido_id}")
     return build_completed_order_info_response(agent_uri, receiver, action, order_graph, stored_pedido)
+
+
+def _discover_logistics_centers(
+    directory_url: str | None,
+    fallback: list[str],
+    requester: URIRef,
+) -> list[str]:
+    """Descubre todos los centros logísticos registrados (extensión avanzada #3 multi-CL).
+
+    Si hay directorio, devuelve la lista de centros registrados como
+    CENTRO_LOGISTICO; si no, usa la lista de fallback heredada de la CLI.
+    Las URLs se normalizan a /comm.
+    """
+
+    if directory_url:
+        urls = search_all_services(directory_url, "CENTRO_LOGISTICO", requester)
+        if urls:
+            return [_comm_url(u) for u in urls]
+    return [_comm_url(u) for u in fallback if u]
+
+
+def _dispatch_to_logistics(
+    agent_uri: URIRef,
+    logistics_graph: Graph,
+    pedido: URIRef,
+    logistics_urls: list[str],
+) -> list[Graph]:
+    """Envía AvisarCL a todos los centros logísticos en paralelo y agrega
+    las confirmaciones válidas. Ignora los failures (centros sin stock).
+    """
+
+    def _ask(url: str) -> Graph | None:
+        try:
+            message = build_logistics_request(
+                agent_uri, AGENTS.CentroLogistico, logistics_graph, pedido
+            )
+            response = post_graph(url, message)
+            msg = get_message(response)
+            if msg is None:
+                return None
+            if msg.performative == ACL.failure:
+                log("comerciante", f"CL {url} sin stock o sin transporte; se ignora")
+                return None
+            if any(response.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+                return response
+            return None
+        except Exception as exc:
+            log("comerciante", f"Error contactando CL {url}: {exc}")
+            return None
+
+    confirmaciones: list[Graph] = []
+    if not logistics_urls:
+        return confirmaciones
+
+    with ThreadPoolExecutor(max_workers=min(8, len(logistics_urls))) as pool:
+        futures = {pool.submit(_ask, url): url for url in logistics_urls}
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                confirmaciones.append(result)
+    return confirmaciones
 
 
 def _classify_lines(graph: Graph, lines: list) -> tuple[list, list, list]:
@@ -279,6 +491,7 @@ def _store_completed_order(completed_orders: dict[str, Graph], order_graph: Grap
         stored.add(triple)
     completed_orders[pedido_id] = stored
     save_graph_item("completed_orders", pedido_id, stored)
+    save_named_graph(f"completed_orders/{pedido_id}", stored)
     log("comerciante", f"Pedido completado guardado: {pedido_id}")
 
 
@@ -359,11 +572,6 @@ def _build_order_graph(
     return graph
 
 
-def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:
-    for triple in source.triples((subject, None, None)):
-        target.add(triple)
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -371,7 +579,12 @@ def main():
     parser.add_argument("--open", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=9001)
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
-    parser.add_argument("--logistics-url", default=None)
+    parser.add_argument(
+        "--logistics-url",
+        action="append",
+        default=None,
+        help="URL fija de un centro logístico de fallback; puede repetirse para varios",
+    )
     parser.add_argument("--financiero-url", default=None)
     parser.add_argument("--feedback-url", default=None)
     parser.add_argument("--vendedor-externo-url", default=None)
@@ -383,25 +596,45 @@ def main():
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_COMERCIANTE", advertised_host, args.port)
 
-    logistics_base = args.logistics_url or search_service(args.dir, "CENTRO_LOGISTICO", service_id) or "http://127.0.0.1:9002"
-    logistics_url = _comm_url(logistics_base)
+    logistics_fallback: list[str] = []
+    if args.logistics_url:
+        logistics_fallback = [_comm_url(u) for u in args.logistics_url]
+    elif not args.dir:
+        logistics_fallback = ["http://127.0.0.1:9002/comm"]
+
     financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO", service_id) or "http://127.0.0.1:9005"
     financiero_url = _comm_url(financiero_base)
     feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK", service_id) or "http://127.0.0.1:9007"
     feedback_url = _comm_url(feedback_base)
     vendedor_externo_base = args.vendedor_externo_url or search_service(args.dir, "AGENTE_VENDEDOR_EXTERNO", service_id) or "http://127.0.0.1:9008"
     vendedor_externo_url = _comm_url(vendedor_externo_base)
-    registered = register_service(args.dir, service_id, "AGENTE_COMERCIANTE", address, f"comerciante-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "AGENTE_COMERCIANTE",
+        address,
+        f"comerciante-{args.port}",
+        capabilities=[ECSDI.RealizarPedido, ECSDI.PeticionInfoPedidoCompletado],
+    )
     try:
-        log(f"comerciante-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}, feedback={feedback_url}, vendedor_externo={vendedor_externo_url}")
-        create_app(logistics_url=logistics_url, financiero_url=financiero_url, feedback_url=feedback_url, vendedor_externo_url=vendedor_externo_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(
+            f"comerciante-{args.port}",
+            (
+                f"listening on {bind_host}:{args.port}, "
+                f"logistics_fallback={logistics_fallback}, financiero={financiero_url}, "
+                f"feedback={feedback_url}, vendedor_externo={vendedor_externo_url}"
+            ),
+        )
+        create_app(
+            logistics_urls=logistics_fallback,
+            directory_url=args.dir,
+            financiero_url=financiero_url,
+            feedback_url=feedback_url,
+            vendedor_externo_url=vendedor_externo_url,
+        ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"comerciante-{args.port}")
-
-
-def _comm_url(base_url: str) -> str:
-    return base_url if base_url.endswith("/comm") else base_url.rstrip("/") + "/comm"
 
 
 if __name__ == "__main__":

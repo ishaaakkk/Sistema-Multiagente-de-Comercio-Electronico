@@ -7,6 +7,7 @@ from rdflib import Graph, Literal
 from rdflib.namespace import RDF
 
 from utilities.builders import build_order_message, build_search_message, build_valoracion_request
+from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.acl import build_message, build_not_understood, get_message
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -442,14 +443,6 @@ IFACE_HTML = """<!DOCTYPE html>
   let lastPedidoId = '';
   let starRating = 0;
 
-  // ── Navegación ────────────────────────────────────────────
-  function showTab(name, btn) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    btn.classList.add('active');
-  }
-
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
     document.getElementById('status-msg').textContent = msg;
@@ -639,8 +632,6 @@ IFACE_HTML = """<!DOCTYPE html>
   }
 
   // ── Init ─────────────────────────────────────────────────
-  // Sobreescribir showTab para que también refresque el panel de pedido
-  const _origShowTab = showTab;
   setStatus('Listo', 'ok');
 </script>
 </body>
@@ -656,6 +647,7 @@ def create_app(
 ):
     app = Flask(__name__)
     app._feedback_requests = []
+    app._recommendations_inbox: list[dict] = []
 
     # ── /iface ────────────────────────────────────────────────────────────────
 
@@ -848,6 +840,16 @@ def create_app(
             mimetype="application/json"
         )
 
+    @app.get("/recommendations-inbox")
+    def recommendations_inbox():
+        """Buzón de recomendaciones recibidas como ACL.inform desde el AgenteFeedback."""
+
+        import json
+        return app.response_class(
+            json.dumps({"inbox": getattr(app, "_recommendations_inbox", [])}),
+            mimetype="application/json",
+        )
+
     @app.get("/recommendations")
     def recommendations():
         import json
@@ -898,6 +900,25 @@ def create_app(
                 log("asistente", f"PedirFeedback recibido: pedido={pedido} producto={product}")
                 return rdf_response(build_message(graph, action, ACL.inform, agent_uri, message.sender))
 
+            # Recomendación proactiva (cap. 9): el agente feedback envía
+            # ACL.inform con un grafo de Recomendaciones cada T minutos. El
+            # asistente las almacena en su inbox para que el usuario las
+            # consulte por /recommendations-inbox.
+            if message.performative == ACL.inform and any(graph.subjects(RDF.type, ECSDI.Recomendacion)):
+                for rec in graph.subjects(RDF.type, ECSDI.Recomendacion):
+                    product = next(graph.objects(rec, ECSDI.recomendacionDeProducto), None)
+                    app._recommendations_inbox.append(
+                        {
+                            "product_id": str(next(graph.objects(product, ECSDI.idProducto), "")) if product else "",
+                            "score": str(next(graph.objects(rec, ECSDI.puntosRecomendacion), "")),
+                            "reason": str(next(graph.objects(rec, ECSDI.motivoRecomendacion), "")),
+                            "date": str(next(graph.objects(rec, ECSDI.fechaRecomendacion), "")),
+                            "from": str(message.sender),
+                        }
+                    )
+                log("asistente", f"Recomendaciones proactivas recibidas: {len(app._recommendations_inbox)} en inbox")
+                return rdf_response(build_message(graph, action, ACL.inform, agent_uri, message.sender))
+
             return rdf_response(
                 build_not_understood(agent_uri, message.sender, "El AsistenteVirtual no acepta requests externos")
             )
@@ -932,14 +953,18 @@ def main():
     shop_base     = args.shop_url     or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
     feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK", service_id)   or "http://127.0.0.1:9007"
 
-    def _comm_url(base):
-        return base if base.endswith("/comm") else base.rstrip("/") + "/comm"
-
     catalog_url  = _comm_url(catalog_base)
     shop_url     = _comm_url(shop_base)
     feedback_url = _comm_url(feedback_base)
 
-    registered = register_service(args.dir, service_id, "AGENTE_ASISTENTE", address, f"asistente-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "AGENTE_ASISTENTE",
+        address,
+        f"asistente-{args.port}",
+        capabilities=[ECSDI.PedirFeedback, ECSDI.Recomendacion],
+    )
 
     try:
         log(
