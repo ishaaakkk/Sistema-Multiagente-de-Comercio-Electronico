@@ -896,6 +896,12 @@
                   rdfs:comment "Representa el agente asistente del usuario, encargado de iniciar búsquedas, compras, devoluciones y recibir información de la tienda" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/AvisarCL
+:AvisarCL rdf:type owl:Class ;
+          rdfs:subClassOf :Accion ;
+          rdfs:comment "Acción mediante la cual el Agente Comerciante solicita a un Centro Logístico preparar o gestionar un pedido para envío" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/BuscarProductos
 :BuscarProductos rdf:type owl:Class ;
                  rdfs:subClassOf :Accion ;
@@ -1070,6 +1076,11 @@
                  rdfs:comment "Representa un producto gestionado directamente por la tienda y disponible en uno o varios centros logísticos propios" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProcesoInterno
+:ProcesoInterno rdf:type owl:Class ;
+                rdfs:comment "Paso de planificación o decisión interna de un agente; no representa una funcionalidad solicitada por otro agente mediante request" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProveedorPagos
 :ProveedorPagos rdf:type owl:Class ;
                 rdfs:subClassOf :Actor ;
@@ -1159,6 +1170,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/SeleccionarCL
 :SeleccionarCL rdf:type owl:Class ;
+               rdfs:subClassOf :ProcesoInterno ;
                rdfs:comment "Proceso interno de selección del centro logístico; no representa una acción solicitada por otro agente" .
 
 
