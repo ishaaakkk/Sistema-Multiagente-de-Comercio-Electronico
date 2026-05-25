@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from flask import Flask, request as flask_request
-from rdflib import Graph
+from rdflib import Graph, Literal
 from rdflib.namespace import RDF
 
 from utilities.builders import build_order_message, build_search_message, build_valoracion_request
@@ -854,7 +854,8 @@ def create_app(
         graph = Graph()
         bind_namespaces(graph)
         action = DATA[f"action/recomendaciones/{uuid4()}"]
-        graph.add((action, RDF.type, ECSDI.PeticionProductosCandidatos))
+        graph.add((action, RDF.type, ECSDI.BuscarProductos))
+        graph.add((action, ECSDI.tipoBusqueda, Literal("recomendacion")))
         message = build_message(graph, action, ACL.request, agent_uri, AGENTS.AgenteFeedback)
         try:
             response = post_graph(feedback_url, message)

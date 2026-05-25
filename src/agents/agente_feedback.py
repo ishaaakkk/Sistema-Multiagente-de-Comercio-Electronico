@@ -63,7 +63,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, assistant_url: str | None = None):
             if (action, RDF.type, ECSDI.NotificarCompraCompletada) in graph:
                 return rdf_response(_handle_notify_purchase(opinions_db, agent_uri, message.sender, action, graph, assistant_url))
 
-            if (action, RDF.type, ECSDI.PeticionProductosCandidatos) in graph:
+            if _is_recommendation_request(graph, action):
                 return rdf_response(_handle_recommendations(opinions_db, agent_uri, message.sender, action))
 
             # EnviarOpinion/RegistrarValoracion son comunicaciones informativas, no acciones de API.
@@ -219,7 +219,7 @@ def _handle_recommendations(
     graph = Graph()
     bind_namespaces(graph)
     response = DATA[f"response/recomendaciones/{uuid4()}"]
-    graph.add((response, RDF.type, ECSDI.RespuestaProductosCandidatos))
+    graph.add((response, RDF.type, ECSDI.Respuesta))
     graph.add((response, ECSDI.respuestaDeAccion, action))
 
     candidates = [r for r in opinions_db if r.get("puntuacion") is not None]
@@ -247,6 +247,13 @@ def _handle_recommendations(
 
     log("feedback", f"Recomendaciones generadas: {len(seen)} candidato(s)")
     return build_message(graph, response, ACL.inform, agent_uri, receiver)
+
+
+def _is_recommendation_request(graph: Graph, action: URIRef) -> bool:
+    return (
+        (action, RDF.type, ECSDI.BuscarProductos) in graph
+        and str(next(graph.objects(action, ECSDI.tipoBusqueda), "")).casefold() == "recomendacion"
+    )
 
 
 def _extract_delivery_date(graph: Graph) -> str | None:
