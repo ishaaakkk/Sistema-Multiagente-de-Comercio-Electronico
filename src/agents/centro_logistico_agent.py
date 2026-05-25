@@ -46,8 +46,8 @@ def create_app(
     @app.post("/comm")
     def comm():
         # Plan: AgruparPedidoEnLote (AgenteLogistico / AgruparEnLotes)
-        # Msg entrante: AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
-        # Recibe RealizarPedido, construye un LoteEnvio y negocia el transporte
+        # Msg entrante: AvisarCL (AgenteComerciante → AgenteLogistico)
+        # Recibe una peticion logistica, construye un LoteEnvio y negocia el transporte
         # con TODOS los transportistas registrados, eligiendo la oferta mas barata.
         try:
             graph = graph_from_request()
@@ -58,7 +58,7 @@ def create_app(
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
-            if (action, RDF.type, ECSDI.RealizarPedido) not in graph:
+            if (action, RDF.type, ECSDI.AvisarCL) not in graph and (action, RDF.type, ECSDI.RealizarPedido) not in graph:
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Accion logistica no soportada"))
 
             pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)

@@ -7,7 +7,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, get_message
 from utilities.builders import build_search_response
 from utilities.catalog import (
     center_uri,
@@ -29,6 +29,7 @@ from utilities.runtime import (
     register_service,
     unregister_service,
 )
+from utilities.storage import load_graph, save_graph
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteCatalogo
@@ -180,6 +181,8 @@ def build_catalog_graph() -> Graph:
 def create_app(agent_uri=DEFAULT_AGENT_URI):
     app = Flask(__name__)
     catalog = build_catalog_graph()
+    for triple in load_graph("catalog.ttl"):
+        catalog.add(triple)
 
     # Historial de busquedas en memoria (futura HistorialBusquedasDB via SPARQL)
     search_history: list[dict] = []
@@ -206,12 +209,10 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             if (action, RDF.type, ECSDI.BuscarProductos) in graph:
                 return rdf_response(_handle_search(catalog, search_history, agent_uri, message.sender, action, graph))
 
-            # Capacidad AñadirProductoExt — Plan: ActualizarCatalogo (pendiente de implementar)
-            # Msg entrante: AnunciarProductoExterno (VendedorExterno → AgenteCatalogo)
-            if (action, RDF.type, ECSDI.AnadirProductoExterno) in graph:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "AnadirProductoExterno: pendiente de implementar")
-                )
+            # Capacidad AñadirProductoExt — Plan: ActualizarCatalogo
+            # Msg entrante: DarAltaProductoExterno (VendedorExterno → AgenteCatalogo)
+            if (action, RDF.type, ECSDI.DarAltaProductoExterno) in graph:
+                return rdf_response(_handle_external_product_registration(catalog, agent_uri, message.sender, action, graph))
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteCatalogo"))
 
@@ -253,6 +254,63 @@ def _handle_search(
     # Plan: MostrarProductos — devuelve productos al solicitante
     log("catalogo", f"Busqueda: {constraints} -> {len(products)} productos encontrados")
     return build_search_response(agent_uri, receiver, action, products, catalog)
+
+
+def _handle_external_product_registration(
+    catalog: Graph,
+    agent_uri: URIRef,
+    sender: URIRef,
+    action: URIRef,
+    graph: Graph,
+) -> Graph:
+    """Plan: ActualizarCatalogo — integra productos externos anunciados."""
+    products = list(graph.objects(action, ECSDI.accionSobreProducto))
+    for product in graph.subjects(RDF.type, ECSDI.ProductoExterno):
+        if product not in products:
+            products.append(product)
+
+    if not products:
+        return build_failure(agent_uri, sender, action, "Falta el producto externo a registrar")
+
+    response_graph = Graph()
+    bind_namespaces(response_graph)
+    response = DATA[f"response/catalogo/alta-externa/{uuid4()}"]
+    response_graph.add((response, RDF.type, ECSDI.Respuesta))
+    response_graph.add((response, ECSDI.respuestaDeAccion, action))
+
+    for product in products:
+        _copy_subject(graph, catalog, product)
+        catalog.add((product, RDF.type, ECSDI.Producto))
+        catalog.add((product, RDF.type, ECSDI.ProductoExterno))
+        if next(catalog.objects(product, ECSDI.idProducto), None) is None:
+            catalog.add((product, ECSDI.idProducto, Literal(_product_id_from_uri(product))))
+        if next(catalog.objects(product, ECSDI.nombreProducto), None) is None:
+            catalog.add((product, ECSDI.nombreProducto, Literal(_product_id_from_uri(product))))
+        if next(catalog.objects(product, ECSDI.precioProducto), None) is None:
+            catalog.add((product, ECSDI.precioProducto, decimal_literal(Decimal("0"))))
+        if next(catalog.objects(product, ECSDI.valoracionMedia), None) is None:
+            catalog.add((product, ECSDI.valoracionMedia, decimal_literal(Decimal("0"))))
+        if next(catalog.objects(product, ECSDI.pesoProducto), None) is None:
+            catalog.add((product, ECSDI.pesoProducto, decimal_literal(Decimal("1.0"))))
+        if next(catalog.objects(product, ECSDI.gestionEnvioExterno), None) is None:
+            catalog.add((product, ECSDI.gestionEnvioExterno, Literal(True, datatype=XSD.boolean)))
+        if next(catalog.objects(product, ECSDI.productoOfrecidoPor), None) is None:
+            catalog.add((product, ECSDI.productoOfrecidoPor, sender))
+        _copy_subject(catalog, response_graph, product)
+
+    log("catalogo", f"Alta externa registrada: {len(products)} producto(s)")
+    save_graph("catalog.ttl", catalog)
+    return build_message(response_graph, response, ACL.inform, agent_uri, sender)
+
+
+def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:
+    for triple in source.triples((subject, None, None)):
+        target.add(triple)
+
+
+def _product_id_from_uri(product: URIRef) -> str:
+    uri = str(product)
+    return uri.rsplit("/producto/", 1)[-1] if "/producto/" in uri else uri.rsplit("/", 1)[-1]
 
 
 def main():

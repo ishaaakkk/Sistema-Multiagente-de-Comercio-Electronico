@@ -1,14 +1,15 @@
 import argparse
 from decimal import Decimal
-from threading import Thread
+from uuid import uuid4
 
 from flask import Flask, request as flask_request
+from rdflib import Graph
 from rdflib.namespace import RDF
 
 from utilities.builders import build_order_message, build_search_message, build_valoracion_request
 from utilities.http import graph_from_request, post_graph, rdf_response
-from utilities.acl import build_not_understood, get_message
-from utilities.namespaces import ACL, AGENTS, ECSDI
+from utilities.acl import build_message, build_not_understood, get_message
+from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -654,6 +655,7 @@ def create_app(
     feedback_url="http://127.0.0.1:9007/comm",
 ):
     app = Flask(__name__)
+    app._feedback_requests = []
 
     # ── /iface ────────────────────────────────────────────────────────────────
 
@@ -838,6 +840,40 @@ def create_app(
             mimetype="application/json"
         )
 
+    @app.get("/feedback-requests")
+    def feedback_requests():
+        import json
+        return app.response_class(
+            json.dumps({"requests": getattr(app, "_feedback_requests", [])}),
+            mimetype="application/json"
+        )
+
+    @app.get("/recommendations")
+    def recommendations():
+        import json
+        graph = Graph()
+        bind_namespaces(graph)
+        action = DATA[f"action/recomendaciones/{uuid4()}"]
+        graph.add((action, RDF.type, ECSDI.PeticionProductosCandidatos))
+        message = build_message(graph, action, ACL.request, agent_uri, AGENTS.AgenteFeedback)
+        try:
+            response = post_graph(feedback_url, message)
+        except Exception as exc:
+            return app.response_class(
+                json.dumps({"error": f"No se pudo contactar con feedback: {exc}"}),
+                mimetype="application/json"
+            )
+
+        items = []
+        for rec in response.subjects(RDF.type, ECSDI.Recomendacion):
+            product = next(response.objects(rec, ECSDI.recomendacionDeProducto), None)
+            items.append({
+                "product_id": str(next(response.objects(product, ECSDI.idProducto), "")) if product else "",
+                "score": str(next(response.objects(rec, ECSDI.puntosRecomendacion), "")),
+                "reason": str(next(response.objects(rec, ECSDI.motivoRecomendacion), "")),
+            })
+        return app.response_class(json.dumps({"recommendations": items}), mimetype="application/json")
+
     # ── /comm — endpoint ACL (para que otros agentes puedan contactarnos) ─────
 
     @app.post("/comm")
@@ -849,7 +885,18 @@ def create_app(
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido")
                 )
-            # El asistente no espera requests externos en este diseño
+            action = message.content
+            if message.performative == ACL.request and (action, RDF.type, ECSDI.PedirFeedback) in graph:
+                pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
+                product = next(graph.objects(action, ECSDI.accionSobreProducto), None)
+                app._feedback_requests.append({
+                    "pedido_id": str(next(graph.objects(pedido, ECSDI.idPedido), "")) if pedido else "",
+                    "product_id": str(next(graph.objects(product, ECSDI.idProducto), "")) if product else "",
+                    "from": str(message.sender),
+                })
+                log("asistente", f"PedirFeedback recibido: pedido={pedido} producto={product}")
+                return rdf_response(build_message(graph, action, ACL.inform, agent_uri, message.sender))
+
             return rdf_response(
                 build_not_understood(agent_uri, message.sender, "El AsistenteVirtual no acepta requests externos")
             )

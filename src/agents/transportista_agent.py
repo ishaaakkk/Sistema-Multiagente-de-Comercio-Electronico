@@ -1,14 +1,15 @@
 import argparse
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from flask import Flask
-from rdflib import URIRef
-from rdflib.namespace import RDF
+from rdflib import Graph, Literal, URIRef
+from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, get_message
 from utilities.builders import build_transport_offer
 from utilities.http import graph_from_request, rdf_response
-from utilities.namespaces import ACL, AGENTS, ECSDI
+from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -57,6 +58,9 @@ def create_app(
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
+            if (action, RDF.type, ECSDI.SolicitarRecogidaDevolucion) in graph:
+                return rdf_response(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
+
             if (action, RDF.type, ECSDI.SolicitarPresupuestoTransporte) not in graph:
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Accion de transporte no soportada"))
 
@@ -90,6 +94,31 @@ def create_app(
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
     return app
+
+
+def _handle_recogida_devolucion(agent_uri: URIRef, receiver: URIRef, action: URIRef, graph: Graph) -> Graph:
+    pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
+    product = next(graph.objects(action, ECSDI.accionSobreProducto), None)
+    devolucion = next(graph.subjects(RDF.type, ECSDI.Devolucion), None)
+    if devolucion is None:
+        devolucion = DATA[f"devolucion/{datetime.now().timestamp()}"]
+
+    pickup_date = datetime.now() + timedelta(days=1)
+    response_graph = Graph()
+    bind_namespaces(response_graph)
+    envio = DATA[f"envio/devolucion/{datetime.now().timestamp()}"]
+    response_graph.add((devolucion, RDF.type, ECSDI.Devolucion))
+    response_graph.add((devolucion, ECSDI.fechaRecogidaDevolucion, Literal(pickup_date.isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+    if pedido is not None:
+        response_graph.add((devolucion, ECSDI.devolucionDePedido, pedido))
+        response_graph.add((envio, ECSDI.envioDePedido, pedido))
+    if product is not None:
+        response_graph.add((devolucion, ECSDI.devolucionDeProducto, product))
+    response_graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
+    response_graph.add((envio, ECSDI.envioRealizadoPor, URIRef(agent_uri)))
+
+    log(str(agent_uri).split("/")[-1], f"Recogida devolucion aceptada: pedido={pedido} producto={product}")
+    return build_message(response_graph, devolucion, ACL.inform, agent_uri, receiver)
 
 
 def _days_for_priority(priority: int) -> int:

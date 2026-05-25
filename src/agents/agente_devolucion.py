@@ -8,7 +8,11 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
-from utilities.builders import build_completed_order_info_request, build_reembolso_request
+from utilities.builders import (
+    build_completed_order_info_request,
+    build_recogida_devolucion_request,
+    build_reembolso_request,
+)
 from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -22,6 +26,7 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
+from utilities.storage import load_json, save_json
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteDevolucion
@@ -32,9 +37,10 @@ def create_app(
     agent_uri=DEFAULT_AGENT_URI,
     shop_url="http://127.0.0.1:9001/comm",
     financiero_url="http://127.0.0.1:9005/comm",
+    transport_url: str | None = None,
 ):
     app = Flask(__name__)
-    devoluciones_db: list[dict] = []
+    devoluciones_db: list[dict] = load_json("devoluciones.json", [])
 
     @app.get("/")
     def index():
@@ -65,6 +71,7 @@ def create_app(
                         graph,
                         shop_url,
                         financiero_url,
+                        transport_url,
                     )
                 )
 
@@ -83,6 +90,7 @@ def _handle_devolucion(
     request_graph: Graph,
     shop_url: str,
     financiero_url: str,
+    transport_url: str | None,
 ) -> Graph:
     devolucion, pedido, product, motivo = _extract_request(request_graph, action)
     if pedido is None or product is None:
@@ -145,7 +153,8 @@ def _handle_devolucion(
             reason="No se pudo confirmar el reembolso con el AgenteFinanciero",
         )
 
-    pickup_date = datetime.now() + timedelta(days=1)
+    pickup_graph = _request_recogida(agent_uri, transport_url, devolucion, pedido, product, order_graph) if transport_url else None
+    pickup_date = _pickup_date_from_graph(pickup_graph) or datetime.now() + timedelta(days=1)
     response = _build_resolution(
         agent_uri,
         receiver,
@@ -159,6 +168,7 @@ def _handle_devolucion(
         importe=importe,
         pickup_date=pickup_date,
         reembolso_graph=reembolso_graph,
+        pickup_graph=pickup_graph,
     )
     devoluciones_db.append(
         {
@@ -170,6 +180,7 @@ def _handle_devolucion(
             "fecha_recogida": pickup_date.isoformat(timespec="seconds"),
         }
     )
+    save_json("devoluciones.json", devoluciones_db)
     log("devolucion", f"Devolucion aceptada pedido={_pedido_id(order_graph, pedido)} producto={_product_id(order_graph, product)} importe={importe}")
     return response
 
@@ -226,6 +237,34 @@ def _request_reembolso(
     return None
 
 
+def _request_recogida(
+    agent_uri: URIRef,
+    transport_url: str | None,
+    devolucion: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    order_graph: Graph,
+) -> Graph | None:
+    if not transport_url:
+        return None
+    try:
+        message = build_recogida_devolucion_request(
+            agent_uri,
+            AGENTS.TransportistaExpress,
+            devolucion,
+            pedido,
+            product,
+            order_graph,
+        )
+        response = post_graph(transport_url, message)
+        msg = get_message(response)
+        if msg and msg.performative == ACL.inform:
+            return response
+    except Exception as exc:
+        log("devolucion", f"No se pudo solicitar recogida: {exc}")
+    return None
+
+
 def _build_resolution(
     sender: URIRef,
     receiver: URIRef,
@@ -239,6 +278,7 @@ def _build_resolution(
     importe: Decimal | None = None,
     pickup_date: datetime | None = None,
     reembolso_graph: Graph | None = None,
+    pickup_graph: Graph | None = None,
 ) -> Graph:
     graph = Graph()
     bind_namespaces(graph)
@@ -268,7 +308,10 @@ def _build_resolution(
         if operacion is not None:
             graph.add((devolucion, ECSDI.devolucionTieneReembolso, operacion))
 
-    if accepted:
+    if pickup_graph is not None:
+        _add_business_triples(pickup_graph, graph)
+
+    if accepted and not list(graph.subjects(RDF.type, ECSDI.EnvioDevolucion)):
         envio = DATA[f"envio/devolucion/{uuid4()}"]
         graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
         graph.add((envio, ECSDI.envioDePedido, pedido))
@@ -326,6 +369,18 @@ def _extract_delivery_date(graph: Graph) -> datetime | None:
     return None
 
 
+def _pickup_date_from_graph(graph: Graph | None) -> datetime | None:
+    if graph is None:
+        return None
+    for devolucion in graph.subjects(RDF.type, ECSDI.Devolucion):
+        value = next(graph.objects(devolucion, ECSDI.fechaRecogidaDevolucion), None)
+        if value is not None:
+            parsed = _parse_datetime(str(value))
+            if parsed is not None:
+                return parsed
+    return None
+
+
 def _extract_datetime(graph: Graph, subject: URIRef, predicate: URIRef) -> datetime | None:
     value = next(graph.objects(subject, predicate), None)
     return _parse_datetime(str(value)) if value is not None else None
@@ -367,6 +422,7 @@ def main():
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
     parser.add_argument("--shop-url", default=None)
     parser.add_argument("--financiero-url", default=None)
+    parser.add_argument("--transport-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -377,12 +433,14 @@ def main():
 
     shop_base = args.shop_url or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
     financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO", service_id) or "http://127.0.0.1:9005"
+    transport_base = args.transport_url or search_service(args.dir, "TRANSPORTISTA", service_id)
     shop_url = _comm_url(shop_base)
     financiero_url = _comm_url(financiero_base)
+    transport_url = _comm_url(transport_base) if transport_base else None
     registered = register_service(args.dir, service_id, "AGENTE_DEVOLUCION", address, f"devolucion-{args.port}")
     try:
-        log(f"devolucion-{args.port}", f"listening on {bind_host}:{args.port}, shop={shop_url}, financiero={financiero_url}")
-        create_app(shop_url=shop_url, financiero_url=financiero_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
+        log(f"devolucion-{args.port}", f"listening on {bind_host}:{args.port}, shop={shop_url}, financiero={financiero_url}, transport={transport_url or 'N/A'}")
+        create_app(shop_url=shop_url, financiero_url=financiero_url, transport_url=transport_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
             unregister_service(args.dir, service_id, f"devolucion-{args.port}")

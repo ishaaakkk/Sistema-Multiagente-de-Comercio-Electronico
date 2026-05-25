@@ -12,6 +12,7 @@ Alcance implementado:
 - Cobro simulado del pedido y pagos a vendedores externos.
 - Registro de compras completadas para feedback y validacion de devoluciones.
 - Devolucion de productos comprados con consulta del pedido completado y reembolso simulado.
+- Solicitud proactiva de feedback al asistente y recomendaciones basicas a partir de valoraciones.
 - Mensajes RDF con una envoltura FIPA-ACL minima y contenido definido con la ontologia del repositorio.
 
 Agentes:
@@ -31,7 +32,7 @@ Agentes:
 Limitaciones de momento:
 
 - El cobro, los reembolsos y los pagos externos se simulan en memoria.
-- No se implementan recomendaciones proactivas.
+- Las recomendaciones son basicas y se calculan en memoria a partir de compras/valoraciones registradas.
 - El servicio de directorio se comunica mediante RDF/FIPA-ACL, pero el registro sigue siendo en memoria; los agentes envian `request` con acciones `DSO.RegistrarAgente`, `DSO.BuscarAgente`, `DSO.BuscarTodosAgentes` y `DSO.EliminarAgente`.
 - El catalogo de datos es pequeno y esta generado en codigo para facilitar la demo.
 - La seleccion de transportista es simple, aunque ya admite varios transportistas registrados.

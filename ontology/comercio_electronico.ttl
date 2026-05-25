@@ -1,6 +1,4 @@
 @prefix : <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
-@prefix dso: <http://www.semanticweb.org/ecsdi/directory/> .
-@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix xml: <http://www.w3.org/XML/1998/namespace> .
@@ -70,27 +68,6 @@
                        rdfs:domain :Notificacion ;
                        rdfs:range :Valoracion ;
                        rdfs:comment "Relación mantenida por compatibilidad para vincular una comunicación informativa con la valoración emitida por el asistente" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionSobrePedido
-:notificacionSobrePedido rdf:type owl:ObjectProperty ;
-                         rdfs:domain :Notificacion ;
-                         rdfs:range :Pedido ;
-                         rdfs:comment "Relación que indica el pedido sobre el que informa una notificación" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionSobreProducto
-:notificacionSobreProducto rdf:type owl:ObjectProperty ;
-                           rdfs:domain :Notificacion ;
-                           rdfs:range :Producto ;
-                           rdfs:comment "Relación que indica el producto sobre el que informa una notificación" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionTieneValoracion
-:notificacionTieneValoracion rdf:type owl:ObjectProperty ;
-                             rdfs:domain :Notificacion ;
-                             rdfs:range :Valoracion ;
-                             rdfs:comment "Relación que vincula una notificación informativa con una valoración emitida" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/confirmacionDeOperacion
@@ -206,6 +183,27 @@
                 rdfs:comment "Relación que indica las líneas de pedido incluidas en un lote de envío" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionSobrePedido
+:notificacionSobrePedido rdf:type owl:ObjectProperty ;
+                         rdfs:domain :Notificacion ;
+                         rdfs:range :Pedido ;
+                         rdfs:comment "Relación que indica el pedido sobre el que informa una notificación" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionSobreProducto
+:notificacionSobreProducto rdf:type owl:ObjectProperty ;
+                           rdfs:domain :Notificacion ;
+                           rdfs:range :Producto ;
+                           rdfs:comment "Relación que indica el producto sobre el que informa una notificación" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionTieneValoracion
+:notificacionTieneValoracion rdf:type owl:ObjectProperty ;
+                             rdfs:domain :Notificacion ;
+                             rdfs:range :Valoracion ;
+                             rdfs:comment "Relación que vincula una notificación informativa con una valoración emitida" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaParaLote
 :ofertaParaLote rdf:type owl:ObjectProperty ;
                 rdfs:domain :OfertaTransporte ;
@@ -240,13 +238,6 @@
                      rdfs:range :AsistenteVirtual .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoTieneFactura
-:pedidoTieneFactura rdf:type owl:ObjectProperty ;
-                    rdfs:domain :Pedido ;
-                    rdfs:range :Factura ;
-                    rdfs:comment "Relación que indica el AsistenteVirtual que solicita un pedido" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoTieneConfirmacion
 :pedidoTieneConfirmacion rdf:type owl:ObjectProperty ;
                          rdfs:domain :Pedido ;
@@ -259,6 +250,13 @@
                   rdfs:domain :Pedido ;
                   rdfs:range :Envio ;
                   rdfs:comment "Relación que vincula un pedido con un envío asociado, interno o externo" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoTieneFactura
+:pedidoTieneFactura rdf:type owl:ObjectProperty ;
+                    rdfs:domain :Pedido ;
+                    rdfs:range :Factura ;
+                    rdfs:comment "Relación que indica el AsistenteVirtual que solicita un pedido" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoTieneLinea
@@ -367,23 +365,23 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/Uri
-dso:Uri rdf:type owl:ObjectProperty ;
-        rdfs:range foaf:Agent ;
-        rdfs:comment "URI del agente registrado o devuelto por el servicio de directorio" .
+<http://www.semanticweb.org/ecsdi/directory/Uri> rdf:type owl:ObjectProperty ;
+                                                 rdfs:range <http://xmlns.com/foaf/0.1/Agent> ;
+                                                 rdfs:comment "URI del agente registrado o devuelto por el servicio de directorio" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/respuestaDeAccion
-dso:respuestaDeAccion rdf:type owl:ObjectProperty ;
-                      rdfs:domain dso:RespuestaDirectorio ;
-                      rdfs:range dso:AccionDirectorio ;
-                      rdfs:comment "Acción de directorio a la que responde una confirmación, fallo o resultado" .
+<http://www.semanticweb.org/ecsdi/directory/respuestaDeAccion> rdf:type owl:ObjectProperty ;
+                                                               rdfs:domain <http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> ;
+                                                               rdfs:range <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                               rdfs:comment "Acción de directorio a la que responde una confirmación, fallo o resultado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/resultadoContiene
-dso:resultadoContiene rdf:type owl:ObjectProperty ;
-                      rdfs:domain dso:RespuestaBusquedaMultiple ;
-                      rdfs:range dso:RespuestaBusqueda ;
-                      rdfs:comment "Relación entre una respuesta múltiple del directorio y cada resultado de búsqueda individual" .
+<http://www.semanticweb.org/ecsdi/directory/resultadoContiene> rdf:type owl:ObjectProperty ;
+                                                               rdfs:domain <http://www.semanticweb.org/ecsdi/directory/RespuestaBusquedaMultiple> ;
+                                                               rdfs:range <http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda> ;
+                                                               rdfs:comment "Relación entre una respuesta múltiple del directorio y cada resultado de búsqueda individual" .
 
 
 #################################################################
@@ -627,6 +625,14 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
             rdfs:comment "Identificador único de un producto del catálogo" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/idRecomendacion
+:idRecomendacion rdf:type owl:DatatypeProperty ;
+                 rdfs:subPropertyOf owl:topDataProperty ;
+                 rdfs:domain :Recomendacion ;
+                 rdfs:range xsd:string ;
+                 rdfs:comment "Identificador único de una recomendación" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idVendedor
 :idVendedor rdf:type owl:DatatypeProperty ;
             rdfs:subPropertyOf owl:topDataProperty ;
@@ -635,12 +641,12 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
             rdfs:comment "Identificador único de un vendedor externo" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/idRecomendacion
-:idRecomendacion rdf:type owl:DatatypeProperty ;
-                 rdfs:subPropertyOf owl:topDataProperty ;
-                 rdfs:domain :Recomendacion ;
-                 rdfs:range xsd:string ;
-                 rdfs:comment "Identificador único de una recomendación" .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/importeCobro
+:importeCobro rdf:type owl:DatatypeProperty ;
+              rdfs:subPropertyOf owl:topDataProperty ;
+              rdfs:domain :SolicitarOperacionPago ;
+              rdfs:range xsd:decimal ;
+              rdfs:comment "Importe solicitado en una acción económica de cobro, reembolso o pago externo" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/importeFactura
@@ -657,14 +663,6 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
                   rdfs:domain :OperacionPago ;
                   rdfs:range xsd:decimal ;
                   rdfs:comment "Importe económico asociado a una operación de pago" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/importeCobro
-:importeCobro rdf:type owl:DatatypeProperty ;
-              rdfs:subPropertyOf owl:topDataProperty ;
-              rdfs:domain :SolicitarOperacionPago ;
-              rdfs:range xsd:decimal ;
-              rdfs:comment "Importe solicitado en una acción económica de cobro, reembolso o pago externo" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/importeTotalPedido
@@ -850,20 +848,20 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
                 rdfs:comment "Referencia externa asociada a una operación de pago" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/tipoEnvio
-:tipoEnvio rdf:type owl:DatatypeProperty ;
-           rdfs:subPropertyOf owl:topDataProperty ;
-           rdfs:domain :LineaPedido ,
-                       :Pedido ;
-           rdfs:range xsd:string .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/tipoBusqueda
 :tipoBusqueda rdf:type owl:DatatypeProperty ;
               rdfs:subPropertyOf owl:topDataProperty ;
               rdfs:domain :BuscarProductos ;
               rdfs:range xsd:string ;
               rdfs:comment "Tipo de búsqueda solicitada al catálogo" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/tipoEnvio
+:tipoEnvio rdf:type owl:DatatypeProperty ;
+           rdfs:subPropertyOf owl:topDataProperty ;
+           rdfs:domain :LineaPedido ,
+                       :Pedido ;
+           rdfs:range xsd:string .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/valorTextoRestriccion
@@ -874,20 +872,20 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
                        rdfs:comment "Valor textual usado en una restricción de búsqueda" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/valoracionMedia
-:valoracionMedia rdf:type owl:DatatypeProperty ;
-                 rdfs:subPropertyOf owl:topDataProperty ;
-                 rdfs:domain :Producto ;
-                 rdfs:range xsd:decimal ;
-                 rdfs:comment "Valoración media acumulada de un producto" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/valoracionDePedido
 :valoracionDePedido rdf:type owl:DatatypeProperty ;
                     rdfs:subPropertyOf owl:topDataProperty ;
                     rdfs:domain :Valoracion ;
                     rdfs:range xsd:string ;
                     rdfs:comment "Identificador del pedido completado al que corresponde una valoración" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/valoracionMedia
+:valoracionMedia rdf:type owl:DatatypeProperty ;
+                 rdfs:subPropertyOf owl:topDataProperty ;
+                 rdfs:domain :Producto ;
+                 rdfs:range xsd:decimal ;
+                 rdfs:comment "Valoración media acumulada de un producto" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/valoracionMinima
@@ -899,21 +897,21 @@ dso:resultadoContiene rdf:type owl:ObjectProperty ;
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/Address
-dso:Address rdf:type owl:DatatypeProperty ;
-            rdfs:range xsd:string ;
-            rdfs:comment "Dirección HTTP anunciada por un agente en el servicio de directorio" .
+<http://www.semanticweb.org/ecsdi/directory/Address> rdf:type owl:DatatypeProperty ;
+                                                     rdfs:range xsd:string ;
+                                                     rdfs:comment "Dirección HTTP anunciada por un agente en el servicio de directorio" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/AgentType
-dso:AgentType rdf:type owl:DatatypeProperty ;
-              rdfs:range xsd:string ;
-              rdfs:comment "Tipo funcional con el que un agente se registra o se busca en el servicio de directorio" .
+<http://www.semanticweb.org/ecsdi/directory/AgentType> rdf:type owl:DatatypeProperty ;
+                                                       rdfs:range xsd:string ;
+                                                       rdfs:comment "Tipo funcional con el que un agente se registra o se busca en el servicio de directorio" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/motivo
-dso:motivo rdf:type owl:DatatypeProperty ;
-           rdfs:range xsd:string ;
-           rdfs:comment "Motivo textual asociado a una respuesta de fallo o rechazo del directorio" .
+<http://www.semanticweb.org/ecsdi/directory/motivo> rdf:type owl:DatatypeProperty ;
+                                                    rdfs:range xsd:string ;
+                                                    rdfs:comment "Motivo textual asociado a una respuesta de fallo o rechazo del directorio" .
 
 
 #################################################################
@@ -923,54 +921,6 @@ dso:motivo rdf:type owl:DatatypeProperty ;
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
         rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/AccionDirectorio
-dso:AccionDirectorio rdf:type owl:Class ;
-                     rdfs:subClassOf :Accion ;
-                     rdfs:comment "Acción que el servicio de directorio ejecuta a petición de otros agentes mediante FIPA-ACL request" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/RegistrarAgente
-dso:RegistrarAgente rdf:type owl:Class ;
-                    rdfs:subClassOf dso:AccionDirectorio ;
-                    rdfs:comment "Acción mediante la cual un agente solicita al servicio de directorio quedar registrado con su URI, nombre, dirección y tipo" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/BuscarAgente
-dso:BuscarAgente rdf:type owl:Class ;
-                 rdfs:subClassOf dso:AccionDirectorio ;
-                 rdfs:comment "Acción mediante la cual un agente solicita al directorio un agente de un tipo funcional concreto" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes
-dso:BuscarTodosAgentes rdf:type owl:Class ;
-                       rdfs:subClassOf dso:AccionDirectorio ;
-                       rdfs:comment "Acción mediante la cual un agente solicita al directorio todos los agentes registrados de un tipo funcional concreto" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/EliminarAgente
-dso:EliminarAgente rdf:type owl:Class ;
-                   rdfs:subClassOf dso:AccionDirectorio ;
-                   rdfs:comment "Acción mediante la cual un agente solicita ser eliminado del registro del servicio de directorio" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio
-dso:RespuestaDirectorio rdf:type owl:Class ;
-                        rdfs:subClassOf :Respuesta ;
-                        rdfs:comment "Respuesta emitida por el servicio de directorio ante acciones de registro, búsqueda o eliminación" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda
-dso:RespuestaBusqueda rdf:type owl:Class ;
-                      rdfs:subClassOf dso:RespuestaDirectorio ;
-                      rdfs:comment "Respuesta del directorio que contiene la URI, dirección y tipo de un agente encontrado" .
-
-
-###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusquedaMultiple
-dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
-                              rdfs:subClassOf dso:RespuestaDirectorio ;
-                              rdfs:comment "Respuesta del directorio que agrupa varios resultados de búsqueda de agentes" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor
@@ -1007,6 +957,12 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
               rdfs:comment "Operación mediante la cual se cobra al AsistenteVirtual el importe de un pedido enviado" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ComunicarProductosExternosPedidos
+:ComunicarProductosExternosPedidos rdf:type owl:Class ;
+                                   rdfs:subClassOf :Accion ;
+                                   rdfs:comment "Acción mediante la cual el Agente Comerciante solicita a un vendedor externo que gestione los productos de un pedido" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ConfirmacionComprra
 :ConfirmacionComprra rdf:type owl:Class ;
                      rdfs:subClassOf :Respuesta ;
@@ -1025,22 +981,10 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                          rdfs:comment "Representa la confirmación de que una operación económica se ha completado correctamente" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ComunicarProductosExternosPedidos
-:ComunicarProductosExternosPedidos rdf:type owl:Class ;
-                                   rdfs:subClassOf :Accion ;
-                                   rdfs:comment "Acción mediante la cual el Agente Comerciante solicita a un vendedor externo que gestione los productos de un pedido" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/DarAltaProductoExterno
 :DarAltaProductoExterno rdf:type owl:Class ;
                         rdfs:subClassOf :Accion ;
                         rdfs:comment "Acción mediante la cual un vendedor externo solicita añadir uno o más productos externos al catálogo de la tienda" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/AnadirProductoExterno
-:AnadirProductoExterno rdf:type owl:Class ;
-                       rdfs:subClassOf :DarAltaProductoExterno ;
-                       rdfs:comment "Alias operativo usado por el prototipo para dar de alta productos externos en catálogo" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Devolucion
@@ -1051,6 +995,12 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Direccion
 :Direccion rdf:type owl:Class ;
            rdfs:comment "Representa la dirección de entrega o recogida usada en pedidos, envíos y devoluciones" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnviarOpinion
+:EnviarOpinion rdf:type owl:Class ;
+               rdfs:subClassOf :Notificacion ;
+               rdfs:comment "Comunicación informativa mediante la cual el AsistenteVirtual comparte una valoración de un producto comprado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Envio
@@ -1074,12 +1024,6 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
 :EnvioInterno rdf:type owl:Class ;
               rdfs:subClassOf :Envio ;
               rdfs:comment "Representa un envío gestionado por la tienda desde un centro logístico propio" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnviarOpinion
-:EnviarOpinion rdf:type owl:Class ;
-               rdfs:subClassOf :Notificacion ;
-               rdfs:comment "Comunicación informativa mediante la cual el AsistenteVirtual comparte una valoración de un producto comprado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Factura
@@ -1118,16 +1062,16 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                rdfs:comment "Representa una operación económica solicitada al proveedor de pagos" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/PagoVendedorExterno
-:PagoVendedorExterno rdf:type owl:Class ;
-                     rdfs:subClassOf :OperacionPago ;
-                     rdfs:comment "Operación mediante la cual la tienda transfiere al vendedor externo el importe correspondiente a sus productos vendidos" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/PagarProductoExterno
 :PagarProductoExterno rdf:type owl:Class ;
                       rdfs:subClassOf :SolicitarOperacionPago ;
                       rdfs:comment "Acción mediante la cual el Agente Comerciante solicita transferir al vendedor externo el importe de sus productos vendidos" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/PagoVendedorExterno
+:PagoVendedorExterno rdf:type owl:Class ;
+                     rdfs:subClassOf :OperacionPago ;
+                     rdfs:comment "Operación mediante la cual la tienda transfiere al vendedor externo el importe correspondiente a sus productos vendidos" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Pedido
@@ -1164,11 +1108,6 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                  rdfs:comment "Representa un producto gestionado directamente por la tienda y disponible en uno o varios centros logísticos propios" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProcesoInterno
-:ProcesoInterno rdf:type owl:Class ;
-                rdfs:comment "Paso de planificación o decisión interna de un agente; no representa una funcionalidad solicitada por otro agente mediante request" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProveedorPagos
 :ProveedorPagos rdf:type owl:Class ;
                 rdfs:subClassOf :Actor ;
@@ -1181,12 +1120,6 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                 rdfs:comment "Acción mediante la cual se solicita la compra de uno o más productos, indicando líneas de pedido, dirección, prioridad de entrega y datos de pago" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/RegistrarValoracion
-:RegistrarValoracion rdf:type owl:Class ;
-                     rdfs:subClassOf :Notificacion ;
-                     rdfs:comment "Comunicación informativa heredada para representar la llegada de una valoración que el sistema integra en su conocimiento" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Recomendacion
 :Recomendacion rdf:type owl:Class ;
                rdfs:comment "Sugerencia de productos generada a partir del historial de compras, búsquedas y valoraciones" .
@@ -1196,6 +1129,12 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
 :ReembolsoCliente rdf:type owl:Class ;
                   rdfs:subClassOf :OperacionPago ;
                   rdfs:comment "Operación mediante la cual se devuelve al AsistenteVirtual el importe de un producto cuya devolución ha sido aceptada" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/RegistrarValoracion
+:RegistrarValoracion rdf:type owl:Class ;
+                     rdfs:subClassOf :Notificacion ;
+                     rdfs:comment "Comunicación informativa heredada para representar la llegada de una valoración que el sistema integra en su conocimiento" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ResolucionDevolucion
@@ -1256,10 +1195,10 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                    rdfs:comment "Respuesta que contiene los productos que cumplen las restricciones indicadas en una búsqueda" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/SeleccionarCL
-:SeleccionarCL rdf:type owl:Class ;
-               rdfs:subClassOf :ProcesoInterno ;
-               rdfs:comment "Proceso interno de selección del centro logístico; no representa una acción solicitada por otro agente" .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarCobro
+:SolicitarCobro rdf:type owl:Class ;
+                rdfs:subClassOf :SolicitarOperacionPago ;
+                rdfs:comment "Acción mediante la cual el Agente Comerciante solicita cobrar al usuario el importe de un pedido" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarDevolucion
@@ -1268,22 +1207,10 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
                      rdfs:comment "Acción mediante la cual el AsistenteVirtual solicita devolver un producto comprado, indicando pedido, producto y motivo de devolución" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarCobro
-:SolicitarCobro rdf:type owl:Class ;
-                rdfs:subClassOf :SolicitarOperacionPago ;
-                rdfs:comment "Acción mediante la cual el Agente Comerciante solicita cobrar al usuario el importe de un pedido" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarOperacionPago
 :SolicitarOperacionPago rdf:type owl:Class ;
                         rdfs:subClassOf :Accion ;
                         rdfs:comment "Acción mediante la cual se solicita al proveedor de pagos ejecutar una operación económica asociada a una compra, devolución o pago a un vendedor externo" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarReembolso
-:SolicitarReembolso rdf:type owl:Class ;
-                    rdfs:subClassOf :SolicitarOperacionPago ;
-                    rdfs:comment "Acción mediante la cual el Agente Devolución solicita reembolsar al usuario una devolución aceptada" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarPresupuestoTransporte
@@ -1296,6 +1223,12 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
 :SolicitarRecogidaDevolucion rdf:type owl:Class ;
                              rdfs:subClassOf :Accion ;
                              rdfs:comment "Acción mediante la cual se solicita a un transportista o servicio de mensajería recoger un producto devuelto y enviarlo de vuelta a la tienda" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarReembolso
+:SolicitarReembolso rdf:type owl:Class ;
+                    rdfs:subClassOf :SolicitarOperacionPago ;
+                    rdfs:comment "Acción mediante la cual el Agente Devolución solicita reembolsar al usuario una devolución aceptada" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/StockProducto
@@ -1318,6 +1251,58 @@ dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
 :VendedorExterno rdf:type owl:Class ;
                  rdfs:subClassOf :Actor ;
                  rdfs:comment "Representa una empresa externa que anuncia productos en la tienda y puede gestionar el envío de sus propios productos" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/AccionDirectorio
+<http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> rdf:type owl:Class ;
+                                                              rdfs:subClassOf :Accion ;
+                                                              rdfs:comment "Acción que el servicio de directorio ejecuta a petición de otros agentes mediante FIPA-ACL request" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/BuscarAgente
+<http://www.semanticweb.org/ecsdi/directory/BuscarAgente> rdf:type owl:Class ;
+                                                          rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                          rdfs:comment "Acción mediante la cual un agente solicita al directorio un agente de un tipo funcional concreto" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes
+<http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes> rdf:type owl:Class ;
+                                                                rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                                rdfs:comment "Acción mediante la cual un agente solicita al directorio todos los agentes registrados de un tipo funcional concreto" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/EliminarAgente
+<http://www.semanticweb.org/ecsdi/directory/EliminarAgente> rdf:type owl:Class ;
+                                                            rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                            rdfs:comment "Acción mediante la cual un agente solicita ser eliminado del registro del servicio de directorio" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RegistrarAgente
+<http://www.semanticweb.org/ecsdi/directory/RegistrarAgente> rdf:type owl:Class ;
+                                                             rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                             rdfs:comment "Acción mediante la cual un agente solicita al servicio de directorio quedar registrado con su URI, nombre, dirección y tipo" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda
+<http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda> rdf:type owl:Class ;
+                                                               rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> ;
+                                                               rdfs:comment "Respuesta del directorio que contiene la URI, dirección y tipo de un agente encontrado" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusquedaMultiple
+<http://www.semanticweb.org/ecsdi/directory/RespuestaBusquedaMultiple> rdf:type owl:Class ;
+                                                                       rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> ;
+                                                                       rdfs:comment "Respuesta del directorio que agrupa varios resultados de búsqueda de agentes" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio
+<http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> rdf:type owl:Class ;
+                                                                 rdfs:subClassOf :Respuesta ;
+                                                                 rdfs:comment "Respuesta emitida por el servicio de directorio ante acciones de registro, búsqueda o eliminación" .
+
+
+###  http://xmlns.com/foaf/0.1/Agent
+<http://xmlns.com/foaf/0.1/Agent> rdf:type owl:Class .
 
 
 #################################################################

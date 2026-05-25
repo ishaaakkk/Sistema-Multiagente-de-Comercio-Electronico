@@ -12,6 +12,7 @@ from utilities.builders import (
     build_aviso_vendedor_externo,
     build_cobro_request,
     build_completed_order_info_response,
+    build_logistics_request,
     build_notify_purchase_completed,
     build_pago_externo_request,
 )
@@ -28,6 +29,7 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
+from utilities.storage import load_graph_collection, save_graph_item
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
@@ -41,7 +43,7 @@ def create_app(
     vendedor_externo_url="http://127.0.0.1:9008/comm",
 ):
     app = Flask(__name__)
-    completed_orders: dict[str, Graph] = {}
+    completed_orders: dict[str, Graph] = load_graph_collection("completed_orders")
 
     @app.get("/")
     def index():
@@ -116,13 +118,11 @@ def _handle_order(
     ))
 
     # --- Lineas que necesitan logistico: internas + externas con envio por tienda ---
-    # Plan: EscogerCL + Notificador → AvisarPedidoACL (AgenteComerciante → AgenteLogistico)
+    # Plan: EscogerCL + Notificador → AvisarCL (AgenteComerciante → AgenteLogistico)
     lines_for_logistics = internal_lines + ext_envio_tienda
     if lines_for_logistics:
-        logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics, action)
-        logistics_message = build_message(
-            logistics_graph, action, ACL.request, agent_uri, AGENTS.CentroLogisticoBarcelona
-        )
+        logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
+        logistics_message = build_logistics_request(agent_uri, AGENTS.CentroLogisticoBarcelona, logistics_graph, pedido)
         shipping_response = post_graph(logistics_url, logistics_message)
         for triple in shipping_response:
             order_graph.add(triple)
@@ -210,7 +210,7 @@ def _gestionar_productos_externos(
     """Plan: ComunicarVendedoresExternos (AgenteComerciante / ComunicarConVendedoresExternos).
 
     Para TODOS los productos externos:
-      - Solicita pago al AgenteFinanciero (PagarProdExterno) — fire-and-forget.
+      - Solicita pago al AgenteFinanciero (PagarProductoExterno) — fire-and-forget.
 
     Solo para productos con gestionEnvioExterno=true:
       - Avisa al AgenteVendedorExterno con producto + direccion (ComunicarProductosExternosPedidos)
@@ -278,6 +278,7 @@ def _store_completed_order(completed_orders: dict[str, Graph], order_graph: Grap
     for triple in order_graph:
         stored.add(triple)
     completed_orders[pedido_id] = stored
+    save_graph_item("completed_orders", pedido_id, stored)
     log("comerciante", f"Pedido completado guardado: {pedido_id}")
 
 
@@ -294,18 +295,13 @@ def _pedido_id(graph: Graph, pedido: URIRef | None) -> str | None:
 
 
 
-def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list, action: URIRef | None = None) -> Graph:
+def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list) -> Graph:
     """Subgrafo del pedido con solo las lineas indicadas para el logistico.
 
-    Incluye el nodo action (RealizarPedido) porque el logistico lo necesita
-    para reconocer el tipo de mensaje entrante.
+    La accion logistica concreta se crea despues como AvisarCL.
     """
     graph = Graph()
     bind_namespaces(graph)
-    # Copiar el nodo action completo para que el logistico encuentre RealizarPedido
-    if action is not None:
-        for triple in full_graph.triples((action, None, None)):
-            graph.add(triple)
     for triple in full_graph.triples((pedido, None, None)):
         if triple[1] == ECSDI.pedidoTieneLinea and triple[2] not in lines:
             continue

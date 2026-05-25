@@ -114,6 +114,17 @@ def build_search_response(sender: URIRef, receiver: URIRef, action: URIRef, prod
     return build_message(graph, response, ACL.inform, sender, receiver)
 
 
+def build_logistics_request(sender: URIRef, receiver: URIRef, order_graph: Graph, pedido: URIRef) -> Graph:
+    """AgenteComerciante -> CentroLogistico: AvisarCL."""
+    graph = Graph()
+    bind_namespaces(graph)
+    _copy_business_graph(order_graph, graph)
+    action = DATA[f"action/logistica/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.AvisarCL))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
 def build_transport_request(sender: URIRef, receiver: URIRef, lote_graph: Graph, lote: URIRef) -> Graph:
     graph = Graph()
     bind_namespaces(graph)
@@ -122,6 +133,28 @@ def build_transport_request(sender: URIRef, receiver: URIRef, lote_graph: Graph,
     action = DATA[f"action/transport/request/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.SolicitarPresupuestoTransporte))
     graph.add((action, ECSDI.accionSobreLote, lote))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_recogida_devolucion_request(
+    sender: URIRef,
+    receiver: URIRef,
+    devolucion: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    source_graph: Graph,
+) -> Graph:
+    """AgenteDevolucion -> Transportista: SolicitarRecogidaDevolucion."""
+    graph = Graph()
+    bind_namespaces(graph)
+    _copy_business_graph(source_graph, graph)
+    action = DATA[f"action/devolucion/recogida/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.SolicitarRecogidaDevolucion))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+    graph.add((devolucion, RDF.type, ECSDI.Devolucion))
+    graph.add((devolucion, ECSDI.devolucionDePedido, pedido))
+    graph.add((devolucion, ECSDI.devolucionDeProducto, product))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -169,14 +202,62 @@ def build_shipping_confirmation(
     return build_message(graph, confirmation, ACL.inform, sender, receiver)
 
 
+def build_pedir_feedback_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido_id: str,
+    product_id: str,
+    product: URIRef,
+) -> Graph:
+    """AgenteFeedback -> AsistenteVirtual: PedirFeedback."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/pedir-feedback/{uuid4()}"]
+    pedido = _pedido_uri(pedido_id)
+    graph.add((action, RDF.type, ECSDI.PedirFeedback))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+    graph.add((pedido, RDF.type, ECSDI.Pedido))
+    graph.add((pedido, ECSDI.idPedido, Literal(pedido_id)))
+    graph.add((product, RDF.type, ECSDI.Producto))
+    graph.add((product, ECSDI.idProducto, Literal(product_id)))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
 def build_cobro_request(sender: URIRef, receiver: URIRef, pedido: URIRef, importe: Decimal) -> Graph:
     """Comerciante → AgenteFinanciero: SolicitarCobro (fire-and-forget)."""
     graph = Graph()
     bind_namespaces(graph)
     action = DATA[f"action/cobro/{uuid4()}"]
+    operacion = DATA[f"pago/cobro/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.SolicitarCobro))
     graph.add((action, ECSDI.accionSobrePedido, pedido))
     graph.add((action, ECSDI.importeCobro, decimal_literal(importe)))
+    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_provider_payment_request(
+    sender: URIRef,
+    receiver: URIRef,
+    original_action: URIRef,
+    operacion: URIRef,
+    operation_type: URIRef,
+    importe: Decimal,
+) -> Graph:
+    """AgenteFinanciero -> ProveedorPagos: SolicitarOperacionPago."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/proveedor-pagos/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.SolicitarOperacionPago))
+    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+    graph.add((action, ECSDI.respuestaDeAccion, original_action))
+    graph.add((operacion, RDF.type, operation_type))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -351,16 +432,21 @@ def build_pago_externo_request(
     """AgenteComerciante → AgenteFinanciero: PagarProductoExterno.
 
     Plan: ComunicarVendedoresExternos (AgenteComerciante / ComunicarConVendedoresExternos).
-    Msg saliente: PagarProdExterno.
+    Msg saliente: PagarProductoExterno.
     """
     graph = Graph()
     bind_namespaces(graph)
     action = DATA[f"action/pago/externo/{uuid4()}"]
+    operacion = DATA[f"pago/externo/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.PagarProductoExterno))
     graph.add((action, ECSDI.accionSobrePedido, pedido))
     graph.add((action, ECSDI.accionSobreProducto, product))
     graph.add((action, ECSDI.importeCobro, decimal_literal(importe)))
     graph.add((action, ECSDI.vendedorDestinatario, vendedor))
+    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+    graph.add((operacion, RDF.type, ECSDI.PagoVendedorExterno))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 

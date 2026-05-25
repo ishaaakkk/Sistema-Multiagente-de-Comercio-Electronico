@@ -53,7 +53,7 @@ Flujo principal de la demo:
 Tras una compra, `feedback_demo.py` puede enviar una valoracion para un producto del pedido.
 Tras una compra, `devolucion_demo.py` puede solicitar la devolucion de un producto del pedido
 contra `AgenteDevolucion`, que consulta el pedido completado en la tienda y coordina el reembolso.
-Las recomendaciones proactivas y la solicitud automatica de opinion quedan pendientes.
+Las recomendaciones y la solicitud proactiva de opinion tienen una implementacion basica en memoria.
 
 ## Requisitos
 

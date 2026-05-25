@@ -59,8 +59,9 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
                 return rdf_response(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
 
             # Accion: Realizar Transaccion — simula el cobro y genera ConfirmacionTransaccion
-            response = _build_confirmacion(agent_uri, message.sender, action, operacion, importe)
-            log("pagos", f"Cobro confirmado: {importe} EUR para operacion {operacion}")
+            operation_type = _operation_type(graph, operacion)
+            response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe)
+            log("pagos", f"Operacion confirmada: {importe} EUR para operacion {operacion}")
             return rdf_response(response)
 
         except Exception as exc:
@@ -74,6 +75,7 @@ def _build_confirmacion(
     receiver: URIRef,
     action: URIRef,
     operacion: URIRef,
+    operation_type: URIRef,
     importe: Decimal,
 ) -> Graph:
     graph = Graph()
@@ -85,7 +87,7 @@ def _build_confirmacion(
     graph.add((confirmacion, ECSDI.respuestaDeAccion, action))
 
     # Actualizamos el estado de la operación en el grafo de respuesta
-    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
+    graph.add((operacion, RDF.type, operation_type))
     graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
@@ -93,6 +95,13 @@ def _build_confirmacion(
     graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
 
     return build_message(graph, confirmacion, ACL.inform, sender, receiver)
+
+
+def _operation_type(graph: Graph, operacion: URIRef) -> URIRef:
+    for operation_type in (ECSDI.CobroCliente, ECSDI.ReembolsoCliente, ECSDI.PagoVendedorExterno):
+        if (operacion, RDF.type, operation_type) in graph:
+            return operation_type
+    return ECSDI.CobroCliente
 
 
 def main():
