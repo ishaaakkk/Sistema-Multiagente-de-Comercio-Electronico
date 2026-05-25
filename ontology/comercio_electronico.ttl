@@ -1,4 +1,6 @@
 @prefix : <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
+@prefix dso: <http://www.semanticweb.org/ecsdi/directory/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix xml: <http://www.w3.org/XML/1998/namespace> .
@@ -362,6 +364,26 @@
                       rdfs:domain :PagarProductoExterno ;
                       rdfs:range :VendedorExterno ;
                       rdfs:comment "Relación que indica el vendedor externo destinatario de un pago" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/Uri
+dso:Uri rdf:type owl:ObjectProperty ;
+        rdfs:range foaf:Agent ;
+        rdfs:comment "URI del agente registrado o devuelto por el servicio de directorio" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/respuestaDeAccion
+dso:respuestaDeAccion rdf:type owl:ObjectProperty ;
+                      rdfs:domain dso:RespuestaDirectorio ;
+                      rdfs:range dso:AccionDirectorio ;
+                      rdfs:comment "Acción de directorio a la que responde una confirmación, fallo o resultado" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/resultadoContiene
+dso:resultadoContiene rdf:type owl:ObjectProperty ;
+                      rdfs:domain dso:RespuestaBusquedaMultiple ;
+                      rdfs:range dso:RespuestaBusqueda ;
+                      rdfs:comment "Relación entre una respuesta múltiple del directorio y cada resultado de búsqueda individual" .
 
 
 #################################################################
@@ -876,6 +898,24 @@
                   rdfs:comment "Valoración mínima exigida en una restricción de búsqueda" .
 
 
+###  http://www.semanticweb.org/ecsdi/directory/Address
+dso:Address rdf:type owl:DatatypeProperty ;
+            rdfs:range xsd:string ;
+            rdfs:comment "Dirección HTTP anunciada por un agente en el servicio de directorio" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/AgentType
+dso:AgentType rdf:type owl:DatatypeProperty ;
+              rdfs:range xsd:string ;
+              rdfs:comment "Tipo funcional con el que un agente se registra o se busca en el servicio de directorio" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/motivo
+dso:motivo rdf:type owl:DatatypeProperty ;
+           rdfs:range xsd:string ;
+           rdfs:comment "Motivo textual asociado a una respuesta de fallo o rechazo del directorio" .
+
+
 #################################################################
 #    Classes
 #################################################################
@@ -883,6 +923,54 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
         rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/AccionDirectorio
+dso:AccionDirectorio rdf:type owl:Class ;
+                     rdfs:subClassOf :Accion ;
+                     rdfs:comment "Acción que el servicio de directorio ejecuta a petición de otros agentes mediante FIPA-ACL request" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RegistrarAgente
+dso:RegistrarAgente rdf:type owl:Class ;
+                    rdfs:subClassOf dso:AccionDirectorio ;
+                    rdfs:comment "Acción mediante la cual un agente solicita al servicio de directorio quedar registrado con su URI, nombre, dirección y tipo" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/BuscarAgente
+dso:BuscarAgente rdf:type owl:Class ;
+                 rdfs:subClassOf dso:AccionDirectorio ;
+                 rdfs:comment "Acción mediante la cual un agente solicita al directorio un agente de un tipo funcional concreto" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes
+dso:BuscarTodosAgentes rdf:type owl:Class ;
+                       rdfs:subClassOf dso:AccionDirectorio ;
+                       rdfs:comment "Acción mediante la cual un agente solicita al directorio todos los agentes registrados de un tipo funcional concreto" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/EliminarAgente
+dso:EliminarAgente rdf:type owl:Class ;
+                   rdfs:subClassOf dso:AccionDirectorio ;
+                   rdfs:comment "Acción mediante la cual un agente solicita ser eliminado del registro del servicio de directorio" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio
+dso:RespuestaDirectorio rdf:type owl:Class ;
+                        rdfs:subClassOf :Respuesta ;
+                        rdfs:comment "Respuesta emitida por el servicio de directorio ante acciones de registro, búsqueda o eliminación" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda
+dso:RespuestaBusqueda rdf:type owl:Class ;
+                      rdfs:subClassOf dso:RespuestaDirectorio ;
+                      rdfs:comment "Respuesta del directorio que contiene la URI, dirección y tipo de un agente encontrado" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/RespuestaBusquedaMultiple
+dso:RespuestaBusquedaMultiple rdf:type owl:Class ;
+                              rdfs:subClassOf dso:RespuestaDirectorio ;
+                              rdfs:comment "Respuesta del directorio que agrupa varios resultados de búsqueda de agentes" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor

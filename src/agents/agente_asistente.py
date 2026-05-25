@@ -880,9 +880,9 @@ def main():
     service_id = agent_id("AGENTE_ASISTENTE", advertised_host, args.port)
 
     # Descubrir servicios via directorio o usar defaults
-    catalog_base  = args.catalog_url  or search_service(args.dir, "AGENTE_CATALOGO")   or "http://127.0.0.1:9006"
-    shop_base     = args.shop_url     or search_service(args.dir, "AGENTE_COMERCIANTE") or "http://127.0.0.1:9001"
-    feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK")   or "http://127.0.0.1:9007"
+    catalog_base  = args.catalog_url  or search_service(args.dir, "AGENTE_CATALOGO", service_id)   or "http://127.0.0.1:9006"
+    shop_base     = args.shop_url     or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
+    feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK", service_id)   or "http://127.0.0.1:9007"
 
     def _comm_url(base):
         return base if base.endswith("/comm") else base.rstrip("/") + "/comm"

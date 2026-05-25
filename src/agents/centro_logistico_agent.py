@@ -19,7 +19,6 @@ from utilities.runtime import (
     log,
     register_service,
     search_all_services,
-    search_service,
     unregister_service,
 )
 
@@ -70,7 +69,7 @@ def create_app(
 
             # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales
             # Descubrir transportistas: primero via directorio, fallback a URL fija
-            transport_urls = _discover_transportistas(directory_url, transport_url, f"logistico")
+            transport_urls = _discover_transportistas(directory_url, transport_url, agent_uri, f"logistico")
 
             if not transport_urls:
                 return rdf_response(build_failure(agent_uri, message.sender, action, "No hay transportistas disponibles"))
@@ -107,6 +106,7 @@ def create_app(
 def _discover_transportistas(
     directory_url: str | None,
     fallback_url: str | None,
+    requester: URIRef,
     prefix: str,
 ) -> list[str]:
     """Devuelve la lista de URLs /comm de todos los transportistas disponibles.
@@ -116,7 +116,7 @@ def _discover_transportistas(
     la URL de fallback (compatibilidad con lanzamientos sin directorio).
     """
     if directory_url:
-        urls = search_all_services(directory_url, "TRANSPORTISTA")
+        urls = search_all_services(directory_url, "TRANSPORTISTA", requester)
         if urls:
             comm_urls = [_comm_url(u) for u in urls]
             log(prefix, f"Transportistas descubiertos via directorio: {comm_urls}")

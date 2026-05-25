@@ -383,17 +383,18 @@ def main():
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
-    logistics_base = args.logistics_url or search_service(args.dir, "CENTRO_LOGISTICO") or "http://127.0.0.1:9002"
-    logistics_url = _comm_url(logistics_base)
-    financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO") or "http://127.0.0.1:9005"
-    financiero_url = _comm_url(financiero_base)
-    feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK") or "http://127.0.0.1:9007"
-    feedback_url = _comm_url(feedback_base)
-    vendedor_externo_base = args.vendedor_externo_url or search_service(args.dir, "AGENTE_VENDEDOR_EXTERNO") or "http://127.0.0.1:9008"
-    vendedor_externo_url = _comm_url(vendedor_externo_base)
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_COMERCIANTE", advertised_host, args.port)
+
+    logistics_base = args.logistics_url or search_service(args.dir, "CENTRO_LOGISTICO", service_id) or "http://127.0.0.1:9002"
+    logistics_url = _comm_url(logistics_base)
+    financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO", service_id) or "http://127.0.0.1:9005"
+    financiero_url = _comm_url(financiero_base)
+    feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK", service_id) or "http://127.0.0.1:9007"
+    feedback_url = _comm_url(feedback_base)
+    vendedor_externo_base = args.vendedor_externo_url or search_service(args.dir, "AGENTE_VENDEDOR_EXTERNO", service_id) or "http://127.0.0.1:9008"
+    vendedor_externo_url = _comm_url(vendedor_externo_base)
     registered = register_service(args.dir, service_id, "AGENTE_COMERCIANTE", address, f"comerciante-{args.port}")
     try:
         log(f"comerciante-{args.port}", f"listening on {bind_host}:{args.port}, logistics={logistics_url}, financiero={financiero_url}, feedback={feedback_url}, vendedor_externo={vendedor_externo_url}")

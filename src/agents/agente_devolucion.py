@@ -371,13 +371,14 @@ def main():
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
-    shop_base = args.shop_url or search_service(args.dir, "AGENTE_COMERCIANTE") or "http://127.0.0.1:9001"
-    financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO") or "http://127.0.0.1:9005"
-    shop_url = _comm_url(shop_base)
-    financiero_url = _comm_url(financiero_base)
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_DEVOLUCION", advertised_host, args.port)
+
+    shop_base = args.shop_url or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
+    financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO", service_id) or "http://127.0.0.1:9005"
+    shop_url = _comm_url(shop_base)
+    financiero_url = _comm_url(financiero_base)
     registered = register_service(args.dir, service_id, "AGENTE_DEVOLUCION", address, f"devolucion-{args.port}")
     try:
         log(f"devolucion-{args.port}", f"listening on {bind_host}:{args.port}, shop={shop_url}, financiero={financiero_url}")

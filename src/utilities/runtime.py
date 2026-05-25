@@ -4,7 +4,7 @@ import time
 
 import requests
 from requests import ConnectionError
-from rdflib import Graph, Literal
+from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import FOAF, RDF
 
 
@@ -107,7 +107,7 @@ def unregister_service(directory_url: str | None, service_id: str, prefix: str) 
         log(prefix, f"could not unregister cleanly: {exc}")
 
 
-def search_service(directory_url: str | None, service_type: str) -> str | None:
+def search_service(directory_url: str | None, service_type: str, requester: str | URIRef | None = None) -> str | None:
     """Busca un agente por tipo en el directorio via FIPA-ACL (DSO.BuscarAgente).
     Respuesta esperada: ACL.inform con DSO.RespuestaBusqueda que contiene DSO.Address.
     """
@@ -127,7 +127,7 @@ def search_service(directory_url: str | None, service_type: str) -> str | None:
         action = DATA[f"directory/search/{uuid4()}"]
         graph.add((action, RDF.type, DSO.BuscarAgente))
         graph.add((action, DSO.AgentType, Literal(service_type)))
-        message = build_message(graph, action, ACL.request, AGENTS.Unknown, AGENTS.DirectoryService)
+        message = build_message(graph, action, ACL.request, _requester_uri(requester), AGENTS.DirectoryService)
         response = post_graph(comm_url, message)
 
         msg = get_message(response)
@@ -142,7 +142,7 @@ def search_service(directory_url: str | None, service_type: str) -> str | None:
     return None
 
 
-def search_all_services(directory_url: str | None, service_type: str) -> list[str]:
+def search_all_services(directory_url: str | None, service_type: str, requester: str | URIRef | None = None) -> list[str]:
     """Busca TODOS los agentes de un tipo en el directorio via FIPA-ACL (DSO.BuscarTodosAgentes).
 
     A diferencia de search_service (que devuelve uno con balanceo de carga),
@@ -168,7 +168,7 @@ def search_all_services(directory_url: str | None, service_type: str) -> list[st
         action = DATA[f"directory/search/all/{uuid4()}"]
         graph.add((action, RDF.type, DSO.BuscarTodosAgentes))
         graph.add((action, DSO.AgentType, Literal(service_type)))
-        message = build_message(graph, action, ACL.request, AGENTS.Unknown, AGENTS.DirectoryService)
+        message = build_message(graph, action, ACL.request, _requester_uri(requester), AGENTS.DirectoryService)
         response = post_graph(comm_url, message)
 
         msg = get_message(response)
@@ -182,3 +182,13 @@ def search_all_services(directory_url: str | None, service_type: str) -> list[st
     except Exception:
         return []
     return []
+
+
+def _requester_uri(requester: str | URIRef | None) -> URIRef:
+    if requester is None:
+        from utilities.namespaces import AGENTS
+        return AGENTS.Unknown
+    if isinstance(requester, URIRef):
+        return requester
+    from utilities.namespaces import AGENTS
+    return AGENTS[requester]

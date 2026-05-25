@@ -32,7 +32,7 @@ Limitaciones de momento:
 
 - El cobro, los reembolsos y los pagos externos se simulan en memoria.
 - No se implementan recomendaciones proactivas.
-- El servicio de directorio usa un protocolo ligero `REGISTER|...`/`SEARCH|...` solo para infraestructura. Las comunicaciones de negocio entre agentes se mantienen en RDF/FIPA-ACL.
+- El servicio de directorio se comunica mediante RDF/FIPA-ACL, pero el registro sigue siendo en memoria; los agentes envian `request` con acciones `DSO.RegistrarAgente`, `DSO.BuscarAgente`, `DSO.BuscarTodosAgentes` y `DSO.EliminarAgente`.
 - El catalogo de datos es pequeno y esta generado en codigo para facilitar la demo.
 - La seleccion de transportista es simple, aunque ya admite varios transportistas registrados.
 
