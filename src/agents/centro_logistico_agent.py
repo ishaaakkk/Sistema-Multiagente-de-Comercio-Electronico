@@ -24,6 +24,7 @@ from utilities.runtime import (
     search_all_services,
     unregister_service,
 )
+from utilities.storage import load_json, save_json
 
 
 DEFAULT_AGENT_URI = AGENTS.CentroLogisticoBarcelona
@@ -145,6 +146,8 @@ def create_app(
 
             best_offer_graph.set((best_offer, ECSDI.estadoOferta, Literal("aceptada")))
             _merge_graphs(best_offer_graph, lote_graph)
+            _reserve_stock(stock_reservations, graph, center, product_quantities)
+            save_json("stock_reservations.json", stock_reservations)
 
             # Anotar el envío con el centro para que el asistente lo identifique.
             envio = DATA[f"envio/{uuid4()}"]
@@ -337,6 +340,7 @@ def _build_lote_graph(
     graph.add((lote, RDF.type, ECSDI.LoteEnvio))
     graph.add((lote, ECSDI.idLote, Literal(f"LOT-{uuid4().hex[:8].upper()}")))
     graph.add((lote, ECSDI.loteOrigenCentro, center))
+    _copy_subject(order_graph, graph, center)
     graph.add((lote, ECSDI.estadoLote, Literal("pendiente_transportista")))
     graph.add((lote, ECSDI.prioridadLote, Literal(priority, datatype=XSD.integer)))
     graph.add((lote, ECSDI.ciudadCentroLogistico, Literal(center_city)))
@@ -350,7 +354,7 @@ def _build_lote_graph(
         product = next(order_graph.objects(line, ECSDI.lineaDeProducto), None)
         quantity = int(next(order_graph.objects(line, ECSDI.cantidad), 1))
         if product is not None:
-            _copy_subject(order_graph, graph, product)
+            _copy_product_context(order_graph, graph, product)
             product_weight = Decimal(str(next(order_graph.objects(product, ECSDI.pesoProducto), "0")))
             weight += product_weight * quantity
 
@@ -361,6 +365,15 @@ def _build_lote_graph(
 def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:
     for triple in source.triples((subject, None, None)):
         target.add(triple)
+
+
+def _copy_product_context(source: Graph, target: Graph, product: URIRef) -> None:
+    _copy_subject(source, target, product)
+    for stock in source.subjects(ECSDI.stockDeProducto, product):
+        _copy_subject(source, target, stock)
+        center = next(source.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            _copy_subject(source, target, center)
 
 
 def _merge_graphs(target: Graph, source: Graph) -> None:

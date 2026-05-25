@@ -32,13 +32,13 @@ Agentes principales:
 
 - `agents.directory_service`: directorio de registro y descubrimiento de agentes.
 - `agents.agente_catalogo`: busqueda de productos en el catalogo RDF en memoria.
-- `agents.agente_comerciante`: agente comerciante; recibe pedidos, genera factura y coordina logistica y cobro.
-- `agents.centro_logistico_agent`: crea lotes de envio y solicita ofertas de transporte.
+- `agents.agente_comerciante`: agente comerciante; recibe pedidos, genera factura y coordina logistica, cobro, feedback y vendedores externos.
+- `agents.centro_logistico_agent`: selecciona un centro con stock suficiente, crea lotes de envio y solicita ofertas de transporte.
 - `agents.transportista_agent`: devuelve ofertas de transporte para lotes.
 - `agents.agente_financiero`: simula el cobro del pedido.
 - `agents.proveedor_pagos_agent`: proveedor de pagos externo simplificado.
 - `agents.agente_feedback`: registra compras pendientes de valoracion y opiniones de productos.
-- `agents.agente_devolucion`: valida devoluciones de pedidos completados y solicita el reembolso al agente financiero.
+- `agents.agente_devolucion`: valida devoluciones de pedidos completados, solicita la recogida y despues solicita el reembolso al agente financiero.
 
 Flujo principal de la demo:
 
@@ -46,13 +46,13 @@ Flujo principal de la demo:
 2. El catalogo devuelve productos que cumplen las restricciones.
 3. El asistente escoge el primer producto y envia un pedido a `AgenteComerciante`.
 4. La tienda genera factura y delega la preparacion del envio al centro logistico.
-5. El centro logistico solicita una oferta al transportista.
+5. El centro logistico comprueba stock declarado, reserva las unidades y solicita una oferta al transportista.
 6. La tienda notifica el cobro al agente financiero y la compra completada al agente feedback.
 7. La demo muestra el pedido, estado, factura, importe y confirmacion de envio.
 
 Tras una compra, `feedback_demo.py` puede enviar una valoracion para un producto del pedido.
 Tras una compra, `devolucion_demo.py` puede solicitar la devolucion de un producto del pedido
-contra `AgenteDevolucion`, que consulta el pedido completado en la tienda y coordina el reembolso.
+contra `AgenteDevolucion`, que consulta el pedido completado en la tienda, coordina la recogida y despues coordina el reembolso.
 Las recomendaciones y la solicitud proactiva de opinion tienen una implementacion basica en memoria.
 
 ## Requisitos
