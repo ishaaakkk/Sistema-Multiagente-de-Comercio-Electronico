@@ -36,11 +36,24 @@ def agent_id(service_type: str, hostaddr: str, port: int) -> str:
     return f"{service_type.lower()}-{safe_host}-{port}"
 
 
-def register_service(directory_url: str | None, service_id: str, service_type: str, address: str, prefix: str) -> bool:
+def register_service(
+    directory_url: str | None,
+    service_id: str,
+    service_type: str,
+    address: str,
+    prefix: str,
+    capabilities: list[URIRef] | None = None,
+) -> bool:
     """Registra el agente en el directorio via FIPA-ACL (DSO.RegistrarAgente).
-    Usando post_graph en lugar de GET con query string.
+
+    `capabilities` es una lista opcional de URIs de la ontología (por ejemplo
+    `ECSDI.BuscarEnCatalogo`) que el agente declara saber atender. Esto
+    aproxima el registro a un perfil de servicio OWL-S (cap. 8.5.2 de los
+    apuntes) y permite buscar agentes por capacidad además de por tipo.
+
     Respuesta esperada: ACL.confirm.
     """
+
     if not directory_url:
         return False
 
@@ -60,6 +73,8 @@ def register_service(directory_url: str | None, service_id: str, service_type: s
     graph.add((action, FOAF.name, Literal(service_id)))
     graph.add((action, DSO.Address, Literal(address)))
     graph.add((action, DSO.AgentType, Literal(service_type)))
+    for capability in capabilities or []:
+        graph.add((action, DSO.Capability, capability))
     message = build_message(graph, action, ACL.request, agent_uri, AGENTS.DirectoryService)
 
     for _ in range(60):
@@ -107,9 +122,17 @@ def unregister_service(directory_url: str | None, service_id: str, prefix: str) 
         log(prefix, f"could not unregister cleanly: {exc}")
 
 
-def search_service(directory_url: str | None, service_type: str, requester: str | URIRef | None = None) -> str | None:
-    """Busca un agente por tipo en el directorio via FIPA-ACL (DSO.BuscarAgente).
-    Respuesta esperada: ACL.inform con DSO.RespuestaBusqueda que contiene DSO.Address.
+def search_service(
+    directory_url: str | None,
+    service_type: str | None = None,
+    requester: str | URIRef | None = None,
+    capability: URIRef | None = None,
+) -> str | None:
+    """Busca un agente por tipo o capacidad en el directorio.
+
+    Si se pasa `capability` (URI), el directorio filtra adicionalmente por
+    `dso:Capability` declarada en el registro (perfil de servicio OWL-S,
+    cap. 8.5.2). Respuesta esperada: ACL.inform con DSO.RespuestaBusqueda.
     """
     if not directory_url:
         return None
@@ -126,7 +149,10 @@ def search_service(directory_url: str | None, service_type: str, requester: str 
         bind_namespaces(graph)
         action = DATA[f"directory/search/{uuid4()}"]
         graph.add((action, RDF.type, DSO.BuscarAgente))
-        graph.add((action, DSO.AgentType, Literal(service_type)))
+        if service_type is not None:
+            graph.add((action, DSO.AgentType, Literal(service_type)))
+        if capability is not None:
+            graph.add((action, DSO.Capability, capability))
         message = build_message(graph, action, ACL.request, _requester_uri(requester), AGENTS.DirectoryService)
         response = post_graph(comm_url, message)
 
@@ -142,16 +168,22 @@ def search_service(directory_url: str | None, service_type: str, requester: str 
     return None
 
 
-def search_all_services(directory_url: str | None, service_type: str, requester: str | URIRef | None = None) -> list[str]:
-    """Busca TODOS los agentes de un tipo en el directorio via FIPA-ACL (DSO.BuscarTodosAgentes).
+def search_all_services(
+    directory_url: str | None,
+    service_type: str | None = None,
+    requester: str | URIRef | None = None,
+    capability: URIRef | None = None,
+) -> list[str]:
+    """Busca TODOS los agentes de un tipo o capacidad en el directorio.
 
     A diferencia de search_service (que devuelve uno con balanceo de carga),
-    esta funcion devuelve las direcciones de todos los agentes registrados
-    del tipo indicado. Util para que el centro logistico contacte con todos
-    los transportistas disponibles y elija la mejor oferta.
+    esta función devuelve las direcciones de todos los agentes registrados.
+    Soporta filtrado por capacidad (URI de la ontología) además de por
+    `agent_type`.
 
     Respuesta esperada: ACL.inform con uno o mas DSO.RespuestaBusqueda.
     """
+
     if not directory_url:
         return []
 
@@ -167,7 +199,10 @@ def search_all_services(directory_url: str | None, service_type: str, requester:
         bind_namespaces(graph)
         action = DATA[f"directory/search/all/{uuid4()}"]
         graph.add((action, RDF.type, DSO.BuscarTodosAgentes))
-        graph.add((action, DSO.AgentType, Literal(service_type)))
+        if service_type is not None:
+            graph.add((action, DSO.AgentType, Literal(service_type)))
+        if capability is not None:
+            graph.add((action, DSO.Capability, capability))
         message = build_message(graph, action, ACL.request, _requester_uri(requester), AGENTS.DirectoryService)
         response = post_graph(comm_url, message)
 
