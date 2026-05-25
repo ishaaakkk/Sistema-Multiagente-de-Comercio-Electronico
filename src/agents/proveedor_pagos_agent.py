@@ -118,7 +118,14 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("PROVEEDOR_PAGOS", advertised_host, args.port)
-    registered = register_service(args.dir, service_id, "PROVEEDOR_PAGOS", address, f"pagos-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "PROVEEDOR_PAGOS",
+        address,
+        f"pagos-{args.port}",
+        capabilities=[ECSDI.SolicitarOperacionPago],
+    )
     try:
         log(f"pagos-{args.port}", f"listening on {bind_host}:{args.port}")
         create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)
