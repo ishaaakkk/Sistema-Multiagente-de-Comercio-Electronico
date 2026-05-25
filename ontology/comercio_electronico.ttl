@@ -4,10 +4,19 @@
 @prefix xml: <http://www.w3.org/XML/1998/namespace> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix schema: <http://schema.org/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix time: <http://www.w3.org/2006/time#> .
 @base <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico> rdf:type owl:Ontology ;
-                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones." ;
+                                                         owl:versionInfo "1.1.0" ;
+                                                         dcterms:creator "Grupo ECSDI 2025/2026 2Q" ;
+                                                         dcterms:license <https://creativecommons.org/licenses/by-sa/4.0/> ;
+                                                         dcterms:modified "2026-05-25"^^xsd:date ;
+                                                         owl:imports <http://xmlns.com/foaf/0.1/> ;
+                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones. Reusa FOAF para agentes, schema.org para productos/pedidos/direcciones y time para instantes temporales." ;
                                                          rdfs:label "Ontologia de comercio electronico" .
 
 #################################################################
@@ -65,9 +74,11 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionTieneValoracion
 :accionTieneValoracion rdf:type owl:ObjectProperty ;
+                       owl:equivalentProperty :notificacionTieneValoracion ;
+                       owl:deprecated true ;
                        rdfs:domain :Notificacion ;
                        rdfs:range :Valoracion ;
-                       rdfs:comment "Relación mantenida por compatibilidad para vincular una comunicación informativa con la valoración emitida por el asistente" .
+                       rdfs:comment "DEPRECATED: usar :notificacionTieneValoracion. Se mantiene como propiedad equivalente para retrocompatibilidad con grafos existentes" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/confirmacionDeOperacion
@@ -85,10 +96,10 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/devolucionDePedido
-:devolucionDePedido rdf:type owl:ObjectProperty ;
+:devolucionDePedido rdf:type owl:ObjectProperty , owl:FunctionalProperty ;
                     rdfs:domain :Devolucion ;
                     rdfs:range :Pedido ;
-                    rdfs:comment "Relación que indica el pedido al que pertenece una devolución" .
+                    rdfs:comment "Relación que indica el pedido al que pertenece una devolución (functional: cada devolución es de un único pedido)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/devolucionDeProducto
@@ -106,10 +117,18 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioDePedido
-:envioDePedido rdf:type owl:ObjectProperty ;
+:envioDePedido rdf:type owl:ObjectProperty , owl:FunctionalProperty ;
+               owl:inverseOf :pedidoTieneEnvio ;
                rdfs:domain :Envio ;
                rdfs:range :Pedido ;
-               rdfs:comment "Relación que indica el pedido asociado a un envío" .
+               rdfs:comment "Relación que indica el pedido asociado a un envío. Inversa de :pedidoTieneEnvio" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioDesdeCentro
+:envioDesdeCentro rdf:type owl:ObjectProperty ;
+                  rdfs:domain :EnvioInterno ;
+                  rdfs:range :CentroLogistico ;
+                  rdfs:comment "Centro logístico origen de un envío interno. Necesario para la extensión avanzada multi-CL: el asistente recibe varias confirmaciones, una por cada centro implicado" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioDestinoDir
@@ -141,10 +160,11 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/facturaDePedido
-:facturaDePedido rdf:type owl:ObjectProperty ;
+:facturaDePedido rdf:type owl:ObjectProperty , owl:FunctionalProperty ;
+                 owl:inverseOf :pedidoTieneFactura ;
                  rdfs:domain :Factura ;
                  rdfs:range :Pedido ;
-                 rdfs:comment "Relación que indica el pedido al que corresponde una factura" .
+                 rdfs:comment "Relación que indica el pedido al que corresponde una factura. Inversa de :pedidoTieneFactura" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/lineaDeProducto
@@ -220,9 +240,11 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoDeUsuario
 :pedidoDeUsuario rdf:type owl:ObjectProperty ;
+                 owl:equivalentProperty :pedidoSolicitadoPor ;
+                 owl:deprecated true ;
                  rdfs:domain :Pedido ;
                  rdfs:range :AsistenteVirtual ;
-                 rdfs:comment "Relacion que indica a quien pertenece el pedido" .
+                 rdfs:comment "DEPRECATED: usar :pedidoSolicitadoPor. Se mantiene como propiedad equivalente para retrocompatibilidad" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoEnviadoA
@@ -556,10 +578,16 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/fechaValoracion
 :fechaValoracion rdf:type owl:DatatypeProperty ;
-                 rdfs:subPropertyOf owl:topDataProperty ;
                  rdfs:domain :Valoracion ;
                  rdfs:range xsd:dateTime ;
                  rdfs:comment "Fecha y hora en la que se registra una valoración" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/fechaBusqueda
+:fechaBusqueda rdf:type owl:DatatypeProperty ;
+               rdfs:domain :NotificarBusquedaRealizada ;
+               rdfs:range xsd:dateTime ;
+               rdfs:comment "Marca temporal en la que un AsistenteVirtual ha realizado una búsqueda registrada por el Agente Feedback (Protocolo Consulta Catálogo)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/gestionEnvioExterno
@@ -578,19 +606,17 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idDevolucion
-:idDevolucion rdf:type owl:DatatypeProperty ;
-              rdfs:subPropertyOf owl:topDataProperty ;
+:idDevolucion rdf:type owl:DatatypeProperty , owl:FunctionalProperty ;
               rdfs:domain :Devolucion ;
               rdfs:range xsd:string ;
-              rdfs:comment "Identificador único de una solicitud de devolución" .
+              rdfs:comment "Identificador único de una solicitud de devolución (functional: cada devolución tiene exactamente uno)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idFactura
-:idFactura rdf:type owl:DatatypeProperty ;
-           rdfs:subPropertyOf owl:topDataProperty ;
+:idFactura rdf:type owl:DatatypeProperty , owl:FunctionalProperty ;
            rdfs:domain :Factura ;
            rdfs:range xsd:string ;
-           rdfs:comment "Identificador único de una factura" .
+           rdfs:comment "Identificador único de una factura (functional: cada factura tiene exactamente uno)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idLote
@@ -602,27 +628,24 @@
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idOperacionPago
-:idOperacionPago rdf:type owl:DatatypeProperty ;
-                 rdfs:subPropertyOf owl:topDataProperty ;
+:idOperacionPago rdf:type owl:DatatypeProperty , owl:FunctionalProperty ;
                  rdfs:domain :OperacionPago ;
                  rdfs:range xsd:string ;
-                 rdfs:comment "Identificador único de una operación económica" .
+                 rdfs:comment "Identificador único de una operación económica (functional)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idPedido
-:idPedido rdf:type owl:DatatypeProperty ;
-          rdfs:subPropertyOf owl:topDataProperty ;
+:idPedido rdf:type owl:DatatypeProperty , owl:FunctionalProperty ;
           rdfs:domain :Pedido ;
           rdfs:range xsd:string ;
-          rdfs:comment "Identificador único de un pedido" .
+          rdfs:comment "Identificador único de un pedido (functional)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idProducto
-:idProducto rdf:type owl:DatatypeProperty ;
-            rdfs:subPropertyOf owl:topDataProperty ;
+:idProducto rdf:type owl:DatatypeProperty , owl:FunctionalProperty ;
             rdfs:domain :Producto ;
             rdfs:range xsd:string ;
-            rdfs:comment "Identificador único de un producto del catálogo" .
+            rdfs:comment "Identificador único de un producto del catálogo (functional)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idRecomendacion
@@ -925,7 +948,8 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor
 :Actor rdf:type owl:Class ;
-       rdfs:comment "Representa los actores externos con los que interactúa la tienda" .
+       rdfs:subClassOf foaf:Agent ;
+       rdfs:comment "Representa los actores externos con los que interactúa la tienda. Subclase de foaf:Agent para reutilizar el vocabulario FOAF" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/AsistenteVirtual
@@ -954,7 +978,8 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/CobroCliente
 :CobroCliente rdf:type owl:Class ;
               rdfs:subClassOf :OperacionPago ;
-              rdfs:comment "Operación mediante la cual se cobra al AsistenteVirtual el importe de un pedido enviado" .
+              owl:disjointWith :ReembolsoCliente , :PagoVendedorExterno ;
+              rdfs:comment "Operación mediante la cual se cobra al AsistenteVirtual el importe de un pedido enviado. Disjunto con :ReembolsoCliente y :PagoVendedorExterno" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ComunicarProductosExternosPedidos
@@ -963,8 +988,8 @@
                                    rdfs:comment "Acción mediante la cual el Agente Comerciante solicita a un vendedor externo que gestione los productos de un pedido" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ConfirmacionComprra
-:ConfirmacionComprra rdf:type owl:Class ;
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ConfirmacionCompra
+:ConfirmacionCompra rdf:type owl:Class ;
                      rdfs:subClassOf :Respuesta ;
                      rdfs:comment "Respuesta que confirma la compra realizada correctamente, con el ticket de compra." .
 
@@ -994,7 +1019,8 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Direccion
 :Direccion rdf:type owl:Class ;
-           rdfs:comment "Representa la dirección de entrega o recogida usada en pedidos, envíos y devoluciones" .
+           rdfs:subClassOf schema:PostalAddress ;
+           rdfs:comment "Representa la dirección de entrega o recogida usada en pedidos, envíos y devoluciones. Subclase de schema:PostalAddress" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnviarOpinion
@@ -1011,19 +1037,21 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnvioDevolucion
 :EnvioDevolucion rdf:type owl:Class ;
                  rdfs:subClassOf :Envio ;
-                 rdfs:comment "Representa un envío para recoger un producto devuelto por el cliente" .
+                 owl:disjointWith :EnvioExterno , :EnvioInterno ;
+                 rdfs:comment "Representa un envío para recoger un producto devuelto por el cliente. Disjunto con :EnvioInterno y :EnvioExterno" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnvioExterno
 :EnvioExterno rdf:type owl:Class ;
               rdfs:subClassOf :Envio ;
-              rdfs:comment "Representa un envío gestionado directamente por un vendedor externo" .
+              owl:disjointWith :EnvioInterno ;
+              rdfs:comment "Representa un envío gestionado directamente por un vendedor externo. Disjunto con :EnvioInterno y :EnvioDevolucion" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnvioInterno
 :EnvioInterno rdf:type owl:Class ;
               rdfs:subClassOf :Envio ;
-              rdfs:comment "Representa un envío gestionado por la tienda desde un centro logístico propio" .
+              rdfs:comment "Representa un envío gestionado por la tienda desde un centro logístico propio. Disjunto con :EnvioExterno y :EnvioDevolucion" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Factura
@@ -1052,6 +1080,18 @@
                            rdfs:comment "Notificación mediante la cual el Agente Comerciante informa al Agente Feedback de que un pedido ha sido completado" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/NotificarBusquedaRealizada
+:NotificarBusquedaRealizada rdf:type owl:Class ;
+                            rdfs:subClassOf :Notificacion ;
+                            rdfs:comment "Protocolo Consulta Catálogo: notificación informativa que el Agente Catálogo envía al Agente Feedback tras procesar una BuscarProductos. Lleva el AsistenteVirtual originador, las restricciones aplicadas y los productos devueltos, para alimentar el historial de búsquedas usado por el algoritmo de recomendación (cap. 9)" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/DecisionContratoTransporte
+:DecisionContratoTransporte rdf:type owl:Class ;
+                            rdfs:subClassOf :Accion ;
+                            rdfs:comment "Cierre de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta y el lote; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransporte
 :OfertaTransporte rdf:type owl:Class ;
                   rdfs:comment "Propuesta realizada por un transportista para entregar un lote, indicando precio, fecha estimada y condiciones de entrega" .
@@ -1071,12 +1111,19 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/PagoVendedorExterno
 :PagoVendedorExterno rdf:type owl:Class ;
                      rdfs:subClassOf :OperacionPago ;
-                     rdfs:comment "Operación mediante la cual la tienda transfiere al vendedor externo el importe correspondiente a sus productos vendidos" .
+                     owl:disjointWith :ReembolsoCliente ;
+                     rdfs:comment "Operación mediante la cual la tienda transfiere al vendedor externo el importe correspondiente a sus productos vendidos. Disjunto con :CobroCliente y :ReembolsoCliente" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Pedido
 :Pedido rdf:type owl:Class ;
-        rdfs:comment "Representa una orden de compra hecha por el asistente virtual." .
+        rdfs:subClassOf schema:Order ,
+                        [
+                            rdf:type owl:Restriction ;
+                            owl:onProperty :pedidoTieneLinea ;
+                            owl:minCardinality "1"^^xsd:nonNegativeInteger
+                        ] ;
+        rdfs:comment "Representa una orden de compra hecha por el asistente virtual. Subclase de schema:Order. Restricción DL: debe tener al menos una :pedidoTieneLinea (un pedido vacío no es válido)." .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/PedirFeedback
@@ -1093,19 +1140,21 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Producto
 :Producto rdf:type owl:Class ;
-          rdfs:comment "Representa un producto disponible en el catálogo de la tienda, con información necesaria para búsqueda, compra, envío, valoración y recomendación" .
+          rdfs:subClassOf schema:Product ;
+          rdfs:comment "Representa un producto disponible en el catálogo de la tienda, con información necesaria para búsqueda, compra, envío, valoración y recomendación. Subclase de schema:Product para reusar schema.org" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProductoExterno
 :ProductoExterno rdf:type owl:Class ;
                  rdfs:subClassOf :Producto ;
-                 rdfs:comment "Representa un producto anunciado por un vendedor externo. Puede ser enviado por la tienda o por el propio vendedor externo" .
+                 owl:disjointWith :ProductoInterno ;
+                 rdfs:comment "Representa un producto anunciado por un vendedor externo. Puede ser enviado por la tienda o por el propio vendedor externo. Disjunto con :ProductoInterno" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProductoInterno
 :ProductoInterno rdf:type owl:Class ;
                  rdfs:subClassOf :Producto ;
-                 rdfs:comment "Representa un producto gestionado directamente por la tienda y disponible en uno o varios centros logísticos propios" .
+                 rdfs:comment "Representa un producto gestionado directamente por la tienda y disponible en uno o varios centros logísticos propios. Disjunto con :ProductoExterno" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProveedorPagos
@@ -1244,7 +1293,8 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Valoracion
 :Valoracion rdf:type owl:Class ;
-            rdfs:comment "Opinión emitida sobre un producto recibido, usada para mejorar la información del catálogo y las recomendaciones" .
+            rdfs:subClassOf schema:Review ;
+            rdfs:comment "Opinión emitida sobre un producto recibido, usada para mejorar la información del catálogo y las recomendaciones. Subclase de schema:Review" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/VendedorExterno
@@ -1316,7 +1366,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ConfirmacionCompraiPhone19
 :ConfirmacionCompraiPhone19 rdf:type owl:NamedIndividual ,
-                                     :ConfirmacionComprra .
+                                     :ConfirmacionCompra .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnvioDevolucionGSL
@@ -1372,12 +1422,12 @@
                                                :restriccionPrecioiPhone .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/centroLogisticoBarceluna
-:centroLogisticoBarceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/centroLogisticoBarcelona
+:centroLogisticoBarcelona rdf:type owl:NamedIndividual ,
                                    :CentroLogistico ;
-                          :ciudadCentroLogistico "Barceluna" ;
+                          :ciudadCentroLogistico "Barcelona" ;
                           :idCentroLogistico "CL-BAR" ;
-                          :nombreCentroLogistico "Centro Logístico Barceluna" .
+                          :nombreCentroLogistico "Centro Logístico Barcelona" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/cobroPedidoiPhone19
@@ -1398,13 +1448,13 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/confirmacionEnvioiPhone
 :confirmacionEnvioiPhone rdf:type owl:NamedIndividual ,
                                   :ConfirmacionEnvio ;
-                         :confirmacionEnvio :envioiPhone19Barceluna .
+                         :confirmacionEnvio :envioiPhone19Barcelona .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/devolucioniPhone19
 :devolucioniPhone19 rdf:type owl:NamedIndividual ,
                              :Devolucion ;
-                    :devolucionDePedido :pedidioiPhone19 ;
+                    :devolucionDePedido :pedidoiPhone19 ;
                     :devolucionDeProducto :productoiPhone19 ;
                     :devolucionTieneReembolso :reembolsoDevolucioniPhone19 ;
                     :devolucionAceptada "true"^^xsd:boolean ;
@@ -1414,11 +1464,11 @@
                     :motivoDevolucion "Producto defectuoso" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/direccionClienteBarceluna
-:direccionClienteBarceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/direccionClienteBarcelona
+:direccionClienteBarcelona rdf:type owl:NamedIndividual ,
                                     :Direccion ;
                            :calle "Carrer Mallurca 401" ;
-                           :ciudad "Barceluna" ;
+                           :ciudad "Barcelona" ;
                            :codigoPostal "08013" ;
                            :pais "España" .
 
@@ -1429,18 +1479,18 @@
                              :envioExternoGestionadoPor :vendedorTechMarket .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioiPhone19Barceluna
-:envioiPhone19Barceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioiPhone19Barcelona
+:envioiPhone19Barcelona rdf:type owl:NamedIndividual ,
                                  :EnvioInterno ;
-                        :envioDePedido :pedidioiPhone19 ;
+                        :envioDePedido :pedidoiPhone19 ;
                         :envioRealizadoPor :transportistaGSL ;
-                        :envioTieneLote :loteEnvioiPhone19Barceluna .
+                        :envioTieneLote :loteEnvioiPhone19Barcelona .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/facturaPedidoiPhone19
 :facturaPedidoiPhone19 rdf:type owl:NamedIndividual ,
                                 :Factura ;
-                       :facturaDePedido :pedidioiPhone19 ;
+                       :facturaDePedido :pedidoiPhone19 ;
                        :fechaFactura "2025-05-25T09:00:00"^^xsd:dateTime ;
                        :idFactura "F001" ;
                        :importeFactura 1199 .
@@ -1454,11 +1504,11 @@
                      :precioUnitario 1199 .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/loteEnvioiPhone19Barceluna
-:loteEnvioiPhone19Barceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/loteEnvioiPhone19Barcelona
+:loteEnvioiPhone19Barcelona rdf:type owl:NamedIndividual ,
                                      :LoteEnvio ;
-                            :loteDestinoDireccion :direccionClienteBarceluna ;
-                            :loteOrigenCentro :centroLogisticoBarceluna ;
+                            :loteDestinoDireccion :direccionClienteBarcelona ;
+                            :loteOrigenCentro :centroLogisticoBarcelona ;
                             :loteTieneLinea :lineaPedidoiPhone19 ;
                             :estadoLote "pendiente_transportista" ;
                             :idLote "L001" ;
@@ -1469,13 +1519,13 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificarCompraCompletadaiPhone19
 :notificarCompraCompletadaiPhone19 rdf:type owl:NamedIndividual ,
                                             :NotificarCompraCompletada ;
-                                   :notificacionSobrePedido :pedidioiPhone19 .
+                                   :notificacionSobrePedido :pedidoiPhone19 .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaGSLiPhone19Barceluna
-:ofertaGSLiPhone19Barceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaGSLiPhone19Barcelona
+:ofertaGSLiPhone19Barcelona rdf:type owl:NamedIndividual ,
                                      :OfertaTransporte ;
-                            :ofertaParaLote :loteEnvioiPhone19Barceluna ;
+                            :ofertaParaLote :loteEnvioiPhone19Barcelona ;
                             :ofertaRealizadaPor :transportistaGSL ;
                             :estadoOferta "aceptada" ;
                             :fechaEntregaEstimada "2025-05-05T10:30:00"^^xsd:dateTime ;
@@ -1493,10 +1543,10 @@
                         :referenciaPago "PAY-EXT001" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidioiPhone19
-:pedidioiPhone19 rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoiPhone19
+:pedidoiPhone19 rdf:type owl:NamedIndividual ,
                           :Pedido ;
-                 :pedidoEnviadoA :direccionClienteBarceluna ;
+                 :pedidoEnviadoA :direccionClienteBarcelona ;
                  :pedidoSolicitadoPor :asistenteUsuario ;
                  :pedidoTieneFactura :facturaPedidoiPhone19 ;
                  :pedidoTieneLinea :lineaPedidoiPhone19 ;
@@ -1595,14 +1645,14 @@
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/solicitarPresupuestoGSL
 :solicitarPresupuestoGSL rdf:type owl:NamedIndividual ,
                                   :SolicitarPresupuestoTransporte ;
-                         :accionSobreLote :loteEnvioiPhone19Barceluna .
+                         :accionSobreLote :loteEnvioiPhone19Barcelona .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/stockiPhone19Barceluna
-:stockiPhone19Barceluna rdf:type owl:NamedIndividual ,
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/stockiPhone19Barcelona
+:stockiPhone19Barcelona rdf:type owl:NamedIndividual ,
                                  :StockProducto ;
                         :stockDeProducto :productoiPhone19 ;
-                        :stockEnCentro :centroLogisticoBarceluna ;
+                        :stockEnCentro :centroLogisticoBarcelona ;
                         :cantidadDisponible 25 .
 
 

@@ -14,6 +14,7 @@ from utilities.builders import (
     build_reembolso_request,
 )
 from utilities.catalog import decimal_literal
+from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
@@ -26,7 +27,7 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
-from utilities.storage import load_json, save_json
+from utilities.storage import load_json, save_json, save_named_graph
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteDevolucion
@@ -198,6 +199,7 @@ def _handle_devolucion(
         }
     )
     save_json("devoluciones.json", devoluciones_db)
+    _persist_devoluciones_rdf(devoluciones_db)
     log("devolucion", f"Devolucion aceptada pedido={_pedido_id(order_graph, pedido)} producto={_product_id(order_graph, product)} importe={importe}")
     return response
 
@@ -337,14 +339,36 @@ def _build_resolution(
     return build_message(graph, response, ACL.inform, sender, receiver)
 
 
+_FIND_LINE_SPARQL = """
+PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX ecsdi: <http://www.semanticweb.org/ecsdi/comercio_electronico/>
+
+SELECT ?line WHERE {
+    ?pedido ecsdi:pedidoTieneLinea ?line .
+    ?line   ecsdi:lineaDeProducto ?lineProduct .
+    OPTIONAL { ?lineProduct ecsdi:idProducto ?lineProductId }
+    FILTER (
+        ?lineProduct = ?product ||
+        (BOUND(?productId) && BOUND(?lineProductId) && STR(?lineProductId) = STR(?productId))
+    )
+}
+LIMIT 1
+"""
+
+
 def _find_order_line(graph: Graph, pedido: URIRef, product: URIRef) -> URIRef | None:
+    """Encuentra la línea del pedido que contiene el producto solicitado.
+
+    Implementado como SPARQL SELECT (cap. 6) sobre el grafo del pedido. Si la
+    URI del producto no coincide, busca por idProducto en una OPTIONAL.
+    """
+
+    init_bindings = {"pedido": pedido, "product": product}
     target_id = _product_id(graph, product)
-    for line in graph.objects(pedido, ECSDI.pedidoTieneLinea):
-        line_product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
-        if line_product is None:
-            continue
-        if line_product == product or _product_id(graph, line_product) == target_id:
-            return line
+    if target_id:
+        init_bindings["productId"] = Literal(target_id)
+    for row in graph.query(_FIND_LINE_SPARQL, initBindings=init_bindings):
+        return row.line
     return None
 
 
@@ -454,7 +478,14 @@ def main():
     shop_url = _comm_url(shop_base)
     financiero_url = _comm_url(financiero_base)
     transport_url = _comm_url(transport_base) if transport_base else None
-    registered = register_service(args.dir, service_id, "AGENTE_DEVOLUCION", address, f"devolucion-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "AGENTE_DEVOLUCION",
+        address,
+        f"devolucion-{args.port}",
+        capabilities=[ECSDI.SolicitarDevolucion],
+    )
     try:
         log(f"devolucion-{args.port}", f"listening on {bind_host}:{args.port}, shop={shop_url}, financiero={financiero_url}, transport={transport_url or 'N/A'}")
         create_app(shop_url=shop_url, financiero_url=financiero_url, transport_url=transport_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
@@ -463,8 +494,27 @@ def main():
             unregister_service(args.dir, service_id, f"devolucion-{args.port}")
 
 
-def _comm_url(base_url: str) -> str:
-    return base_url if base_url.endswith("/comm") else base_url.rstrip("/") + "/comm"
+def _persist_devoluciones_rdf(devoluciones_db: list[dict]) -> None:
+    """Espejo RDF (Dataset común) de las devoluciones almacenadas en JSON."""
+
+    graph = Graph()
+    bind_namespaces(graph)
+    for idx, record in enumerate(devoluciones_db):
+        node = DATA[f"devolucion/{record.get('pedido_id','')}/{record.get('product_id','')}/{idx}"]
+        graph.add((node, RDF.type, ECSDI.Devolucion))
+        if record.get("pedido_id"):
+            graph.add((node, ECSDI.devolucionDePedido, Literal(record["pedido_id"])))
+        if record.get("product_id"):
+            graph.add((node, ECSDI.devolucionDeProducto, Literal(record["product_id"])))
+        if record.get("motivo"):
+            graph.add((node, ECSDI.motivoDevolucion, Literal(record["motivo"])))
+        if record.get("aceptada") is not None:
+            graph.add((node, ECSDI.estadoOperacion, Literal("aceptada" if record["aceptada"] else "rechazada")))
+        if record.get("importe"):
+            graph.add((node, ECSDI.importeOperacion, Literal(record["importe"])))
+        if record.get("fecha_recogida"):
+            graph.add((node, ECSDI.fechaRecogidaDevolucion, Literal(record["fecha_recogida"])))
+    save_named_graph("returns", graph)
 
 
 if __name__ == "__main__":

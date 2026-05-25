@@ -54,6 +54,18 @@ def create_app(
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
+
+            # Cierre de Contract Net: aceptaciones y rechazos son informativos para el
+            # transportista; permiten al ganador comprometer recursos y al perdedor liberarlos.
+            if message.performative in (ACL["accept-proposal"], ACL["reject-proposal"]):
+                action = message.content
+                outcome = "ACEPTADA" if message.performative == ACL["accept-proposal"] else "RECHAZADA"
+                log(str(agent_uri).split("/")[-1], f"Contract Net cierre: oferta {outcome} (action={action})")
+                ack = Graph()
+                bind_namespaces(ack)
+                ack.add((action, RDF.type, ECSDI.DecisionContratoTransporte))
+                return rdf_response(build_message(ack, action, ACL.inform, agent_uri, message.sender))
+
             if message.performative != ACL.request:
                 return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -156,7 +168,17 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("TRANSPORTISTA", advertised_host, args.port)
-    registered = register_service(args.dir, service_id, "TRANSPORTISTA", address, f"transportista-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "TRANSPORTISTA",
+        address,
+        f"transportista-{args.port}",
+        capabilities=[
+            ECSDI.SolicitarPresupuestoTransporte,
+            ECSDI.SolicitarRecogidaDevolucion,
+        ],
+    )
     try:
         log(
             f"transportista-{args.port}",

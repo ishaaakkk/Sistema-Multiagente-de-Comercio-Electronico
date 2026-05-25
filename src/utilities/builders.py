@@ -276,7 +276,6 @@ def build_notify_purchase_completed(
     """
     graph = Graph()
     bind_namespaces(graph)
-    # Copiar solo los triples de datos, excluyendo el mensaje ACL interno
     for triple in order_graph:
         s, p, o = triple
         if p not in (ACL.performative, ACL.sender, ACL.receiver, ACL.content):
@@ -286,6 +285,83 @@ def build_notify_purchase_completed(
     graph.add((action, RDF.type, ECSDI.NotificarCompraCompletada))
     graph.add((action, ECSDI.notificacionSobrePedido, pedido))
     return build_message(graph, action, ACL.inform, sender, receiver)
+
+
+def build_busqueda_realizada_notification(
+    sender: URIRef,
+    receiver: URIRef,
+    asistente: URIRef,
+    constraints: dict,
+    product_uris: list[URIRef],
+) -> Graph:
+    """Protocolo Consulta Catálogo (AgenteCatalogo → AgenteFeedback).
+
+    Notificación informativa que indica que se ha procesado una BuscarProductos.
+    Lleva el AsistenteVirtual originador, las restricciones aplicadas y los
+    productos devueltos para que el agente feedback pueda construir el historial
+    de búsquedas y alimentar el algoritmo de recomendación (cap. 9).
+    """
+
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/busqueda-realizada/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.NotificarBusquedaRealizada))
+    graph.add((action, ECSDI.accionSolicitadaPor, asistente))
+    graph.add(
+        (
+            action,
+            ECSDI.fechaBusqueda,
+            Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime),
+        )
+    )
+
+    if constraints.get("name"):
+        _add_text_restriction(graph, action, ECSDI.RestriccionNombre, constraints["name"])
+    if constraints.get("brand"):
+        _add_text_restriction(graph, action, ECSDI.RestriccionMarca, constraints["brand"])
+    if constraints.get("min_price") is not None or constraints.get("max_price") is not None:
+        restriction = DATA[f"restriction/price/{uuid4()}"]
+        graph.add((restriction, RDF.type, ECSDI.RestriccionPrecio))
+        if constraints.get("min_price") is not None:
+            graph.add(
+                (restriction, ECSDI.precioMinimo, decimal_literal(Decimal(str(constraints["min_price"]))))
+            )
+        if constraints.get("max_price") is not None:
+            graph.add(
+                (restriction, ECSDI.precioMaximo, decimal_literal(Decimal(str(constraints["max_price"]))))
+            )
+        graph.add((action, ECSDI.accionTieneRestriccion, restriction))
+    if constraints.get("min_rating") is not None:
+        restriction = DATA[f"restriction/rating/{uuid4()}"]
+        graph.add((restriction, RDF.type, ECSDI.RestriccionValoracion))
+        graph.add(
+            (
+                restriction,
+                ECSDI.valoracionMinima,
+                decimal_literal(Decimal(str(constraints["min_rating"]))),
+            )
+        )
+        graph.add((action, ECSDI.accionTieneRestriccion, restriction))
+
+    for product in product_uris:
+        graph.add((action, ECSDI.resultadoContieneProducto, product))
+
+    return build_message(graph, action, ACL.inform, sender, receiver)
+
+
+def build_recommendation_inform(
+    sender: URIRef,
+    receiver: URIRef,
+    recommendation_graph: Graph,
+    response_node: URIRef,
+) -> Graph:
+    """AgenteFeedback → AsistenteVirtual: inform proactivo con Recomendacion.
+
+    Envuelve el grafo de Recomendacion ya construido por el recomendador en
+    un mensaje FIPA-ACL inform. No requiere respuesta del asistente.
+    """
+
+    return build_message(recommendation_graph, response_node, ACL.inform, sender, receiver)
 
 
 def build_completed_order_info_request(sender: URIRef, receiver: URIRef, pedido_id: str) -> Graph:
@@ -488,13 +564,11 @@ def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef
 
 
 def _copy_business_graph(source: Graph, target: Graph) -> None:
-    for triple in source:
-        s, p, _ = triple
-        if p in (ACL.performative, ACL.sender, ACL.receiver, ACL.content):
-            continue
-        if (s, RDF.type, ACL.FipaAclMessage) in source:
-            continue
-        target.add(triple)
+    # Delegamos en la versión canónica en utilities/comm.py para evitar
+    # divergencias entre módulos.
+    from .comm import copy_business_graph as _copy
+
+    _copy(source, target)
 
 
 def _copy_stock_context(source: Graph, target: Graph, product: URIRef) -> None:

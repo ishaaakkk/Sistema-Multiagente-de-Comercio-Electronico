@@ -5,10 +5,12 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-DIR_HOST="127.0.0.1"
-DIR_PORT="9000"
-DIR_URL="http://${DIR_HOST}:${DIR_PORT}"
-HOSTADDR="127.0.0.1"
+# Configurable vía variables de entorno para poder lanzar el sistema
+# desde otra máquina o detrás de NAT. Por defecto sigue siendo localhost.
+DIR_HOST="${DIR_HOST:-127.0.0.1}"
+DIR_PORT="${DIR_PORT:-9000}"
+DIR_URL="${DIR_URL:-http://${DIR_HOST}:${DIR_PORT}}"
+HOSTADDR="${HOSTADDR:-127.0.0.1}"
 
 if [[ -x "../.venv/bin/python" ]]; then
     PYTHON="../.venv/bin/python"
@@ -57,15 +59,24 @@ trap shutdown_all EXIT INT TERM
 
 start_agent "DirectoryService" "$PYTHON" -m agents.directory_service --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
 sleep 1
-start_agent "Transportista" "$PYTHON" -m agents.transportista_agent --port 9003 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+# Dos transportistas con tarifas distintas — extensión avanzada #1: el
+# centro logístico negocia Contract Net en paralelo y elige la mejor oferta.
+start_agent "TransportistaExpress" "$PYTHON" -m agents.transportista_agent --port 9003 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 4.50 --tarifa-kg 1.75 --tarifa-dia 0.80
 sleep 0.5
-start_agent "CentroLogistico" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+start_agent "TransportistaEco" "$PYTHON" -m agents.transportista_agent --port 9011 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
+sleep 0.5
+# Dos centros logísticos con stocks disjuntos — extensión avanzada #3: el
+# comerciante distribuye en paralelo a cada CL y agrega las confirmaciones.
+start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --stock-products "P-IPHONE19,P-EBOOK-AURORA,P-AURICULARES-BT"
+sleep 0.5
+start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --stock-products "P-BATIDORA-MINI,P-LIBRO-RUST"
 sleep 0.5
 start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos_agent --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 start_agent "AgenteFinanciero" "$PYTHON" -m agents.agente_financiero --port 9005 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
-start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+# Feedback con scheduler proactivo y delay corto para la demo.
+start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --feedback-delay 60 --recommendation-period 120 --recommendation-warmup 30
 sleep 0.5
 start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5

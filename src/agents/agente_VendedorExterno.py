@@ -101,7 +101,14 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_VENDEDOR_EXTERNO", advertised_host, args.port)
-    registered = register_service(args.dir, service_id, "AGENTE_VENDEDOR_EXTERNO", address, f"vendedor-externo-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "AGENTE_VENDEDOR_EXTERNO",
+        address,
+        f"vendedor-externo-{args.port}",
+        capabilities=[ECSDI.ComunicarProductosExternosPedidos],
+    )
     try:
         log(f"vendedor-externo-{args.port}", f"listening on {bind_host}:{args.port}")
         create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)
