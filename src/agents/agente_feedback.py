@@ -52,15 +52,15 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido")
                 )
-            if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+            if message.performative not in (ACL.request, ACL.inform):
+                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request o inform"))
 
             action = message.content
 
             if (action, RDF.type, ECSDI.NotificarCompraCompletada) in graph:
                 return rdf_response(_handle_notify_purchase(opinions_db, agent_uri, message.sender, action, graph))
 
-            # builders.py construye ECSDI.EnviarOpinion — aceptamos ambos nombres por compatibilidad
+            # EnviarOpinion/RegistrarValoracion son comunicaciones informativas, no acciones de API.
             if (action, RDF.type, ECSDI.EnviarOpinion) in graph or (action, RDF.type, ECSDI.RegistrarValoracion) in graph:
                 return rdf_response(_handle_registrar_valoracion(opinions_db, agent_uri, message.sender, action, graph))
 
@@ -79,7 +79,9 @@ def _handle_notify_purchase(
     graph: Graph,
 ) -> Graph:
     """Plan: RegistrarCompraParaFuturaOpinion — una entrada pendiente por linea de pedido."""
-    pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
+    pedido = next(graph.objects(action, ECSDI.notificacionSobrePedido), None)
+    if pedido is None:
+        pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     if pedido is None:
         return build_failure(agent_uri, sender, action, "Falta accionSobrePedido")
 
@@ -122,7 +124,9 @@ def _handle_registrar_valoracion(
     graph: Graph,
 ) -> Graph:
     """Plan: RegistrarOpinionProducto — completa un registro pendiente con puntuacion y comentario."""
-    valoracion = next(graph.objects(action, ECSDI.accionTieneValoracion), None)
+    valoracion = next(graph.objects(action, ECSDI.notificacionTieneValoracion), None)
+    if valoracion is None:
+        valoracion = next(graph.objects(action, ECSDI.accionTieneValoracion), None)
     if valoracion is None:
         valoracion = next(graph.subjects(RDF.type, ECSDI.Valoracion), None)
     if valoracion is None:

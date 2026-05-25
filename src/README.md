@@ -1,6 +1,6 @@
-# README - Prototipo fase 2
+# README - Prototipo fase 3
 
-Este directorio contiene una implementacion preliminar alineada con la segunda fase de ECSDI.
+Este directorio contiene una implementacion preliminar alineada con la tercera fase de ECSDI.
 
 Alcance implementado:
 
@@ -9,6 +9,9 @@ Alcance implementado:
 - Verificacion de que el pedido se puede servir desde un unico centro logistico con stock suficiente.
 - Planificacion de envio sin proceso de pago.
 - Agente externo de transporte separado del centro logistico.
+- Cobro simulado del pedido y pagos a vendedores externos.
+- Registro de compras completadas para feedback y validacion de devoluciones.
+- Devolucion de productos comprados con consulta del pedido completado y reembolso simulado.
 - Mensajes RDF con una envoltura FIPA-ACL minima y contenido definido con la ontologia del repositorio.
 
 Agentes:
@@ -17,15 +20,21 @@ Agentes:
 - `AgenteComerciante`: atiende `BuscarProductos` y `RealizarPedido`, mantiene catalogo/stock interno y genera factura.
 - `CentroLogisticoAgent`: transforma un pedido aceptado en `LoteEnvio` y solicita presupuesto al transportista.
 - `TransportistaAgent`: responde a `SolicitarPresupuestoTransporte` con una `OfertaTransporte`.
+- `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
+- `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria.
+- `AgenteFeedback`: registra compras completadas y valoraciones.
+- `AgenteVendedorExterno`: recibe avisos de productos externos cuyo envio gestiona el vendedor.
+- `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados y solicita reembolsos.
 - `assistant_demo.py`: cliente de prueba que actua como `AsistenteVirtual`.
+- `devolucion_demo.py`: cliente de prueba que compra un producto y solicita su devolucion.
 
 Limitaciones de momento:
 
-- No hay cobro ni proveedor de pagos.
-- No se implementan vendedores externos, devoluciones, feedback ni recomendaciones.
+- El cobro, los reembolsos y los pagos externos se simulan en memoria.
+- No se implementan recomendaciones proactivas.
 - El servicio de directorio usa un protocolo ligero `REGISTER|...`/`SEARCH|...` solo para infraestructura. Las comunicaciones de negocio entre agentes se mantienen en RDF/FIPA-ACL.
 - El catalogo de datos es pequeno y esta generado en codigo para facilitar la demo.
-- La seleccion de transportista es trivial porque solo hay un transportista, aunque ya esta separado como agente.
+- La seleccion de transportista es simple, aunque ya admite varios transportistas registrados.
 
 Ejecucion local:
 
@@ -36,8 +45,14 @@ pip install -r src/requirements.txt
 
 PYTHONPATH=src python -m agents.transportista_agent --port 9003
 PYTHONPATH=src python -m agents.centro_logistico_agent --port 9002 --transport-url http://127.0.0.1:9003/comm
-PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --logistics-url http://127.0.0.1:9002/comm
-PYTHONPATH=src python -m assistant_demo --shop-url http://127.0.0.1:9001/comm
+PYTHONPATH=src python -m agents.agente_financiero --port 9005
+PYTHONPATH=src python -m agents.agente_feedback --port 9007
+PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008
+PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --logistics-url http://127.0.0.1:9002/comm --financiero-url http://127.0.0.1:9005/comm --feedback-url http://127.0.0.1:9007/comm --vendedor-externo-url http://127.0.0.1:9008/comm
+PYTHONPATH=src python -m agents.agente_catalogo --port 9006
+PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --shop-url http://127.0.0.1:9001/comm --financiero-url http://127.0.0.1:9005/comm
+PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
+PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 ```
 
 Con servicio de directorio:
@@ -46,8 +61,14 @@ Con servicio de directorio:
 PYTHONPATH=src python -m agents.directory_service --port 9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m assistant_demo --shop-url http://127.0.0.1:9001/comm
+PYTHONPATH=src python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
+PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 ```
 
 Tambien se puede levantar todo el stack local con:
@@ -72,10 +93,12 @@ $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http
 $env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
  $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --vebose
+$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --verbose
 
 Demo:
 $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
 $env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+$env:PYTHONPATH="src"; python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 
 $env:PYTHONPATH="src"; python -m agents.agente_asistente --port 9010

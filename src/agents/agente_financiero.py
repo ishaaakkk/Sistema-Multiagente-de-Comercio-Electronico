@@ -50,19 +50,15 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             if (action, RDF.type, ECSDI.SolicitarCobro) in graph:
                 return _handle_cobro(graph, agent_uri, message.sender, action)
 
-            # Capacidad ReembolsoAlUsuario — Plan: ReembolsoAlUsuario (pendiente de implementar)
+            # Capacidad ReembolsoAlUsuario — Plan: ReembolsoAlUsuario
             # Msg entrante: SolicitarReembolso (AgenteDevolucion → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarReembolso) in graph:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "ReembolsoAlUsuario: pendiente de implementar")
-                )
+                return _handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.ReembolsoCliente, "reembolso")
 
-            # Capacidad PagarProdsExternos — Plan: PagarProdsExternos (pendiente de implementar)
+            # Capacidad PagarProdsExternos — Plan: PagarProdsExternos
             # Msg entrante: PagarProdExterno (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.PagarProductoExterno) in graph:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "PagarProdsExternos: pendiente de implementar")
-                )
+                return _handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.PagoVendedorExterno, "pago_externo")
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFinanciero"))
 
@@ -97,6 +93,41 @@ def _handle_cobro(graph, agent_uri, sender, action):
     # ACK inmediato — NotificarCobroFinalizado interno hacia FinalizarPedido
     ack = build_message(graph, action, ACL.inform, agent_uri, sender)
     return rdf_response(ack)
+
+
+def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag):
+    """Confirma reembolsos y pagos a vendedores externos de forma simulada."""
+    operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
+    importe = None
+    if operacion is not None:
+        importe = next(graph.objects(operacion, ECSDI.importeOperacion), None)
+    if importe is None:
+        importe = next(graph.objects(action, ECSDI.importeCobro), None)
+    if importe is None:
+        return rdf_response(build_failure(agent_uri, sender, action, "Falta importe de la operacion"))
+
+    amount = Decimal(str(importe))
+    if amount <= 0:
+        return rdf_response(build_failure(agent_uri, sender, action, "Importe de la operacion invalido"))
+
+    if operacion is None:
+        operacion = DATA[f"pago/{tag}/{uuid4()}"]
+
+    response_graph = Graph()
+    bind_namespaces(response_graph)
+    confirmation = DATA[f"response/pago/{uuid4()}"]
+    response_graph.add((confirmation, RDF.type, ECSDI.ConfirmacionTransaccion))
+    response_graph.add((confirmation, ECSDI.confirmacionDeOperacion, operacion))
+    response_graph.add((confirmation, ECSDI.respuestaDeAccion, action))
+    response_graph.add((operacion, RDF.type, operation_type))
+    response_graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
+    response_graph.add((operacion, ECSDI.importeOperacion, decimal_literal(amount)))
+    response_graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
+    response_graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
+    response_graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+
+    log("financiero", f"{tag} confirmado: importe={amount} ref={next(response_graph.objects(operacion, ECSDI.referenciaPago))}")
+    return rdf_response(build_message(response_graph, confirmation, ACL.inform, agent_uri, sender))
 
 
 def _realizar_transaccion(pedido: URIRef, importe: Decimal) -> None:

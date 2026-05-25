@@ -11,6 +11,7 @@ from utilities.acl import build_failure, build_message, build_not_understood, ge
 from utilities.builders import (
     build_aviso_vendedor_externo,
     build_cobro_request,
+    build_completed_order_info_response,
     build_notify_purchase_completed,
     build_pago_externo_request,
 )
@@ -40,6 +41,7 @@ def create_app(
     vendedor_externo_url="http://127.0.0.1:9008/comm",
 ):
     app = Flask(__name__)
+    completed_orders: dict[str, Graph] = {}
 
     @app.get("/")
     def index():
@@ -61,7 +63,11 @@ def create_app(
             # Msg entrante: RealizarPedido (AsistenteVirtual → AgenteComerciante)
             # El asistente incluye idProducto, precio, vendedor y quienEnvia por cada linea.
             if (action, RDF.type, ECSDI.RealizarPedido) in graph:
-                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url))
+                return rdf_response(_handle_order(agent_uri, message.sender, action, graph, logistics_url, financiero_url, feedback_url, vendedor_externo_url, completed_orders))
+
+            # Protocolo InfoPedidoCompletado — AgenteDevolucion valida una compra ya completada.
+            if (action, RDF.type, ECSDI.PeticionInfoPedidoCompletado) in graph:
+                return rdf_response(_handle_completed_order_info(completed_orders, agent_uri, message.sender, action, graph))
 
             return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
         except Exception as exc:
@@ -79,6 +85,7 @@ def _handle_order(
     financiero_url: str,
     feedback_url: str,
     vendedor_externo_url: str,
+    completed_orders: dict[str, Graph],
 ) -> Graph:
     """Plan: PreguntarDatosCompra → bifurcacion por linea de pedido.
 
@@ -147,7 +154,29 @@ def _handle_order(
     # Plan: FinalizarPedido → NotificarCompraCompletada (AgenteComerciante → AgenteFeedback)
     _post_safe(feedback_url, build_notify_purchase_completed(agent_uri, AGENTS.AgenteFeedback, order_graph, pedido), "feedback")
 
+    _store_completed_order(completed_orders, order_graph, pedido)
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
+
+
+def _handle_completed_order_info(
+    completed_orders: dict[str, Graph],
+    agent_uri: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    graph: Graph,
+) -> Graph:
+    pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
+    pedido_id = _pedido_id(graph, pedido)
+    if not pedido_id:
+        return build_failure(agent_uri, receiver, action, "Falta el identificador de pedido")
+
+    order_graph = completed_orders.get(pedido_id)
+    if order_graph is None:
+        return build_failure(agent_uri, receiver, action, f"Pedido completado no encontrado: {pedido_id}")
+
+    stored_pedido = next(order_graph.subjects(ECSDI.idPedido, Literal(pedido_id)), pedido)
+    log("comerciante", f"Consulta pedido completado: {pedido_id}")
+    return build_completed_order_info_response(agent_uri, receiver, action, order_graph, stored_pedido)
 
 
 def _classify_lines(graph: Graph, lines: list) -> tuple[list, list, list]:
@@ -238,6 +267,30 @@ def _post_safe(url: str, graph, tag: str) -> None:
         post_graph(url, graph)
     except Exception as exc:
         log("comerciante", f"[{tag}] aviso fire-and-forget fallido ({url}): {exc}")
+
+
+def _store_completed_order(completed_orders: dict[str, Graph], order_graph: Graph, pedido: URIRef) -> None:
+    pedido_id = str(next(order_graph.objects(pedido, ECSDI.idPedido), ""))
+    if not pedido_id:
+        return
+    stored = Graph()
+    bind_namespaces(stored)
+    for triple in order_graph:
+        stored.add(triple)
+    completed_orders[pedido_id] = stored
+    log("comerciante", f"Pedido completado guardado: {pedido_id}")
+
+
+def _pedido_id(graph: Graph, pedido: URIRef | None) -> str | None:
+    if pedido is None:
+        return None
+    explicit_id = next(graph.objects(pedido, ECSDI.idPedido), None)
+    if explicit_id is not None:
+        return str(explicit_id)
+    uri = str(pedido)
+    if "/pedido/" in uri:
+        return uri.rsplit("/pedido/", 1)[-1]
+    return uri.rsplit("/", 1)[-1] if uri else None
 
 
 

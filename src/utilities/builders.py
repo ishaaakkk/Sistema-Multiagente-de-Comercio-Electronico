@@ -165,7 +165,7 @@ def build_shipping_confirmation(
     graph.add((confirmation, RDF.type, ECSDI.ConfirmacionEnvio))
     graph.add((confirmation, ECSDI.confirmacionEnvio, envio))
     graph.add((confirmation, ECSDI.respuestaDeAccion, action))
-    graph.add((confirmation, ECSDI.accionSobreOferta, offer))
+    graph.add((confirmation, ECSDI.respuestaSobreOferta, offer))
     return build_message(graph, confirmation, ACL.inform, sender, receiver)
 
 
@@ -188,7 +188,7 @@ def build_notify_purchase_completed(
 ) -> Graph:
     """Plan: FinalizarPedido → NotificarCompraCompletada (AgenteComerciante → AgenteFeedback).
 
-    Fire-and-forget: informa al AgenteFeedback de que una compra se ha completado
+    Mensaje informativo: comunica al AgenteFeedback que una compra se ha completado
     para que registre el pedido en OpinionesDB con opinion=NULL.
     Se incluye el grafo completo del pedido para que Feedback tenga toda la info.
     """
@@ -202,7 +202,98 @@ def build_notify_purchase_completed(
                 graph.add(triple)
     action = DATA[f"action/feedback/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.NotificarCompraCompletada))
+    graph.add((action, ECSDI.notificacionSobrePedido, pedido))
+    return build_message(graph, action, ACL.inform, sender, receiver)
+
+
+def build_completed_order_info_request(sender: URIRef, receiver: URIRef, pedido_id: str) -> Graph:
+    """AgenteDevolucion → AgenteComerciante: PeticionInfoPedidoCompletado."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/order-info/{uuid4()}"]
+    pedido = _pedido_uri(pedido_id)
+    graph.add((action, RDF.type, ECSDI.PeticionInfoPedidoCompletado))
     graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((pedido, RDF.type, ECSDI.Pedido))
+    graph.add((pedido, ECSDI.idPedido, Literal(_pedido_id_from_uri(pedido))))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_completed_order_info_response(
+    sender: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    order_graph: Graph,
+    pedido: URIRef,
+) -> Graph:
+    """AgenteComerciante → AgenteDevolucion: RespuestaInfoPedidoCompletado."""
+    graph = Graph()
+    bind_namespaces(graph)
+    _copy_business_graph(order_graph, graph)
+    response = DATA[f"response/order-info/{uuid4()}"]
+    graph.add((response, RDF.type, ECSDI.RespuestaInfoPedidoCompletado))
+    graph.add((response, ECSDI.respuestaDeAccion, action))
+    graph.add((response, ECSDI.respuestaSobrePedido, pedido))
+    return build_message(graph, response, ACL.inform, sender, receiver)
+
+
+def build_devolucion_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido_id: str,
+    product_id: str,
+    motivo: str,
+) -> Graph:
+    """AsistenteVirtual → AgenteDevolucion: SolicitarDevolucion."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/devolucion/{uuid4()}"]
+    devolucion_id = f"DEV-{uuid4().hex[:8].upper()}"
+    devolucion = DATA[f"devolucion/{devolucion_id}"]
+    pedido = _pedido_uri(pedido_id)
+    product = product_uri(product_id)
+
+    graph.add((action, RDF.type, ECSDI.SolicitarDevolucion))
+    graph.add((action, ECSDI.accionSolicitadaPor, sender))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+
+    graph.add((devolucion, RDF.type, ECSDI.Devolucion))
+    graph.add((devolucion, ECSDI.idDevolucion, Literal(devolucion_id)))
+    graph.add((devolucion, ECSDI.devolucionDePedido, pedido))
+    graph.add((devolucion, ECSDI.devolucionDeProducto, product))
+    graph.add((devolucion, ECSDI.motivoDevolucion, Literal(motivo)))
+    graph.add((devolucion, ECSDI.fechaSolicitudDevolucion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+
+    graph.add((pedido, RDF.type, ECSDI.Pedido))
+    graph.add((pedido, ECSDI.idPedido, Literal(_pedido_id_from_uri(pedido))))
+    graph.add((product, RDF.type, ECSDI.Producto))
+    graph.add((product, ECSDI.idProducto, Literal(product_id)))
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
+def build_reembolso_request(
+    sender: URIRef,
+    receiver: URIRef,
+    devolucion: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    importe: Decimal,
+) -> Graph:
+    """AgenteDevolucion → AgenteFinanciero: SolicitarReembolso."""
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/reembolso/{uuid4()}"]
+    operacion = DATA[f"pago/reembolso/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.SolicitarReembolso))
+    graph.add((action, ECSDI.accionSobrePedido, pedido))
+    graph.add((action, ECSDI.accionSobreProducto, product))
+    graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+    graph.add((operacion, RDF.type, ECSDI.ReembolsoCliente))
+    graph.add((operacion, ECSDI.idOperacionPago, Literal(f"RB-{uuid4().hex[:8].upper()}")))
+    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
+    graph.add((devolucion, ECSDI.devolucionTieneReembolso, operacion))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -217,23 +308,22 @@ def build_valoracion_request(
     """AsistenteVirtual → AgenteFeedback: EnviarOpinion.
 
     Plan: RegistrarOpinionProducto (AgenteFeedback / ObtenerOpinionProductoComprado).
-    La accion es EnviarOpinion; la Valoracion viaja como contenido directo
-    sin accionTieneValoracion (clase inexistente en la ontologia).
+    Es una comunicacion informativa: lleva enlazada la Valoracion enviada.
     """
     graph = Graph()
     bind_namespaces(graph)
     action = DATA[f"action/valoracion/{uuid4()}"]
     valoracion = DATA[f"valoracion/{uuid4()}"]
     graph.add((action, RDF.type, ECSDI.EnviarOpinion))
-    graph.add((action, ECSDI.accionSobreProducto, product_uri(product_id)))
-    graph.add((action, ECSDI.accionTieneValoracion, valoracion))
+    graph.add((action, ECSDI.notificacionSobreProducto, product_uri(product_id)))
+    graph.add((action, ECSDI.notificacionTieneValoracion, valoracion))
     graph.add((valoracion, RDF.type, ECSDI.Valoracion))
     graph.add((valoracion, ECSDI.valoracionDeProducto, product_uri(product_id)))
     graph.add((valoracion, ECSDI.valoracionEnviadaPor, sender))
     graph.add((valoracion, ECSDI.valoracionDePedido, Literal(pedido_id)))
     graph.add((valoracion, ECSDI.puntuacion, Literal(puntuacion, datatype=XSD.integer)))
     graph.add((valoracion, ECSDI.comentario, Literal(comentario)))
-    return build_message(graph, action, ACL.request, sender, receiver)
+    return build_message(graph, action, ACL.inform, sender, receiver)
 
 
 def build_valoracion_response(
@@ -308,3 +398,26 @@ def _add_text_restriction(graph: Graph, action: URIRef, restriction_type: URIRef
     graph.add((restriction, RDF.type, restriction_type))
     graph.add((restriction, ECSDI.valorTextoRestriccion, Literal(text)))
     graph.add((action, ECSDI.accionTieneRestriccion, restriction))
+
+
+def _copy_business_graph(source: Graph, target: Graph) -> None:
+    for triple in source:
+        s, p, _ = triple
+        if p in (ACL.performative, ACL.sender, ACL.receiver, ACL.content):
+            continue
+        if (s, RDF.type, ACL.FipaAclMessage) in source:
+            continue
+        target.add(triple)
+
+
+def _pedido_uri(pedido_id: str) -> URIRef:
+    if pedido_id.startswith("http://") or pedido_id.startswith("https://"):
+        return URIRef(pedido_id)
+    return DATA[f"pedido/{pedido_id}"]
+
+
+def _pedido_id_from_uri(pedido: URIRef) -> str:
+    uri = str(pedido)
+    if "/pedido/" in uri:
+        return uri.rsplit("/pedido/", 1)[-1]
+    return uri.rsplit("/", 1)[-1]

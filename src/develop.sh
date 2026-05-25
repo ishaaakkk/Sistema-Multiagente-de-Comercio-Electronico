@@ -61,12 +61,23 @@ start_agent "Transportista" "$PYTHON" -m agents.transportista_agent --port 9003 
 sleep 0.5
 start_agent "CentroLogistico" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
+start_agent "AgenteFinanciero" "$PYTHON" -m agents.agente_financiero --port 9005 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
+start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
+start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
 start_agent "Tienda" "$PYTHON" -m agents.agente_comerciante --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
+start_agent "AgenteCatalogo" "$PYTHON" -m agents.agente_catalogo --port 9006 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
+start_agent "AgenteDevolucion" "$PYTHON" -m agents.agente_devolucion --port 9009 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 
 echo
 echo "Agents are running."
 echo "Run the demo in another terminal with:"
-echo "  cd $SCRIPT_DIR && PYTHONPATH=$SCRIPT_DIR $PYTHON -m assistant_demo --shop-url http://127.0.0.1:9001/comm"
+echo "  cd $SCRIPT_DIR && PYTHONPATH=$SCRIPT_DIR $PYTHON -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm"
+echo "  cd $SCRIPT_DIR && PYTHONPATH=$SCRIPT_DIR $PYTHON -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm"
 echo
 read -r -n 1 -s -p "Press any key to stop all agents..."
 echo
