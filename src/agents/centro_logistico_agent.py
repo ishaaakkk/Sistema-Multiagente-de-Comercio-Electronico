@@ -21,6 +21,7 @@ from utilities.runtime import (
     search_all_services,
     unregister_service,
 )
+from utilities.storage import load_json, save_json
 
 
 DEFAULT_AGENT_URI = AGENTS.CentroLogisticoBarcelona
@@ -37,7 +38,11 @@ def create_app(
     Si hay directorio, se ignora transport_url y se usan todos los registrados.
     """
     app = Flask(__name__)
-    center = center_uri("CL-BCN")
+    fallback_center = center_uri("CL-BCN")
+    stock_reservations = {
+        key: int(value)
+        for key, value in load_json("stock_reservations.json", {}).items()
+    }
 
     @app.get("/")
     def index():
@@ -65,6 +70,11 @@ def create_app(
             if pedido is None:
                 return rdf_response(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
 
+            product_quantities = _requested_quantities(graph, pedido)
+            center = _select_center(graph, pedido, product_quantities, stock_reservations, fallback_center)
+            if center is None:
+                return rdf_response(build_failure(agent_uri, message.sender, action, "No hay un centro logistico con stock suficiente para todo el pedido"))
+
             lote_graph, lote = _build_lote_graph(graph, pedido, center)
 
             # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales
@@ -84,6 +94,8 @@ def create_app(
 
             best_offer_graph.set((best_offer, ECSDI.estadoOferta, Literal("aceptada")))
             _merge_graphs(best_offer_graph, lote_graph)
+            _reserve_stock(stock_reservations, graph, center, product_quantities)
+            save_json("stock_reservations.json", stock_reservations)
 
             # Plan: InformarDatosEnvioMsg (AgenteLogistico → AgenteComerciante)
             response = build_shipping_confirmation(
@@ -179,6 +191,113 @@ def _negotiate_transport(
     return best_offer_graph, best_offer, best_transportista
 
 
+def _requested_quantities(order_graph: Graph, pedido: URIRef) -> dict[URIRef, int]:
+    quantities: dict[URIRef, int] = {}
+    for line in order_graph.objects(pedido, ECSDI.pedidoTieneLinea):
+        product = next(order_graph.objects(line, ECSDI.lineaDeProducto), None)
+        if product is None:
+            continue
+        quantity = int(next(order_graph.objects(line, ECSDI.cantidad), 1))
+        quantities[product] = quantities.get(product, 0) + quantity
+    return quantities
+
+
+def _select_center(
+    order_graph: Graph,
+    pedido: URIRef,
+    product_quantities: dict[URIRef, int],
+    reservations: dict[str, int],
+    fallback_center: URIRef,
+) -> URIRef | None:
+    """Escoge un unico centro capaz de servir todas las lineas con stock conocido.
+
+    Los productos sin StockProducto en el grafo no restringen la seleccion; esto
+    permite que productos externos gestionados por la tienda viajen en el mismo
+    flujo logistico sin inventar stock local para ellos.
+    """
+    candidate_sets = []
+    for product, quantity in product_quantities.items():
+        centers = _stock_centers_for_product(order_graph, product, quantity, reservations)
+        if centers is not None:
+            candidate_sets.append(centers)
+
+    if not candidate_sets:
+        log("logistico", f"Sin stock declarado en el pedido; usando centro por defecto {fallback_center}")
+        return fallback_center
+
+    candidates = set.intersection(*candidate_sets)
+    if not candidates:
+        return None
+
+    destination_city = _destination_city(order_graph, pedido)
+    if destination_city:
+        for center in sorted(candidates, key=str):
+            city = str(next(order_graph.objects(center, ECSDI.ciudadCentroLogistico), ""))
+            if city.casefold() == destination_city.casefold():
+                log("logistico", f"Centro seleccionado por ciudad/stock: {center}")
+                return center
+
+    selected = sorted(candidates, key=str)[0]
+    log("logistico", f"Centro seleccionado por stock: {selected}")
+    return selected
+
+
+def _stock_centers_for_product(
+    graph: Graph,
+    product: URIRef,
+    quantity: int,
+    reservations: dict[str, int],
+) -> set[URIRef] | None:
+    centers = set()
+    stocks = list(graph.subjects(ECSDI.stockDeProducto, product))
+    if not stocks:
+        return None
+    for stock in stocks:
+        center = next(graph.objects(stock, ECSDI.stockEnCentro), None)
+        available = _int_value(graph, stock, ECSDI.cantidadDisponible)
+        if center is None or available is None:
+            continue
+        reserved = reservations.get(_reservation_key(center, product), 0)
+        if available - reserved >= quantity:
+            centers.add(center)
+    return centers
+
+
+def _reserve_stock(
+    reservations: dict[str, int],
+    graph: Graph,
+    center: URIRef,
+    product_quantities: dict[URIRef, int],
+) -> None:
+    for product, quantity in product_quantities.items():
+        has_stock_in_center = any(
+            (stock, ECSDI.stockEnCentro, center) in graph
+            for stock in graph.subjects(ECSDI.stockDeProducto, product)
+        )
+        if not has_stock_in_center:
+            continue
+        key = _reservation_key(center, product)
+        reservations[key] = reservations.get(key, 0) + quantity
+        log("logistico", f"Stock reservado: centro={center} producto={product} cantidad={quantity}")
+
+
+def _reservation_key(center: URIRef, product: URIRef) -> str:
+    return f"{center}|{product}"
+
+
+def _destination_city(graph: Graph, pedido: URIRef) -> str | None:
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    if address is None:
+        return None
+    city = next(graph.objects(address, ECSDI.ciudad), None)
+    return str(city) if city is not None else None
+
+
+def _int_value(graph: Graph, subject: URIRef, predicate: URIRef) -> int | None:
+    value = next(graph.objects(subject, predicate), None)
+    return int(value) if value is not None else None
+
+
 def _build_lote_graph(order_graph: Graph, pedido: URIRef, center: URIRef) -> tuple[Graph, URIRef]:
     graph = Graph()
     bind_namespaces(graph)
@@ -190,6 +309,7 @@ def _build_lote_graph(order_graph: Graph, pedido: URIRef, center: URIRef) -> tup
     graph.add((lote, RDF.type, ECSDI.LoteEnvio))
     graph.add((lote, ECSDI.idLote, Literal(f"LOT-{uuid4().hex[:8].upper()}")))
     graph.add((lote, ECSDI.loteOrigenCentro, center))
+    _copy_subject(order_graph, graph, center)
     graph.add((lote, ECSDI.estadoLote, Literal("pendiente_transportista")))
     graph.add((lote, ECSDI.prioridadLote, Literal(priority, datatype=XSD.integer)))
     if address is not None:
@@ -202,7 +322,7 @@ def _build_lote_graph(order_graph: Graph, pedido: URIRef, center: URIRef) -> tup
         product = next(order_graph.objects(line, ECSDI.lineaDeProducto), None)
         quantity = int(next(order_graph.objects(line, ECSDI.cantidad), 1))
         if product is not None:
-            _copy_subject(order_graph, graph, product)
+            _copy_product_context(order_graph, graph, product)
             product_weight = Decimal(str(next(order_graph.objects(product, ECSDI.pesoProducto), "0")))
             weight += product_weight * quantity
 
@@ -213,6 +333,15 @@ def _build_lote_graph(order_graph: Graph, pedido: URIRef, center: URIRef) -> tup
 def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:
     for triple in source.triples((subject, None, None)):
         target.add(triple)
+
+
+def _copy_product_context(source: Graph, target: Graph, product: URIRef) -> None:
+    _copy_subject(source, target, product)
+    for stock in source.subjects(ECSDI.stockDeProducto, product):
+        _copy_subject(source, target, stock)
+        center = next(source.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            _copy_subject(source, target, center)
 
 
 def _merge_graphs(target: Graph, source: Graph) -> None:

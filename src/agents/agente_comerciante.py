@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from flask import Flask
 from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import RDF, XSD
+from rdflib.namespace import RDF, RDFS, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, get_message
 from utilities.builders import (
@@ -124,12 +124,18 @@ def _handle_order(
         logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
         logistics_message = build_logistics_request(agent_uri, AGENTS.CentroLogisticoBarcelona, logistics_graph, pedido)
         shipping_response = post_graph(logistics_url, logistics_message)
+        shipping_message = get_message(shipping_response)
+        if not shipping_message or shipping_message.performative != ACL.inform:
+            return build_failure(agent_uri, receiver, action, f"No se pudo planificar el envio: {_response_reason(shipping_response)}")
+
         for triple in shipping_response:
             order_graph.add(triple)
         # Enlazar ConfirmacionEnvio al pedido para que el cliente pueda encontrarla
         confirmacion = next(shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None)
         if confirmacion is not None:
             order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+        else:
+            return build_failure(agent_uri, receiver, action, "El centro logistico no devolvio ConfirmacionEnvio")
         log("comerciante", f"Envio logistico planificado para {len(lines_for_logistics)} linea(s)")
 
     # --- Productos externos: pago al vendedor + aviso si gestiona el envio ---
@@ -269,6 +275,11 @@ def _post_safe(url: str, graph, tag: str) -> None:
         log("comerciante", f"[{tag}] aviso fire-and-forget fallido ({url}): {exc}")
 
 
+def _response_reason(graph: Graph) -> str:
+    reason = next(graph.objects(None, RDFS.comment), None)
+    return str(reason) if reason is not None else "respuesta no inform"
+
+
 def _store_completed_order(completed_orders: dict[str, Graph], order_graph: Graph, pedido: URIRef) -> None:
     pedido_id = str(next(order_graph.objects(pedido, ECSDI.idPedido), ""))
     if not pedido_id:
@@ -311,8 +322,7 @@ def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list) -
             graph.add(triple)
         product = next(full_graph.objects(line, ECSDI.lineaDeProducto), None)
         if product is not None:
-            for triple in full_graph.triples((product, None, None)):
-                graph.add(triple)
+            _copy_product_context(full_graph, graph, product)
     address = next(full_graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
     if address is not None:
         for triple in full_graph.triples((address, None, None)):
@@ -341,7 +351,7 @@ def _build_order_graph(
         _copy_subject(request_graph, graph, line)
         product = next(request_graph.objects(line, ECSDI.lineaDeProducto), None)
         if product is not None:
-            _copy_subject(request_graph, graph, product)
+            _copy_product_context(request_graph, graph, product)
         # El precio unitario lo manda el asistente en la linea
         price = Decimal(str(next(request_graph.objects(line, ECSDI.precioUnitario), "0")))
         quantity = int(next(request_graph.objects(line, ECSDI.cantidad), 1))
@@ -362,6 +372,15 @@ def _build_order_graph(
 def _copy_subject(source: Graph, target: Graph, subject: URIRef) -> None:
     for triple in source.triples((subject, None, None)):
         target.add(triple)
+
+
+def _copy_product_context(source: Graph, target: Graph, product: URIRef) -> None:
+    _copy_subject(source, target, product)
+    for stock in source.subjects(ECSDI.stockDeProducto, product):
+        _copy_subject(source, target, stock)
+        center = next(source.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            _copy_subject(source, target, center)
 
 
 def main():

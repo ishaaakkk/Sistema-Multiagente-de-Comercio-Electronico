@@ -138,6 +138,22 @@ def _handle_devolucion(
             reason=f"El motivo indicado exige estar dentro de los {RETURN_WINDOW_DAYS} dias desde la recepcion",
         )
 
+    pickup_graph = _request_recogida(agent_uri, transport_url, devolucion, pedido, product, order_graph) if transport_url else None
+    if transport_url and pickup_graph is None:
+        return _build_resolution(
+            agent_uri,
+            receiver,
+            action,
+            devolucion,
+            pedido,
+            product,
+            motivo,
+            accepted=False,
+            reason="No se pudo confirmar la recogida con el transportista",
+        )
+
+    pickup_date = _pickup_date_from_graph(pickup_graph) or datetime.now() + timedelta(days=1)
+
     importe = _line_amount(order_graph, line, product)
     reembolso_graph = _request_reembolso(agent_uri, financiero_url, devolucion, pedido, product, importe)
     if reembolso_graph is None:
@@ -150,11 +166,11 @@ def _handle_devolucion(
             product,
             motivo,
             accepted=False,
-            reason="No se pudo confirmar el reembolso con el AgenteFinanciero",
+            reason="Recogida confirmada, pero no se pudo confirmar el reembolso con el AgenteFinanciero",
+            pickup_date=pickup_date,
+            pickup_graph=pickup_graph,
         )
 
-    pickup_graph = _request_recogida(agent_uri, transport_url, devolucion, pedido, product, order_graph) if transport_url else None
-    pickup_date = _pickup_date_from_graph(pickup_graph) or datetime.now() + timedelta(days=1)
     response = _build_resolution(
         agent_uri,
         receiver,
@@ -178,6 +194,7 @@ def _handle_devolucion(
             "aceptada": True,
             "importe": str(importe),
             "fecha_recogida": pickup_date.isoformat(timespec="seconds"),
+            "reembolso_confirmado": True,
         }
     )
     save_json("devoluciones.json", devoluciones_db)

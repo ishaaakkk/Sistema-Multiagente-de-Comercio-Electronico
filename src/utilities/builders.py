@@ -52,10 +52,9 @@ def build_order_message(
 ) -> Graph:
     """Construye el mensaje RealizarPedido para el AgenteComerciante.
 
-    Si se pasa catalog_graph, copia todos los triples de cada producto
-    (incluyendo RDF.type ProductoInterno/ProductoExterno, gestionEnvioExterno,
-    productoOfrecidoPor, etc.) para que el comerciante pueda clasificar
-    correctamente las lineas sin necesidad de consultar el catalogo.
+    Si se pasa catalog_graph, copia los triples del producto y su contexto de
+    stock/centro logistico para que el comerciante y el centro logistico puedan
+    clasificar y validar el pedido sin consultar de nuevo el catalogo.
     """
     graph = Graph()
     bind_namespaces(graph)
@@ -97,6 +96,7 @@ def build_order_message(
         if catalog_graph is not None:
             for triple in catalog_graph.triples((pnode, None, None)):
                 graph.add(triple)
+            _copy_stock_context(catalog_graph, graph, pnode)
 
     return build_message(graph, action, ACL.request, sender, receiver)
 
@@ -111,6 +111,7 @@ def build_search_response(sender: URIRef, receiver: URIRef, action: URIRef, prod
         graph.add((response, ECSDI.resultadoContieneProducto, product))
         for triple in product_graph.triples((product, None, None)):
             graph.add(triple)
+        _copy_stock_context(product_graph, graph, product)
     return build_message(graph, response, ACL.inform, sender, receiver)
 
 
@@ -494,6 +495,16 @@ def _copy_business_graph(source: Graph, target: Graph) -> None:
         if (s, RDF.type, ACL.FipaAclMessage) in source:
             continue
         target.add(triple)
+
+
+def _copy_stock_context(source: Graph, target: Graph, product: URIRef) -> None:
+    for stock in source.subjects(ECSDI.stockDeProducto, product):
+        for triple in source.triples((stock, None, None)):
+            target.add(triple)
+        center = next(source.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            for triple in source.triples((center, None, None)):
+                target.add(triple)
 
 
 def _pedido_uri(pedido_id: str) -> URIRef:

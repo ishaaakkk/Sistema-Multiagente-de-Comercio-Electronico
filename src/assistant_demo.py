@@ -9,7 +9,7 @@ from utilities.namespaces import AGENTS, ECSDI
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Demo de fase 2: busqueda y compra simple.")
+    parser = argparse.ArgumentParser(description="Demo de fase 3: busqueda, compra y envio simple.")
     parser.add_argument("--catalog-url", default="http://127.0.0.1:9006/comm")
     parser.add_argument("--shop-url", default="http://127.0.0.1:9001/comm")
     parser.add_argument("--search-name", default="iphone")
