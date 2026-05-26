@@ -393,6 +393,18 @@ IFACE_HTML = """<!DOCTYPE html>
             <option value="3" selected>3 — Económico (5 días)</option>
           </select>
         </div>
+        <div class="field">
+          <label>Método de pago</label>
+          <select id="o-payment">
+            <option value="tarjeta" selected>Tarjeta</option>
+            <option value="paypal">PayPal</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Distancia logística entrega (0–1000)</label>
+          <input id="o-dist" type="number" min="0" max="1000" value="130">
+        </div>
       </div>
       <button class="btn" onclick="hacerPedido()">Confirmar pedido →</button>
     </div>
@@ -554,6 +566,8 @@ IFACE_HTML = """<!DOCTYPE html>
       postal_code: document.getElementById('o-postal').value,
       country: document.getElementById('o-country').value,
       priority: parseInt(document.getElementById('o-priority').value),
+      payment_method: document.getElementById('o-payment').value,
+      delivery_dist: parseInt(document.getElementById('o-dist').value) || 0,
     };
 
     setStatus('Procesando pedido…', 'loading');
@@ -738,6 +752,8 @@ def create_app(
         postal_code= data.get("postal_code", "")
         country    = data.get("country", "")
         priority   = int(data.get("priority", 3))
+        payment_method = data.get("payment_method", "tarjeta")
+        delivery_dist = int(data.get("delivery_dist", 130))
 
         catalog_graph = getattr(app, "_last_search_graph", None)
 
@@ -752,6 +768,8 @@ def create_app(
                 postal_code=postal_code,
                 country=country,
                 priority=priority,
+                payment_method=payment_method,
+                delivery_dist=delivery_dist,
                 catalog_graph=catalog_graph,
             )
             order_response = post_graph(shop_url, order_message)

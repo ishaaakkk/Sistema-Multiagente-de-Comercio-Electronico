@@ -51,9 +51,21 @@ exporta `FEEDBACK_DELAY_SECONDS=20` y `RECOMMENDATION_PERIOD_SECONDS=30`
 ### A4. Gestión de envío y multi-CL
 
 - Pasos: comprar a la vez 1× `iPhone 19` (CL-BCN) y 1× `Libro Rust`
-  (CL-MAD).
-- Salida esperada: el asistente recibe **dos** `ConfirmacionEnvio`, una
-  por cada CL, cada una con su transportista y fecha estimada.
+  (CL-MAD). En el formulario de pedido indicar **distancia logística
+  entrega** `130` (cercana a CL-BCN) y un **método de pago** (p. ej.
+  `tarjeta`).
+- Salida esperada: el Comerciante ordena los CL por
+  `|dist_CL − dist_entrega|` (BCN `--dist 130` antes que MAD `--dist 500`),
+  contacta secuencialmente hasta asignar todas las líneas, y el asistente
+  recibe **dos** `ConfirmacionEnvio`, una por cada CL, cada una con su
+  transportista y fecha estimada.
+
+### A4b. Selección de CL por proximidad `dist`
+
+- Pasos: pedido de un solo producto de CL-BCN con `delivery_dist=130`.
+- Salida esperada: en los logs del Comerciante, el primer `AvisarCL` va a
+  CL-BCN (puerto 9002). Repetir con `delivery_dist=500`: el primer intento
+  debe ir a CL-MAD (puerto 9012).
 
 ### A5. Devolución (SolicitarDevolucion)
 

@@ -96,13 +96,13 @@ case "$AGENT" in
     cl_bcn)
         PORT="${PORT:-9002}"
         exec "$PYTHON" -m agents.centro_logistico_agent --port "$PORT" "${common_args[@]}" \
-            --center-id CL-BCN --center-city Barcelona \
+            --center-id CL-BCN --center-city Barcelona --dist 130 \
             --stock-products "P-IPHONE19,P-EBOOK-AURORA,P-AURICULARES-BT"
         ;;
     cl_mad)
         PORT="${PORT:-9012}"
         exec "$PYTHON" -m agents.centro_logistico_agent --port "$PORT" "${common_args[@]}" \
-            --center-id CL-MAD --center-city Madrid \
+            --center-id CL-MAD --center-city Madrid --dist 500 \
             --stock-products "P-BATIDORA-MINI,P-LIBRO-RUST"
         ;;
     proveedor_pagos)

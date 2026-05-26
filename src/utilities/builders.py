@@ -48,6 +48,8 @@ def build_order_message(
     postal_code: str,
     country: str,
     priority: int,
+    payment_method: str = "tarjeta",
+    delivery_dist: int = 130,
     catalog_graph: Graph | None = None,
 ) -> Graph:
     """Construye el mensaje RealizarPedido para el AgenteComerciante.
@@ -72,6 +74,7 @@ def build_order_message(
     graph.add((pedido, ECSDI.pedidoSolicitadoPor, sender))
     graph.add((pedido, ECSDI.pedidoEnviadoA, address))
     graph.add((pedido, ECSDI.prioridadEntrega, Literal(priority, datatype=XSD.integer)))
+    graph.add((pedido, ECSDI.metodoPago, Literal(payment_method)))
     graph.add((pedido, ECSDI.estadoPedido, Literal("solicitado")))
     graph.add((pedido, ECSDI.fechaPedido, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
 
@@ -80,6 +83,7 @@ def build_order_message(
     graph.add((address, ECSDI.calle, Literal(street)))
     graph.add((address, ECSDI.codigoPostal, Literal(postal_code)))
     graph.add((address, ECSDI.pais, Literal(country)))
+    graph.add((address, ECSDI.dist, Literal(delivery_dist, datatype=XSD.integer)))
 
     for product_id, quantity in product_quantities.items():
         pnode = product_uri(product_id)
@@ -225,7 +229,13 @@ def build_pedir_feedback_request(
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
-def build_cobro_request(sender: URIRef, receiver: URIRef, pedido: URIRef, importe: Decimal) -> Graph:
+def build_cobro_request(
+    sender: URIRef,
+    receiver: URIRef,
+    pedido: URIRef,
+    importe: Decimal,
+    metodo_pago: str | None = None,
+) -> Graph:
     """Comerciante → AgenteFinanciero: SolicitarCobro (fire-and-forget)."""
     graph = Graph()
     bind_namespaces(graph)
@@ -238,6 +248,9 @@ def build_cobro_request(sender: URIRef, receiver: URIRef, pedido: URIRef, import
     graph.add((operacion, RDF.type, ECSDI.CobroCliente))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
+    if metodo_pago is not None:
+        graph.add((action, ECSDI.metodoPago, Literal(str(metodo_pago))))
+        graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
