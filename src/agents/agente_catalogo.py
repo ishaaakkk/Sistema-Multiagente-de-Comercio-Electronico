@@ -202,8 +202,11 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
     for triple in load_graph("catalog.ttl"):
         catalog.add(triple)
 
-    # Historial de busquedas en memoria (futura HistorialBusquedasDB via SPARQL)
-    search_history: list[dict] = []
+    # Historial de búsquedas local del Catálogo (útil para depurar).
+    # Para persistencia del sistema de recomendación se usa el protocolo hacia AgenteFeedback,
+    # pero mantenemos también esta traza local en disco.
+    from utilities.storage import load_json
+    search_history: list[dict] = load_json("catalog_searches.json", [])
 
     @app.get("/")
     def index():
@@ -279,6 +282,8 @@ def _handle_search(
             "results": [str(p) for p in products],
             "tipo": tipo,
         })
+        from utilities.storage import save_json
+        save_json("catalog_searches.json", search_history)
         log("catalogo", f"Busqueda registrada en historial: {constraints} -> {len(products)} productos")
 
     log("catalogo", f"Busqueda: {constraints} -> {len(products)} productos encontrados")

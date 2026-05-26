@@ -111,6 +111,14 @@ exporta `FEEDBACK_DELAY_SECONDS=20` y `RECOMMENDATION_PERIOD_SECONDS=30`
   arrancar. La recomendación debe degradar a un ranking neutral del
   catálogo, no a un error.
 
+### B5. Persistencia del historial de búsquedas
+
+- Preparación: realizar 1–2 búsquedas de compra desde la UI del asistente.
+- Verificación:
+  - En `src/data/searches.json` se acumulan búsquedas (historial del Feedback).
+  - En `src/data/catalog_searches.json` se guarda la traza local del Catálogo.
+  - Reiniciar los agentes (`./develop.sh`) y comprobar que ambos ficheros siguen presentes.
+
 ## C. Casos de fallo a documentar
 
 | Caso | Cómo provocarlo | Comportamiento esperado |

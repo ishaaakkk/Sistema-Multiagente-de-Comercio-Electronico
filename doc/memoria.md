@@ -282,6 +282,10 @@ Cuando procesa una búsqueda de compra, el catálogo informa al Agente Feedback
 con `NotificarBusquedaRealizada`. Esta notificación alimenta el historial usado
 por el recomendador.
 
+Adicionalmente, el Catálogo mantiene una traza local de búsquedas de compra
+persistida en `src/data/catalog_searches.json` (útil para depuración y para
+verificar que el protocolo se dispara incluso si el Feedback está caído).
+
 Implementación:
 
 - Archivo: `src/agents/agente_catalogo.py`.
