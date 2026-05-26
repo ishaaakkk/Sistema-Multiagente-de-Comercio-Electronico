@@ -1,5 +1,5 @@
 from rdflib import Namespace
-from rdflib.namespace import FOAF, RDF, RDFS, XSD
+from rdflib.namespace import RDF, RDFS, XSD
 
 ECSDI = Namespace("http://www.semanticweb.org/ecsdi/comercio_electronico/")
 ACL = Namespace("http://www.nuin.org/ontology/fipa/acl#")
@@ -14,7 +14,6 @@ def bind_namespaces(graph):
     graph.bind("agents", AGENTS)
     graph.bind("data", DATA)
     graph.bind("dso", DSO)
-    graph.bind("foaf", FOAF)
     graph.bind("rdf", RDF)
     graph.bind("rdfs", RDFS)
     graph.bind("xsd", XSD)

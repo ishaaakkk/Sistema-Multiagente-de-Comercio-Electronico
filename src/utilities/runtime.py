@@ -5,7 +5,7 @@ import time
 import requests
 from requests import ConnectionError
 from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import FOAF, RDF
+from rdflib.namespace import RDF
 
 
 def log(prefix: str, message: str) -> None:
@@ -70,7 +70,7 @@ def register_service(
     action = DATA[f"directory/register/{uuid4()}"]
     graph.add((action, RDF.type, DSO.RegistrarAgente))
     graph.add((action, DSO.Uri, agent_uri))
-    graph.add((action, FOAF.name, Literal(service_id)))
+    graph.add((action, DSO.Name, Literal(service_id)))
     graph.add((action, DSO.Address, Literal(address)))
     graph.add((action, DSO.AgentType, Literal(service_type)))
     for capability in capabilities or []:

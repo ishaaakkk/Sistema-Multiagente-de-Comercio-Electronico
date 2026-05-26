@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rdflib import Graph, Literal
-from rdflib.namespace import RDF, FOAF
+from rdflib.namespace import RDF
 
 from agents.directory_service import _handle_search
 from utilities.acl import get_message
@@ -19,7 +19,7 @@ class DirectorySearchTests(unittest.TestCase):
         dsgraph = Graph()
         bind_namespaces(dsgraph)
         agent = AGENTS["transportista-test"]
-        dsgraph.add((agent, RDF.type, FOAF.Agent))
+        dsgraph.add((agent, RDF.type, DSO.AgenteDirectorio))
         dsgraph.add((agent, DSO.Address, Literal("http://127.0.0.1:9103")))
         dsgraph.add((agent, DSO.Capability, ECSDI.SolicitarPresupuestoTransporte))
 

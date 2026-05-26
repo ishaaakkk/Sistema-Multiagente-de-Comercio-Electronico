@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from flask import Flask, jsonify
 from rdflib import Graph, Literal
-from rdflib.namespace import FOAF, RDF
+from rdflib.namespace import RDF
 
 from utilities.acl import build_message, build_not_understood, correlate_reply, get_message, parse_graph, serialize_graph
 from utilities.http import graph_from_request, rdf_response
@@ -72,8 +72,8 @@ def create_app(schedule: str = "equaljobs"):
     def info():
         """Muestra el estado del directorio en formato JSON."""
         agents = {}
-        for agent_uri in set(dsgraph.subjects(RDF.type, FOAF.Agent)):
-            name = str(next(dsgraph.objects(agent_uri, FOAF.name), ""))
+        for agent_uri in set(dsgraph.subjects(RDF.type, DSO.AgenteDirectorio)):
+            name = str(next(dsgraph.objects(agent_uri, DSO.Name), ""))
             address = str(next(dsgraph.objects(agent_uri, DSO.Address), ""))
             agent_type = str(next(dsgraph.objects(agent_uri, DSO.AgentType), ""))
             agents[str(agent_uri)] = {
@@ -97,18 +97,18 @@ def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
     """
 
     agent_uri = next(graph.objects(action, DSO.Uri), None)
-    agent_name = next(graph.objects(action, FOAF.name), None)
+    agent_name = next(graph.objects(action, DSO.Name), None)
     agent_address = next(graph.objects(action, DSO.Address), None)
     agent_type = next(graph.objects(action, DSO.AgentType), None)
 
     if None in (agent_uri, agent_name, agent_address, agent_type):
         return _build_response(ACL.failure, action, sender, "Faltan campos en RegistrarAgente")
 
-    if (agent_uri, RDF.type, FOAF.Agent) in dsgraph:
+    if (agent_uri, RDF.type, DSO.AgenteDirectorio) in dsgraph:
         return _build_response(ACL.failure, action, sender, f"Agente ya registrado: {agent_uri}")
 
-    dsgraph.add((agent_uri, RDF.type, FOAF.Agent))
-    dsgraph.add((agent_uri, FOAF.name, agent_name))
+    dsgraph.add((agent_uri, RDF.type, DSO.AgenteDirectorio))
+    dsgraph.add((agent_uri, DSO.Name, agent_name))
     dsgraph.add((agent_uri, DSO.Address, agent_address))
     dsgraph.add((agent_uri, DSO.AgentType, agent_type))
     capabilities = list(graph.objects(action, DSO.Capability))
@@ -138,7 +138,7 @@ def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix
     if requested_capability is not None:
         candidates_by_cap = {
             uri for uri in dsgraph.subjects(DSO.Capability, requested_capability)
-            if (uri, RDF.type, FOAF.Agent) in dsgraph
+            if (uri, RDF.type, DSO.AgenteDirectorio) in dsgraph
         }
     else:
         candidates_by_cap = None
@@ -146,7 +146,7 @@ def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix
     if agent_type is not None:
         candidates_by_type = {
             uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
-            if (uri, RDF.type, FOAF.Agent) in dsgraph
+            if (uri, RDF.type, DSO.AgenteDirectorio) in dsgraph
         }
     else:
         candidates_by_type = None
@@ -200,7 +200,7 @@ def _handle_search_all(dsgraph, graph, action, sender, prefix):
     if requested_capability is not None:
         candidates_by_cap = {
             uri for uri in dsgraph.subjects(DSO.Capability, requested_capability)
-            if (uri, RDF.type, FOAF.Agent) in dsgraph
+            if (uri, RDF.type, DSO.AgenteDirectorio) in dsgraph
         }
     else:
         candidates_by_cap = None
@@ -208,7 +208,7 @@ def _handle_search_all(dsgraph, graph, action, sender, prefix):
     if agent_type is not None:
         candidates_by_type = {
             uri for uri in dsgraph.subjects(DSO.AgentType, agent_type)
-            if (uri, RDF.type, FOAF.Agent) in dsgraph
+            if (uri, RDF.type, DSO.AgenteDirectorio) in dsgraph
         }
     else:
         candidates_by_type = None
@@ -257,7 +257,7 @@ def _handle_unregister(dsgraph, loadbalance, graph, action, sender, prefix):
     if agent_uri is None:
         return _build_response(ACL.failure, action, sender, "Falta DSO.Uri en EliminarAgente")
 
-    if (agent_uri, RDF.type, FOAF.Agent) not in dsgraph:
+    if (agent_uri, RDF.type, DSO.AgenteDirectorio) not in dsgraph:
         return _build_response(ACL.failure, action, sender, f"Agente no registrado: {agent_uri}")
 
     dsgraph.remove((agent_uri, None, None))

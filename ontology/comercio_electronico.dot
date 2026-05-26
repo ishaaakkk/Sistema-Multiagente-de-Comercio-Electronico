@@ -4,6 +4,8 @@ digraph ComercioElectronico {
     edge [fontsize=10, fontname="Helvetica"];
     "Accion";
     "Actor";
+    "AgenteDirectorio";
+    "AgenteExterno";
     "AsistenteVirtual";
     "AvisarCL";
     "BuscarAgente";
@@ -70,6 +72,7 @@ digraph ComercioElectronico {
     "Transportista";
     "Valoracion";
     "VendedorExterno";
+    "Actor" -> "AgenteExterno" [label="isA", color="#2f5597"];
     "AsistenteVirtual" -> "Actor" [label="isA", color="#2f5597"];
     "AvisarCL" -> "Accion" [label="isA", color="#2f5597"];
     "BuscarAgente" -> "Accion" [label="isA", color="#2f5597"];
