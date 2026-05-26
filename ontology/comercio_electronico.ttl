@@ -44,6 +44,12 @@ xsd:date rdf:type rdfs:Datatype .
 #    Object Properties
 #################################################################
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#metodoPagoDeAsistente
+:metodoPagoDeAsistente rdf:type owl:ObjectProperty ;
+                       rdfs:domain :AsistenteVirtual ;
+                       rdfs:range :MetodoDePago .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobreLote
 :accionSobreLote rdf:type owl:ObjectProperty ;
                  rdfs:domain :Accion ;
@@ -439,10 +445,17 @@ xsd:date rdf:type rdfs:Datatype .
 #    Data properties
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#dist
-:dist rdf:type owl:DatatypeProperty ;
-      rdfs:domain :CentroLogistico ;
-      rdfs:range xsd:unsignedInt .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#tarjeta
+:tarjeta rdf:type owl:DatatypeProperty ;
+         rdfs:domain :MetodoDePago ,
+                     :RespuestaDatosEnvio ;
+         rdfs:range xsd:string .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#urgencia
+:urgencia rdf:type owl:DatatypeProperty ;
+          rdfs:domain :RespuestaDatosEnvio ;
+          rdfs:range xsd:string .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/calle
@@ -515,6 +528,13 @@ xsd:date rdf:type rdfs:Datatype .
                     rdfs:domain :Devolucion ;
                     rdfs:range xsd:boolean ;
                     rdfs:comment "Indica si una solicitud de devolución ha sido aceptada o rechazada" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/dist
+:dist rdf:type owl:DatatypeProperty ;
+      rdfs:domain :RespuestaDatosEnvio ,
+                  :CentroLogistico ;
+      rdfs:range xsd:unsignedInt .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/estadoLote
@@ -986,6 +1006,16 @@ xsd:date rdf:type rdfs:Datatype .
 #################################################################
 #    Classes
 #################################################################
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#MetodoDePago
+:MetodoDePago rdf:type owl:Class ;
+              rdfs:comment "Metodo de Pago proporcionado por el Asistente Virtual para realizar las compras o donde se le devuelve el importe al hacer una devolucion" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#RespuestaDatosEnvio
+:RespuestaDatosEnvio rdf:type owl:Class ;
+                     rdfs:subClassOf :Respuesta .
+
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
