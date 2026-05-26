@@ -35,7 +35,8 @@ coincidan con el código:
 
 - `PreguntarDatosCompra`
 - `RegistrarPedidoPendiente`
-- `EscogerCL` (con notificador `AvisarCL`, en paralelo a TODOS los CL)
+- `EscogerCL` (notificador `AvisarCL`; orden por `|dist_CL − dist_entrega|`,
+  fan-out secuencial greedy hasta cubrir todas las líneas)
 - `ComunicarVendedoresExternos` (`PagarProductoExterno`, `AvisarVendedorExterno`)
 - `RealizarCobro` (→ Agente Financiero)
 - `FinalizarPedido` (→ Agente Feedback, persistir `completed_orders`)
@@ -162,7 +163,7 @@ ontología usen los mismos nombres:
 | ---------------------------- | ------------- | ------ |
 | `AvisarPedidoACL`, `PreguntaRealizacionPedidoCL`, `RegistrarPedidoParaEnvio` | `AvisarCL` | Es la acción real que el Comerciante solicita a cada Centro Logístico mediante `request`. |
 | `Notificar CL` como `Action` | Integrarlo en `ConfirmacionEnvio` / `ConfirmacionCompra` | En el PD significa "notificar al usuario del CL escogido"; no es una API externa nueva. Es información de respuesta al asistente. |
-| `SeleccionarCL`              | `EscogerCL` + `AvisarCL` + `FiltrarLineasPorStock` | En el código no se escoge un único CL al inicio: se avisa a todos y cada CL filtra sus líneas. |
+| `SeleccionarCL`              | `EscogerCL` + `AvisarCL` + `FiltrarLineasPorStock` | Orden por métrica `dist`; contacto secuencial; cada CL filtra líneas con stock. |
 | AUML de `Protocolo Reembolso`: `SolicitarReembolsso` | `SolicitarReembolso` | El objeto `Message` ya está bien; queda corregir el texto AUML interno. |
 | AUML de `Protocolo PagarProductoExterno`: `PagarProdExterno` | `PagarProductoExterno` | El objeto `Message` ya está bien; queda corregir el texto AUML interno. |
 | `Mostrar Recomendaciones` como acción | `Recomendacion proactiva` / `RecibirRecomendaciones` | La recomendación es información enviada con `inform`, no una acción externa solicitada al agente. |

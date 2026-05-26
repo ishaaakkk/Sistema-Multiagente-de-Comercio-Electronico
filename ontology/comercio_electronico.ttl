@@ -837,6 +837,22 @@
                 rdfs:comment "Precio de una unidad de producto dentro de una línea de pedido" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/metodoPago
+:metodoPago rdf:type owl:DatatypeProperty ;
+            rdfs:subPropertyOf owl:topDataProperty ;
+            rdfs:domain :Pedido ;
+            rdfs:range xsd:string ;
+            rdfs:comment "Método de pago elegido por el cliente (tarjeta, paypal, transferencia, etc.)" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/dist
+:dist rdf:type owl:DatatypeProperty ;
+      rdfs:subPropertyOf owl:topDataProperty ;
+      rdfs:domain :Direccion ;
+      rdfs:range xsd:integer ;
+      rdfs:comment "Métrica logística unidimensional (0-1000) de proximidad operativa de la dirección de entrega" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/prioridadEntrega
 :prioridadEntrega rdf:type owl:DatatypeProperty ;
                   rdfs:subPropertyOf owl:topDataProperty ;
@@ -1466,7 +1482,8 @@
                            :calle "Carrer Mallurca 401" ;
                            :ciudad "Barcelona" ;
                            :codigoPostal "08013" ;
-                           :pais "España" .
+                           :pais "España" ;
+                           :dist 130 .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioExternoAuricularesSoni
@@ -1551,7 +1568,8 @@
                  :fechaPedido "2025-05-03T10:32:57"^^xsd:dateTime ;
                  :idPedido "P001" ;
                  :importeTotalPedido 1199 ;
-                 :prioridadEntrega 1 .
+                 :prioridadEntrega 1 ;
+                 :metodoPago "tarjeta" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/productoAuricularesSoni

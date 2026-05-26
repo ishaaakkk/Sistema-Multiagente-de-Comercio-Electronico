@@ -119,8 +119,8 @@ def _handle_order(
     siguiendo el desglose del PD:
 
       1. `_plan_preguntar_datos_compra`         → valida campos obligatorios del pedido.
-      2. `_plan_registrar_pedido_pendiente`      → construye el grafo del pedido.
-      3. `_plan_escoger_cl`                      → selecciona CL por distancia y confirma envío.
+      2. `_plan_preparar_pedido`                 → registra pedido y clasifica líneas.
+      3. `_plan_escoger_cl`                      → selecciona CL por métrica dist y confirma envío.
       4. `_plan_gestionar_vendedores_externos`   → pago + aviso vendedor externo.
       5. `_plan_realizar_cobro`                  → orden de cobro al cliente (con metodoPago).
       6. `_plan_finalizar_pedido`                → notifica compra completada + persiste.
@@ -132,17 +132,11 @@ def _handle_order(
     if error is not None:
         return error
 
-    order_graph = _plan_registrar_pedido_pendiente(graph, action, pedido, lines)
+    order_graph, internal_lines, ext_envio_tienda, ext_envio_propio = _plan_preparar_pedido(
+        graph, action, pedido, lines
+    )
 
-    internal_lines, ext_envio_tienda, ext_envio_propio = _classify_lines(graph, lines)
-    log("comerciante", (
-        f"Pedido clasificado: {len(internal_lines)} internas, "
-        f"{len(ext_envio_tienda)} ext-envio-tienda, "
-        f"{len(ext_envio_propio)} ext-envio-propio"
-    ))
-
-    # Extraer coordenadas del cliente para la heurística de distancia al CL.
-    client_lat, client_lon = _extract_client_dist(graph, pedido)
+    client_dist = _extract_client_dist(graph, pedido)
 
     cl_error = _plan_escoger_cl(
         agent_uri,
@@ -152,8 +146,7 @@ def _handle_order(
         pedido,
         internal_lines + ext_envio_tienda,
         logistics_urls,
-        client_lat=client_lat,
-        client_lon=client_lon,
+        client_dist=client_dist,
     )
     if cl_error is not None:
         return cl_error
@@ -208,7 +201,36 @@ def _plan_preguntar_datos_compra(
     if next(graph.objects(pedido, ECSDI.metodoPago), None) is None:
         return None, [], build_failure(agent_uri, receiver, action, "Falta metodoPago")
 
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    dist_raw = next(graph.objects(address, ECSDI.dist), None) if address is not None else None
+    if dist_raw is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta dist en direccionEntrega")
+    try:
+        dist_val = int(dist_raw)
+    except (TypeError, ValueError):
+        return None, [], build_failure(agent_uri, receiver, action, "dist debe ser un entero 0-1000")
+    if not 0 <= dist_val <= 1000:
+        return None, [], build_failure(agent_uri, receiver, action, "dist debe estar entre 0 y 1000")
+
     return pedido, lines, None
+
+
+def _plan_preparar_pedido(
+    request_graph: Graph,
+    action: URIRef,
+    pedido: URIRef,
+    lines: list,
+) -> tuple[Graph, list, list, list]:
+    """Plan PrepararPedido: registra el pedido pendiente y clasifica las líneas."""
+
+    order_graph = _plan_registrar_pedido_pendiente(request_graph, action, pedido, lines)
+    internal_lines, ext_envio_tienda, ext_envio_propio = _classify_lines(request_graph, lines)
+    log("comerciante", (
+        f"Pedido clasificado: {len(internal_lines)} internas, "
+        f"{len(ext_envio_tienda)} ext-envio-tienda, "
+        f"{len(ext_envio_propio)} ext-envio-propio"
+    ))
+    return order_graph, internal_lines, ext_envio_tienda, ext_envio_propio
 
 
 def _plan_registrar_pedido_pendiente(
@@ -230,11 +252,8 @@ def _plan_escoger_cl(
     logistics_urls: list[str],
     client_dist: int | None = None,
 ) -> Graph | None:
-    """Plan EscogerCL: selecciona el CL más cercano al cliente (heurística
-    haversine) y le envía el pedido. Si rechaza, prueba el siguiente en orden
-    de distancia. Devuelve `None` si se planificó al menos un envío, o un
-    mensaje de fallo si ningún centro puede servir.
-    """
+    """Plan EscogerCL: ordena CLs por |dist_CL - dist_entrega| y contacta
+    secuencialmente hasta asignar todas las líneas pendientes."""
 
     if not lines_for_logistics:
         return None
@@ -246,7 +265,7 @@ def _plan_escoger_cl(
             "No hay centros logísticos disponibles para planificar el envío",
         )
 
-    # Reordenar por distancia al cliente cuando se dispone de coordenadas.
+    # Reordenar por proximidad métrica dist (0-1000).
     ordered_urls = _sort_logistics_by_distance(logistics_urls, client_dist)
 
     logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
@@ -422,8 +441,8 @@ def _dispatch_to_logistics(
     return confirmaciones
 
 
-def _extract_client_dist(graph: Graph, pedido: URIRef) -> tuple[float | None, float | None]:
-    """Extrae dist(0-1000) de la direccion de entrega si esta persente"""
+def _extract_client_dist(graph: Graph, pedido: URIRef) -> float | None:
+    """Extrae dist (0-1000) de la dirección de entrega si está presente."""
     address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
     if address is None:
         return None
@@ -435,13 +454,8 @@ def _extract_client_dist(graph: Graph, pedido: URIRef) -> tuple[float | None, fl
         return None
 
 
-def _sort_logistics_by_distance(logistics_urls, client_dist):    
-    """Intenta reordenar las URLs de centros logísticos por proximidad al
-    cliente usando un endpoint `/info` que pueda devolver coordenadas.
-
-    Si no hay coordenadas del cliente o no se pueden obtener coordenadas de
-    los centros, devuelve la lista tal cual.
-    """
+def _sort_logistics_by_distance(logistics_urls, client_dist):
+    """Reordena URLs de CL por |dist_CL - dist_entrega| vía GET /info."""
     if client_dist is None:
         return list(logistics_urls)
 
@@ -506,11 +520,9 @@ def _dispatch_to_logistics_ordered(
         if not results:
             continue
 
-        # SI ESTE CL ACEPTA → lo usamos y terminamos
         for resp in results:
             confirmations.append(resp)
 
-            # eliminar líneas asignadas
             for lote in resp.subjects(RDF.type, ECSDI.LoteEnvio):
                 for line in resp.objects(lote, ECSDI.loteTieneLinea):
                     if line in remaining_lines:
@@ -522,10 +534,6 @@ def _dispatch_to_logistics_ordered(
                     for line in resp.objects(lote, ECSDI.loteTieneLinea):
                         if line in remaining_lines:
                             remaining_lines.remove(line)
-
-        # EARLY STOP: si este CL ya pudo con algo → fin del proceso
-        if confirmations:
-            break
 
     return confirmations
 def _classify_lines(graph: Graph, lines: list) -> tuple[list, list, list]:

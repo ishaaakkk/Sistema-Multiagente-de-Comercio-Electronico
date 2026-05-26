@@ -98,8 +98,23 @@ La Figura 1 de la memoria es el render del archivo
   la decisión informativa del Centro Logístico tras comparar ofertas.
 - `envioDesdeCentro` para identificar el centro logístico que sirve un
   envío en el escenario multi-CL.
+- `metodoPago` en `Pedido` y `dist` en `Direccion` (entero 0–1000): métrica
+  logística unidimensional para la heurística de selección de CL.
 
-### 2.5 Correcciones aplicadas
+### 2.5 PreguntarDatosCompra y selección de CL
+
+El plan **PreguntarDatosCompra** se ejecuta en el **AsistenteVirtual**
+(formulario: dirección, prioridad, método de pago, `dist` de entrega). El
+**AgenteComerciante** solo valida que el mensaje `RealizarPedido` incluya
+`pedidoEnviadoA`, `prioridadEntrega`, `metodoPago` y `dist` en la dirección,
+y propaga `metodoPago` en `SolicitarCobro`.
+
+Para **EscogerCL**, cada centro logístico se registra con `--dist` (métrica
+operativa 0–1000). El comerciante descubre todos los CL, lee `dist` vía
+`GET /info`, ordena por `|dist_CL − dist_entrega|` y contacta de forma
+**secuencial y greedy** hasta asignar todas las líneas (multi-CL).
+
+### 2.6 Correcciones aplicadas
 
 Se han corregido errores que aparecían en versiones anteriores tanto en
 la ontología como en los ejemplos citados en la memoria:
@@ -113,7 +128,7 @@ la ontología como en los ejemplos citados en la memoria:
   - `accionTieneValoracion` deprecada, sustituida por
     `notificacionTieneValoracion`.
 
-### 2.6 Aclaración Feedback vs Recomendador
+### 2.7 Aclaración Feedback vs Recomendador
 
 En las versiones anteriores aparecía un agente `AgenteRecomendador` como
 si fuera independiente. **Hay un único agente, `AgenteFeedback`**, que
