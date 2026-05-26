@@ -395,7 +395,7 @@
 ###  http://www.semanticweb.org/ecsdi/directory/respuestaDeAccion
 <http://www.semanticweb.org/ecsdi/directory/respuestaDeAccion> rdf:type owl:ObjectProperty ;
                                                                rdfs:domain <http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> ;
-                                                               rdfs:range <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                               rdfs:range :Accion ;
                                                                rdfs:comment "Acción de directorio a la que responde una confirmación, fallo o resultado" .
 
 
@@ -1309,33 +1309,27 @@
                  rdfs:comment "Representa una empresa externa que anuncia productos en la tienda y puede gestionar el envío de sus propios productos" .
 
 
-###  http://www.semanticweb.org/ecsdi/directory/AccionDirectorio
-<http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> rdf:type owl:Class ;
-                                                              rdfs:subClassOf :Accion ;
-                                                              rdfs:comment "Acción que el servicio de directorio ejecuta a petición de otros agentes mediante FIPA-ACL request" .
-
-
 ###  http://www.semanticweb.org/ecsdi/directory/BuscarAgente
 <http://www.semanticweb.org/ecsdi/directory/BuscarAgente> rdf:type owl:Class ;
-                                                          rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                          rdfs:subClassOf :Accion ;
                                                           rdfs:comment "Acción mediante la cual un agente solicita al directorio un agente de un tipo funcional concreto" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes
 <http://www.semanticweb.org/ecsdi/directory/BuscarTodosAgentes> rdf:type owl:Class ;
-                                                                rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                                rdfs:subClassOf :Accion ;
                                                                 rdfs:comment "Acción mediante la cual un agente solicita al directorio todos los agentes registrados de un tipo funcional concreto" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/EliminarAgente
 <http://www.semanticweb.org/ecsdi/directory/EliminarAgente> rdf:type owl:Class ;
-                                                            rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                            rdfs:subClassOf :Accion ;
                                                             rdfs:comment "Acción mediante la cual un agente solicita ser eliminado del registro del servicio de directorio" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/RegistrarAgente
 <http://www.semanticweb.org/ecsdi/directory/RegistrarAgente> rdf:type owl:Class ;
-                                                             rdfs:subClassOf <http://www.semanticweb.org/ecsdi/directory/AccionDirectorio> ;
+                                                             rdfs:subClassOf :Accion ;
                                                              rdfs:comment "Acción mediante la cual un agente solicita al servicio de directorio quedar registrado con su URI, nombre, dirección y tipo" .
 
 
@@ -1355,10 +1349,6 @@
 <http://www.semanticweb.org/ecsdi/directory/RespuestaDirectorio> rdf:type owl:Class ;
                                                                  rdfs:subClassOf :Respuesta ;
                                                                  rdfs:comment "Respuesta emitida por el servicio de directorio ante acciones de registro, búsqueda o eliminación" .
-
-
-###  http://xmlns.com/foaf/0.1/Agent
-<http://xmlns.com/foaf/0.1/Agent> rdf:type owl:Class .
 
 
 #################################################################
