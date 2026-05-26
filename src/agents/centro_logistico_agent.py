@@ -46,6 +46,7 @@ def create_app(
     center_id: str = "CL-BCN",
     center_city: str = "Barcelona",
     stock_products: tuple[str, ...] = DEFAULT_STOCK_ANY,
+    dist: int = 0,
 ):
     """Crea la aplicación Flask del centro logístico.
 
@@ -75,6 +76,7 @@ def create_app(
             "center_city": center_city,
             "accepts_all": accepts_all,
             "stock_products": sorted(stock_set) if not accepts_all else [],
+            "dist": dist,
         }
 
     @app.post("/comm")
@@ -179,6 +181,7 @@ def create_app(
             response.add((envio_in_resp, ECSDI.envioDesdeCentro, center))
             response.add((envio_in_resp, ECSDI.idCentroLogistico, Literal(center_id)))
             response.add((envio_in_resp, ECSDI.ciudadCentroLogistico, Literal(center_city)))
+            response.add((envio_in_resp, ECSDI.distanciaCentroLogistico, Literal(dist)))
             return reply(response)
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
@@ -464,6 +467,12 @@ def main():
         help="Lista de IDs de producto separados por coma; '*' = todos los productos internos",
     )
     parser.add_argument("--verbose", action="store_true", default=False)
+    parser.add_argument(
+        "--dist",
+        type=int,
+        default=0,
+        help="Distancia del centro logístico (0-1000)",
+    )
     args = parser.parse_args()
 
     configure_flask_logging(args.verbose)
@@ -505,6 +514,7 @@ def main():
             center_id=center_id,
             center_city=center_city,
             stock_products=stock_products,
+            dist=args.dist,
         ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
