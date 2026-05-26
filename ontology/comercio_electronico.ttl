@@ -4,8 +4,6 @@
 @prefix xml: <http://www.w3.org/XML/1998/namespace> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix foaf: <http://xmlns.com/foaf/0.1/> .
-@prefix schema: <http://schema.org/> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix time: <http://www.w3.org/2006/time#> .
 @base <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
@@ -15,8 +13,7 @@
                                                          dcterms:creator "Grupo ECSDI 2025/2026 2Q" ;
                                                          dcterms:license <https://creativecommons.org/licenses/by-sa/4.0/> ;
                                                          dcterms:modified "2026-05-25"^^xsd:date ;
-                                                         owl:imports <http://xmlns.com/foaf/0.1/> ;
-                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones. Reusa FOAF para agentes, schema.org para productos/pedidos/direcciones y time para instantes temporales." ;
+                                                         rdfs:comment "Ontología del sistema multiagente de comercio electrónico. Define los conceptos compartidos por los agentes para representar productos, ofertas, pedidos, pagos, envíos, devoluciones, valoraciones y recomendaciones. El dominio se modela con vocabulario propio para evitar dependencias innecesarias de ontologías externas; se mantiene time para instantes temporales." ;
                                                          rdfs:label "Ontologia de comercio electronico" .
 
 #################################################################
@@ -388,7 +385,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/directory/Uri
 <http://www.semanticweb.org/ecsdi/directory/Uri> rdf:type owl:ObjectProperty ;
-                                                 rdfs:range <http://xmlns.com/foaf/0.1/Agent> ;
+                                                 rdfs:range <http://www.semanticweb.org/ecsdi/directory/AgenteDirectorio> ;
                                                  rdfs:comment "URI del agente registrado o devuelto por el servicio de directorio" .
 
 
@@ -408,8 +405,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/directory/Capability
 <http://www.semanticweb.org/ecsdi/directory/Capability> rdf:type owl:ObjectProperty ;
-                                                        rdfs:range owl:Class ;
-                                                        rdfs:comment "Capacidad funcional declarada o solicitada en el directorio; su valor es una clase de acción o servicio de la ontología compartida" .
+                                                        rdfs:comment "Capacidad funcional declarada o solicitada en el directorio; su valor es una URI de acción o servicio de la ontología compartida" .
 
 
 #################################################################
@@ -931,6 +927,12 @@
                                                      rdfs:comment "Dirección HTTP anunciada por un agente en el servicio de directorio" .
 
 
+###  http://www.semanticweb.org/ecsdi/directory/Name
+<http://www.semanticweb.org/ecsdi/directory/Name> rdf:type owl:DatatypeProperty ;
+                                                  rdfs:range xsd:string ;
+                                                  rdfs:comment "Nombre identificador usado en el registro de un agente y en su entrada del servicio de directorio" .
+
+
 ###  http://www.semanticweb.org/ecsdi/directory/AgentType
 <http://www.semanticweb.org/ecsdi/directory/AgentType> rdf:type owl:DatatypeProperty ;
                                                        rdfs:range xsd:string ;
@@ -954,8 +956,13 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor
 :Actor rdf:type owl:Class ;
-       rdfs:subClassOf foaf:Agent ;
-       rdfs:comment "Representa los actores externos con los que interactúa la tienda. Subclase de foaf:Agent para reutilizar el vocabulario FOAF" .
+       rdfs:subClassOf :AgenteExterno ;
+       rdfs:comment "Representa los actores externos con los que interactúa la tienda, modelados con vocabulario propio del dominio" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/AgenteExterno
+:AgenteExterno rdf:type owl:Class ;
+               rdfs:comment "Agente software o entidad externa que interactúa con la tienda dentro de los protocolos del sistema" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/AsistenteVirtual
@@ -1025,8 +1032,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Direccion
 :Direccion rdf:type owl:Class ;
-           rdfs:subClassOf schema:PostalAddress ;
-           rdfs:comment "Representa la dirección de entrega o recogida usada en pedidos, envíos y devoluciones. Subclase de schema:PostalAddress" .
+           rdfs:comment "Representa la dirección de entrega o recogida usada en pedidos, envíos y devoluciones" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/EnviarOpinion
@@ -1123,13 +1129,12 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Pedido
 :Pedido rdf:type owl:Class ;
-        rdfs:subClassOf schema:Order ,
-                        [
+        rdfs:subClassOf [
                             rdf:type owl:Restriction ;
                             owl:onProperty :pedidoTieneLinea ;
                             owl:minCardinality "1"^^xsd:nonNegativeInteger
                         ] ;
-        rdfs:comment "Representa una orden de compra hecha por el asistente virtual. Subclase de schema:Order. Restricción DL: debe tener al menos una :pedidoTieneLinea (un pedido vacío no es válido)." .
+        rdfs:comment "Representa una orden de compra hecha por el asistente virtual. Restricción DL: debe tener al menos una :pedidoTieneLinea (un pedido vacío no es válido)." .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/PedirFeedback
@@ -1146,8 +1151,7 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Producto
 :Producto rdf:type owl:Class ;
-          rdfs:subClassOf schema:Product ;
-          rdfs:comment "Representa un producto disponible en el catálogo de la tienda, con información necesaria para búsqueda, compra, envío, valoración y recomendación. Subclase de schema:Product para reusar schema.org" .
+          rdfs:comment "Representa un producto disponible en el catálogo de la tienda, con información necesaria para búsqueda, compra, envío, valoración y recomendación" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ProductoExterno
@@ -1299,14 +1303,18 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Valoracion
 :Valoracion rdf:type owl:Class ;
-            rdfs:subClassOf schema:Review ;
-            rdfs:comment "Opinión emitida sobre un producto recibido, usada para mejorar la información del catálogo y las recomendaciones. Subclase de schema:Review" .
+            rdfs:comment "Opinión emitida sobre un producto recibido, usada para mejorar la información del catálogo y las recomendaciones" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/VendedorExterno
 :VendedorExterno rdf:type owl:Class ;
                  rdfs:subClassOf :Actor ;
                  rdfs:comment "Representa una empresa externa que anuncia productos en la tienda y puede gestionar el envío de sus propios productos" .
+
+
+###  http://www.semanticweb.org/ecsdi/directory/AgenteDirectorio
+<http://www.semanticweb.org/ecsdi/directory/AgenteDirectorio> rdf:type owl:Class ;
+                                                              rdfs:comment "Agente registrado en el servicio de directorio, con nombre, dirección, tipo funcional y capacidades opcionales" .
 
 
 ###  http://www.semanticweb.org/ecsdi/directory/BuscarAgente
