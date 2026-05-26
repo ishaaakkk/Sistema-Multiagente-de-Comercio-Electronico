@@ -8,7 +8,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import (
     build_aviso_vendedor_externo,
     build_cobro_request,
@@ -61,8 +61,10 @@ def create_app(
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
@@ -73,7 +75,7 @@ def create_app(
                 logistics_urls_now = _discover_logistics_centers(
                     directory_url, fallback_logistics_urls, agent_uri
                 )
-                return rdf_response(
+                return reply(
                     _handle_order(
                         agent_uri,
                         message.sender,
@@ -89,9 +91,9 @@ def create_app(
 
             # Protocolo InfoPedidoCompletado — AgenteDevolucion valida una compra ya completada.
             if (action, RDF.type, ECSDI.PeticionInfoPedidoCompletado) in graph:
-                return rdf_response(_handle_completed_order_info(completed_orders, agent_uri, message.sender, action, graph))
+                return reply(_handle_completed_order_info(completed_orders, agent_uri, message.sender, action, graph))
 
-            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteComerciante"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
@@ -535,6 +537,17 @@ def _build_partial_order_graph(full_graph: Graph, pedido: URIRef, lines: list) -
         for triple in full_graph.triples((address, None, None)):
             graph.add(triple)
     return graph
+
+
+def _copy_product_context(source: Graph, target: Graph, product: URIRef) -> None:
+    """Copia el producto y el contexto de stock/centro necesario para logistica."""
+
+    _copy_subject(source, target, product)
+    for stock in source.subjects(ECSDI.stockDeProducto, product):
+        _copy_subject(source, target, stock)
+        center = next(source.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            _copy_subject(source, target, center)
 
 
 def _build_order_graph(

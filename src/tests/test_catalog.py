@@ -11,8 +11,10 @@ from decimal import Decimal
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
+from utilities.acl import get_message
+from utilities.builders import build_external_product_registration
 from utilities.catalog import filter_products
-from utilities.namespaces import ECSDI, bind_namespaces
+from utilities.namespaces import ACL, AGENTS, ECSDI, bind_namespaces
 
 
 def _add_product(graph, uri, *, name, brand, price, rating, is_internal=True):
@@ -53,6 +55,32 @@ class FilterProductsTests(unittest.TestCase):
     def test_filter_by_min_rating(self):
         result = set(filter_products(self.graph, {"min_rating": 4.6}))
         self.assertEqual(result, {self.p3})
+
+
+class ExternalProductRegistrationBuilderTests(unittest.TestCase):
+    def test_builds_dar_alta_producto_externo_message(self):
+        graph = build_external_product_registration(
+            AGENTS.AgenteVendedorExterno,
+            AGENTS.AgenteCatalogo,
+            [
+                {
+                    "id": "P-EXT-1",
+                    "nombre": "Producto externo",
+                    "marca": "Marca",
+                    "precio": "12.50",
+                    "valoracion": "4.1",
+                    "peso": "0.3",
+                    "gestion_envio_externo": True,
+                }
+            ],
+        )
+
+        message = get_message(graph)
+        self.assertEqual(message.performative, ACL.request)
+        self.assertIn((message.content, RDF.type, ECSDI.DarAltaProductoExterno), graph)
+        product = next(graph.subjects(ECSDI.idProducto, Literal("P-EXT-1")), None)
+        self.assertIsNotNone(product)
+        self.assertIn((product, RDF.type, ECSDI.ProductoExterno), graph)
 
 
 if __name__ == "__main__":

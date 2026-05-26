@@ -94,8 +94,8 @@ La Figura 1 de la memoria es el render del archivo
   **Protocolo Consulta Catálogo**: el Catálogo informa al Feedback de
   cada búsqueda.
 - `fechaBusqueda` para anotar la búsqueda.
-- `DecisionContratoTransporte` (subclase de `Accion`) para representar
-  la decisión del Centro Logístico tras el Contract-Net.
+- `DecisionContratoTransporte` (subclase de `Respuesta`) para representar
+  la decisión informativa del Centro Logístico tras comparar ofertas.
 - `envioDesdeCentro` para identificar el centro logístico que sirve un
   envío en el escenario multi-CL.
 
@@ -202,10 +202,10 @@ HTML actual está en `doc/pdtool/defaultreport_2026-05-19/`.
   registran con `dso:AgentType` y, además, con `dso:Capability` (URI
   de la ontología, perfil de servicio OWL-S del cap. 8.5.2). Los demás
   agentes pueden buscar por tipo o por capacidad.
-- **Red de contratos** (cap. 8.3): cada Centro Logístico, al recibir
-  `AvisarCL`, lanza un Contract-Net en paralelo con todos los
-  transportistas registrados (`cfp` → `propose` → mejor `accept-proposal`
-  + `reject-proposal` a los demás).
+- **Red de contratos simplificada** (cap. 8.3): cada Centro Logístico, al
+  recibir `AvisarCL`, solicita presupuestos en paralelo a los
+  transportistas registrados, elige la mejor oferta y cierra la decisión
+  con `accept-proposal` al ganador y `reject-proposal` a los demás.
 - **Notificación / fire-and-forget**: protocolo Consulta Catálogo
   (Catálogo → Feedback), `NotificarCompraCompletada` (Comerciante →
   Feedback) y recomendaciones proactivas (Feedback → Asistente)

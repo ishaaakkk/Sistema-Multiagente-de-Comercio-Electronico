@@ -47,7 +47,7 @@ def register_service(
     """Registra el agente en el directorio via FIPA-ACL (DSO.RegistrarAgente).
 
     `capabilities` es una lista opcional de URIs de la ontología (por ejemplo
-    `ECSDI.BuscarEnCatalogo`) que el agente declara saber atender. Esto
+    `ECSDI.BuscarProductos`) que el agente declara saber atender. Esto
     aproxima el registro a un perfil de servicio OWL-S (cap. 8.5.2 de los
     apuntes) y permite buscar agentes por capacidad además de por tipo.
 

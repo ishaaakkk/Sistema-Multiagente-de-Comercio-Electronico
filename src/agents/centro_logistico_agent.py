@@ -8,7 +8,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_shipping_confirmation, build_transport_request
 from utilities.catalog import center_uri, decimal_literal
 from utilities.comm import comm_url as _comm_url
@@ -58,6 +58,7 @@ def create_app(
 
     app = Flask(__name__)
     center = center_uri(center_id)
+    stock_reservations = load_json("stock_reservations.json", {})
     stock_set = {p.strip() for p in stock_products if p.strip()}
     accepts_all = stock_set == {"*"} or not stock_set
     log_tag = f"logistico-{center_id}"
@@ -85,25 +86,23 @@ def create_app(
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido")
                 )
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "Se esperaba performativa request")
-                )
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
             if (action, RDF.type, ECSDI.AvisarCL) not in graph and (action, RDF.type, ECSDI.RealizarPedido) not in graph:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "Accion logistica no soportada")
-                )
+                return reply(build_not_understood(agent_uri, message.sender, "Accion logistica no soportada"))
 
             pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
             if pedido is None:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
+                return reply(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
 
             fulfillable_lines = _filter_lines_by_stock(graph, pedido, accepts_all, stock_set)
             if not fulfillable_lines:
                 log(log_tag, "Sin lineas servibles para este centro; respondiendo failure controlado")
-                return rdf_response(
+                return reply(
                     build_failure(
                         agent_uri,
                         message.sender,
@@ -113,10 +112,11 @@ def create_app(
                 )
 
             lote_graph, lote = _build_lote_graph(graph, pedido, fulfillable_lines, center, center_city)
+            product_quantities = _product_quantities_for_lines(graph, fulfillable_lines)
 
             transport_urls = _discover_transportistas(directory_url, transport_url, agent_uri, log_tag)
             if not transport_urls:
-                return rdf_response(
+                return reply(
                     build_failure(agent_uri, message.sender, action, "No hay transportistas disponibles")
                 )
 
@@ -125,7 +125,7 @@ def create_app(
             )
 
             if best_offer is None:
-                return rdf_response(
+                return reply(
                     build_failure(
                         agent_uri,
                         message.sender,
@@ -171,7 +171,7 @@ def create_app(
             response.add((envio_in_resp, ECSDI.envioDesdeCentro, center))
             response.add((envio_in_resp, ECSDI.idCentroLogistico, Literal(center_id)))
             response.add((envio_in_resp, ECSDI.ciudadCentroLogistico, Literal(center_city)))
-            return rdf_response(response)
+            return reply(response)
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
@@ -195,6 +195,29 @@ def _filter_lines_by_stock(
         if product_id and product_id in stock_set:
             fulfillable.append(line)
     return fulfillable
+
+
+def _product_quantities_for_lines(graph: Graph, lines: list[URIRef]) -> dict[str, int]:
+    quantities: dict[str, int] = {}
+    for line in lines:
+        product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
+        if product is None:
+            continue
+        product_id = str(next(graph.objects(product, ECSDI.idProducto), ""))
+        if not product_id:
+            product_id = str(product).rsplit("/", 1)[-1]
+        quantity = int(next(graph.objects(line, ECSDI.cantidad), 1))
+        quantities[product_id] = quantities.get(product_id, 0) + quantity
+    return quantities
+
+
+def _reserve_stock(reservations: dict, graph: Graph, center: URIRef, product_quantities: dict[str, int]) -> None:
+    center_id = str(next(graph.objects(center, ECSDI.idCentroLogistico), ""))
+    if not center_id:
+        center_id = str(center).rsplit("/", 1)[-1]
+    center_reservations = reservations.setdefault(center_id, {})
+    for product_id, quantity in product_quantities.items():
+        center_reservations[product_id] = int(center_reservations.get(product_id, 0)) + quantity
 
 
 def _discover_transportistas(
@@ -303,8 +326,7 @@ def _close_contract_net(
         bind_namespaces(msg)
         decision = DATA[f"decision/{uuid4()}"]
         msg.add((decision, RDF.type, ECSDI.DecisionContratoTransporte))
-        msg.add((decision, ECSDI.accionSobreLote, lote))
-        msg.add((decision, ECSDI.accionSobreOferta, offer))
+        msg.add((decision, ECSDI.respuestaSobreOferta, offer))
         return build_message(msg, decision, performative, agent_uri, transportista)
 
     for proposal in proposals:

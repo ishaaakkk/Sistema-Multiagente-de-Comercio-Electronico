@@ -349,6 +349,56 @@ def build_busqueda_realizada_notification(
     return build_message(graph, action, ACL.inform, sender, receiver)
 
 
+def build_external_product_registration(
+    sender: URIRef,
+    receiver: URIRef,
+    products: list[dict],
+) -> Graph:
+    """AgenteVendedorExterno -> AgenteCatalogo: DarAltaProductoExterno."""
+
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/catalogo/alta-externa/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.DarAltaProductoExterno))
+
+    for product_data in products:
+        product_id = str(product_data["id"])
+        product = URIRef(product_data.get("uri", product_uri(product_id)))
+        graph.add((action, ECSDI.accionSobreProducto, product))
+        graph.add((product, RDF.type, ECSDI.Producto))
+        graph.add((product, RDF.type, ECSDI.ProductoExterno))
+        graph.add((product, ECSDI.idProducto, Literal(product_id)))
+        graph.add((product, ECSDI.nombreProducto, Literal(product_data.get("nombre", product_id))))
+
+        if product_data.get("marca"):
+            graph.add((product, ECSDI.marcaProducto, Literal(product_data["marca"])))
+        if product_data.get("descripcion"):
+            graph.add((product, ECSDI.descripcionProducto, Literal(product_data["descripcion"])))
+
+        price = Decimal(str(product_data.get("precio", "0")))
+        graph.add((product, ECSDI.precioProducto, decimal_literal(price)))
+
+        rating = Decimal(str(product_data.get("valoracion", "0")))
+        graph.add((product, ECSDI.valoracionMedia, decimal_literal(rating)))
+
+        weight = Decimal(str(product_data.get("peso", "1.0")))
+        graph.add((product, ECSDI.pesoProducto, decimal_literal(weight)))
+
+        graph.add(
+            (
+                product,
+                ECSDI.gestionEnvioExterno,
+                Literal(bool(product_data.get("gestion_envio_externo", True)), datatype=XSD.boolean),
+            )
+        )
+        graph.add((product, ECSDI.productoOfrecidoPor, sender))
+
+        if product_data.get("fecha_llegada"):
+            graph.add((product, ECSDI.fechaLlegadaProductoExterno, Literal(product_data["fecha_llegada"], datatype=XSD.dateTime)))
+
+    return build_message(graph, action, ACL.request, sender, receiver)
+
+
 def build_recommendation_inform(
     sender: URIRef,
     receiver: URIRef,

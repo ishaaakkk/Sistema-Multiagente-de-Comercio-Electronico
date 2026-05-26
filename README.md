@@ -130,7 +130,7 @@ Terminal 8 - Agente vendedor externo:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000
+PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --announce-products
 ```
 
 Terminal 9 - Agente devolucion:

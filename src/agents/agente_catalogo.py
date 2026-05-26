@@ -7,7 +7,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_busqueda_realizada_notification, build_search_response
 from utilities.catalog import (
     center_uri,
@@ -216,28 +216,31 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, message.sender if message else AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
-            # Capacidad BuscarEnCatalogo — Plan: BuscarEnCatalogo → FiltrarProductos → MostrarProductos
+            # Capacidad PDT BuscarEnCatalogo — accion ontologica BuscarProductos.
+            # Plan: BuscarEnCatalogo → FiltrarProductos → MostrarProductos
             # Msg entrante: BuscarProductos (AsistenteVirtual → AgenteCatalogo)
             # Msg saliente: ResultadoBusqueda (AgenteCatalogo → AsistenteVirtual)
             # Tras la respuesta se dispara el protocolo Consulta Catálogo
             # (NotificarBusquedaRealizada → AgenteFeedback) para alimentar el
             # historial de búsquedas usado por la recomendación periódica.
             if (action, RDF.type, ECSDI.BuscarProductos) in graph:
-                return rdf_response(
+                return reply(
                     _handle_search(catalog, search_history, agent_uri, message.sender, action, graph, feedback_url)
                 )
 
             # Capacidad AñadirProductoExt — Plan: ActualizarCatalogo
             # Msg entrante: DarAltaProductoExterno (VendedorExterno → AgenteCatalogo)
             if (action, RDF.type, ECSDI.DarAltaProductoExterno) in graph:
-                return rdf_response(_handle_external_product_registration(catalog, agent_uri, message.sender, action, graph))
+                return reply(_handle_external_product_registration(catalog, agent_uri, message.sender, action, graph))
 
-            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteCatalogo"))
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteCatalogo"))
 
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
@@ -254,7 +257,7 @@ def _handle_search(
     graph: Graph,
     feedback_url: str | None = None,
 ) -> Graph:
-    """Plan: BuscarEnCatalogo → FiltrarProductos → MostrarProductos (AgenteCatalogo / BuscarEnCatalogo).
+    """Plan PDT BuscarEnCatalogo sobre la accion ontologica BuscarProductos.
 
     Extrae restricciones, filtra productos y registra la busqueda en el historial
     si el tipo de peticion es compra (futura HistorialBusquedasDB via SPARQL).

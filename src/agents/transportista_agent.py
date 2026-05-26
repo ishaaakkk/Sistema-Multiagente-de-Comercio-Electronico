@@ -6,7 +6,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_transport_offer
 from utilities.http import graph_from_request, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -54,6 +54,8 @@ def create_app(
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
 
             # Cierre de Contract Net: aceptaciones y rechazos son informativos para el
             # transportista; permiten al ganador comprometer recursos y al perdedor liberarlos.
@@ -63,22 +65,24 @@ def create_app(
                 log(str(agent_uri).split("/")[-1], f"Contract Net cierre: oferta {outcome} (action={action})")
                 ack = Graph()
                 bind_namespaces(ack)
+                for triple in graph.triples((action, None, None)):
+                    ack.add(triple)
                 ack.add((action, RDF.type, ECSDI.DecisionContratoTransporte))
-                return rdf_response(build_message(ack, action, ACL.inform, agent_uri, message.sender))
+                return reply(build_message(ack, action, ACL.inform, agent_uri, message.sender))
 
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
             if (action, RDF.type, ECSDI.SolicitarRecogidaDevolucion) in graph:
-                return rdf_response(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
+                return reply(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
 
             if (action, RDF.type, ECSDI.SolicitarPresupuestoTransporte) not in graph:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Accion de transporte no soportada"))
+                return reply(build_not_understood(agent_uri, message.sender, "Accion de transporte no soportada"))
 
             lote = next(graph.objects(action, ECSDI.accionSobreLote), None)
             if lote is None:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Falta el lote de envio"))
+                return reply(build_failure(agent_uri, message.sender, action, "Falta el lote de envio"))
 
             weight = Decimal(str(next(graph.objects(lote, ECSDI.pesoTotalLote), "1.0")))
             priority = int(next(graph.objects(lote, ECSDI.prioridadLote), 3))
@@ -101,7 +105,7 @@ def create_app(
                 price=price.quantize(Decimal("0.01")),
                 max_days=max_days,
             )
-            return rdf_response(response)
+            return reply(response)
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 

@@ -1,10 +1,14 @@
 import argparse
+import time
+from threading import Thread
 
 from flask import Flask
 from rdflib.namespace import RDF
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
-from utilities.http import graph_from_request, rdf_response
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
+from utilities.builders import build_external_product_registration
+from utilities.comm import comm_url as _comm_url
+from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, ECSDI
 from utilities.runtime import (
     agent_address,
@@ -13,6 +17,7 @@ from utilities.runtime import (
     configure_flask_logging,
     log,
     register_service,
+    search_service,
     unregister_service,
 )
 
@@ -40,20 +45,18 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido")
                 )
+            def reply(response_graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "Se esperaba performativa request")
-                )
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
             # Accion: ComunicarProductosExternosPedidos
             if (action, RDF.type, ECSDI.ComunicarProductosExternosPedidos) in graph:
-                return rdf_response(_handle_aviso_envio(agent_uri, message.sender, action, graph))
+                return reply(_handle_aviso_envio(agent_uri, message.sender, action, graph))
 
-            return rdf_response(
-                build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteVendedorExterno")
-            )
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteVendedorExterno"))
         except Exception as exc:
             return rdf_response(
                 build_failure(agent_uri, AGENTS.AgenteComerciante, None, str(exc)), status=500
@@ -87,6 +90,64 @@ def _handle_aviso_envio(agent_uri, sender, action, graph):
     return build_message(graph, action, ACL.inform, agent_uri, sender)
 
 
+def _default_external_products():
+    return [
+        {
+            "id": "P-CARGADOR-GAN",
+            "nombre": "Cargador GaN 65W",
+            "marca": "Voltix",
+            "descripcion": "Cargador USB-C de 65W anunciado por vendedor externo",
+            "precio": "29.90",
+            "valoracion": "4.4",
+            "peso": "0.18",
+            "gestion_envio_externo": True,
+        }
+    ]
+
+
+def _announce_products_delayed(
+    directory_url: str | None,
+    catalog_url: str | None,
+    service_id: str,
+    agent_uri,
+    products: list[dict],
+    retries: int = 30,
+    delay_seconds: float = 1.0,
+) -> None:
+    """Anuncia productos externos al catálogo cuando el catálogo esté disponible."""
+
+    for attempt in range(1, retries + 1):
+        target_base = catalog_url
+        if not target_base and directory_url:
+            target_base = search_service(
+                directory_url,
+                "AGENTE_CATALOGO",
+                service_id,
+                capability=ECSDI.DarAltaProductoExterno,
+            )
+
+        if target_base:
+            try:
+                target_url = _comm_url(target_base)
+                message = build_external_product_registration(
+                    agent_uri,
+                    AGENTS.AgenteCatalogo,
+                    products,
+                )
+                response = post_graph(target_url, message)
+                msg = get_message(response)
+                if msg and msg.performative == ACL.inform:
+                    log("vendedor_externo", f"Alta externa enviada al catálogo ({len(products)} producto(s))")
+                    return
+                log("vendedor_externo", f"Alta externa rechazada: {msg.performative if msg else 'sin ACL'}")
+            except Exception as exc:
+                log("vendedor_externo", f"Alta externa pendiente ({attempt}/{retries}): {exc}")
+
+        time.sleep(delay_seconds)
+
+    log("vendedor_externo", "No se pudo anunciar productos externos al catálogo")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -94,6 +155,8 @@ def main():
     parser.add_argument("--open", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=9008)
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
+    parser.add_argument("--catalog-url", default=None)
+    parser.add_argument("--announce-products", action="store_true", default=False)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -109,6 +172,18 @@ def main():
         f"vendedor-externo-{args.port}",
         capabilities=[ECSDI.ComunicarProductosExternosPedidos],
     )
+    if args.announce_products:
+        Thread(
+            target=_announce_products_delayed,
+            args=(
+                args.dir,
+                args.catalog_url,
+                service_id,
+                DEFAULT_AGENT_URI,
+                _default_external_products(),
+            ),
+            daemon=True,
+        ).start()
     try:
         log(f"vendedor-externo-{args.port}", f"listening on {bind_host}:{args.port}")
         create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)

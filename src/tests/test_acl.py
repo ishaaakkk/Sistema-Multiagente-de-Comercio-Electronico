@@ -14,6 +14,7 @@ from utilities.acl import (
     build_message,
     build_not_understood,
     build_reply,
+    correlate_reply,
     get_message,
 )
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -67,6 +68,33 @@ class AclMessageTests(unittest.TestCase):
         reply_parsed = get_message(reply)
         self.assertEqual(reply_parsed.conversation_id, "conv-42")
         self.assertEqual(reply_parsed.in_reply_to, "msg-1")
+
+    def test_correlate_reply_updates_existing_message(self):
+        graph, action = self._make_action()
+        req = build_message(
+            graph,
+            action,
+            ACL.request,
+            AGENTS.AsistenteVirtual,
+            AGENTS.AgenteCatalogo,
+            conversation_id="conv-99",
+            reply_with="request-99",
+        )
+        req_parsed = get_message(req)
+
+        reply_graph, content = self._make_action()
+        reply = build_message(
+            reply_graph,
+            content,
+            ACL.inform,
+            AGENTS.AgenteCatalogo,
+            AGENTS.AsistenteVirtual,
+        )
+        correlate_reply(reply, req_parsed)
+
+        parsed = get_message(reply)
+        self.assertEqual(parsed.conversation_id, "conv-99")
+        self.assertEqual(parsed.in_reply_to, "request-99")
 
     def test_failure_and_not_understood_messages(self):
         fail = build_failure(AGENTS.AgenteCatalogo, AGENTS.AsistenteVirtual, None, "boom")

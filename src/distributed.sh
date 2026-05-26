@@ -122,7 +122,7 @@ case "$AGENT" in
         ;;
     vendedor_externo)
         PORT="${PORT:-9008}"
-        exec "$PYTHON" -m agents.agente_VendedorExterno --port "$PORT" "${common_args[@]}"
+        exec "$PYTHON" -m agents.agente_VendedorExterno --port "$PORT" "${common_args[@]}" --announce-products
         ;;
     comerciante)
         PORT="${PORT:-9001}"

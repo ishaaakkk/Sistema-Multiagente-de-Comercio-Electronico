@@ -7,13 +7,13 @@ from flask import Flask, jsonify
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import (
     build_completed_order_info_request,
     build_recogida_devolucion_request,
     build_reembolso_request,
 )
-from utilities.catalog import decimal_literal
+from utilities.catalog import decimal_literal, product_uri
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -58,12 +58,14 @@ def create_app(
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
             if (action, RDF.type, ECSDI.SolicitarDevolucion) in graph:
-                return rdf_response(
+                return reply(
                     _handle_devolucion(
                         devoluciones_db,
                         agent_uri,
@@ -76,7 +78,7 @@ def create_app(
                     )
                 )
 
-            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteDevolucion"))
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteDevolucion"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
@@ -503,17 +505,27 @@ def _persist_devoluciones_rdf(devoluciones_db: list[dict]) -> None:
         node = DATA[f"devolucion/{record.get('pedido_id','')}/{record.get('product_id','')}/{idx}"]
         graph.add((node, RDF.type, ECSDI.Devolucion))
         if record.get("pedido_id"):
-            graph.add((node, ECSDI.devolucionDePedido, Literal(record["pedido_id"])))
+            pedido = DATA[f"pedido/{record['pedido_id']}"]
+            graph.add((pedido, RDF.type, ECSDI.Pedido))
+            graph.add((pedido, ECSDI.idPedido, Literal(record["pedido_id"])))
+            graph.add((node, ECSDI.devolucionDePedido, pedido))
         if record.get("product_id"):
-            graph.add((node, ECSDI.devolucionDeProducto, Literal(record["product_id"])))
+            product = product_uri(record["product_id"])
+            graph.add((product, RDF.type, ECSDI.Producto))
+            graph.add((product, ECSDI.idProducto, Literal(record["product_id"])))
+            graph.add((node, ECSDI.devolucionDeProducto, product))
         if record.get("motivo"):
             graph.add((node, ECSDI.motivoDevolucion, Literal(record["motivo"])))
         if record.get("aceptada") is not None:
-            graph.add((node, ECSDI.estadoOperacion, Literal("aceptada" if record["aceptada"] else "rechazada")))
+            graph.add((node, ECSDI.devolucionAceptada, Literal(record["aceptada"], datatype=XSD.boolean)))
         if record.get("importe"):
-            graph.add((node, ECSDI.importeOperacion, Literal(record["importe"])))
+            operacion = DATA[f"pago/reembolso/{record.get('pedido_id','')}/{record.get('product_id','')}/{idx}"]
+            graph.add((operacion, RDF.type, ECSDI.ReembolsoCliente))
+            graph.add((operacion, ECSDI.importeOperacion, decimal_literal(Decimal(str(record["importe"])))))
+            graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
+            graph.add((node, ECSDI.devolucionTieneReembolso, operacion))
         if record.get("fecha_recogida"):
-            graph.add((node, ECSDI.fechaRecogidaDevolucion, Literal(record["fecha_recogida"])))
+            graph.add((node, ECSDI.fechaRecogidaDevolucion, Literal(record["fecha_recogida"], datatype=XSD.dateTime)))
     save_named_graph("returns", graph)
 
 

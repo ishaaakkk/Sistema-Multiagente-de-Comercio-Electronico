@@ -7,7 +7,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -43,26 +43,28 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteFinanciero, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
             if (action, RDF.type, ECSDI.SolicitarOperacionPago) not in graph:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Accion de pago no soportada"))
+                return reply(build_not_understood(agent_uri, message.sender, "Accion de pago no soportada"))
 
             operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
             if operacion is None:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Falta la operacion de pago"))
+                return reply(build_failure(agent_uri, message.sender, action, "Falta la operacion de pago"))
 
             importe = Decimal(str(next(graph.objects(operacion, ECSDI.importeOperacion), "0")))
             if importe <= 0:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
+                return reply(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
 
             # Accion: Realizar Transaccion — simula el cobro y genera ConfirmacionTransaccion
             operation_type = _operation_type(graph, operacion)
             response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe)
             log("pagos", f"Operacion confirmada: {importe} EUR para operacion {operacion}")
-            return rdf_response(response)
+            return reply(response)
 
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AgenteFinanciero, None, str(exc)), status=500)

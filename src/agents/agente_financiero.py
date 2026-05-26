@@ -8,7 +8,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_provider_payment_request
 from utilities.catalog import decimal_literal
 from utilities.comm import comm_url as _comm_url
@@ -43,27 +43,29 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, provider_url: str | None = None):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
             # Capacidad CobrarAlUsuario — Plan: RealizarCobro
             # Msg entrante: SolicitarCobro (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarCobro) in graph:
-                return _handle_cobro(graph, agent_uri, message.sender, action, provider_url)
+                return reply(_handle_cobro(graph, agent_uri, message.sender, action, provider_url))
 
             # Capacidad ReembolsoAlUsuario — Plan: ReembolsoAlUsuario
             # Msg entrante: SolicitarReembolso (AgenteDevolucion → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarReembolso) in graph:
-                return _handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.ReembolsoCliente, "reembolso", provider_url)
+                return reply(_handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.ReembolsoCliente, "reembolso", provider_url))
 
             # Capacidad PagarProdsExternos — Plan: PagarProdsExternos
             # Msg entrante: PagarProductoExterno (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.PagarProductoExterno) in graph:
-                return _handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.PagoVendedorExterno, "pago_externo", provider_url)
+                return reply(_handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.PagoVendedorExterno, "pago_externo", provider_url))
 
-            return rdf_response(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFinanciero"))
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFinanciero"))
 
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AgenteComerciante, None, str(exc)), status=500)
@@ -83,7 +85,7 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
     operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
 
     if pedido is None or importe is None:
-        return rdf_response(build_failure(agent_uri, sender, action, "Faltan pedido o importe en SolicitarCobro"))
+        return build_failure(agent_uri, sender, action, "Faltan pedido o importe en SolicitarCobro")
 
     # Accion: Realizar Transaccion — se lanza en hilo para no bloquear la respuesta
     amount = Decimal(str(importe))
@@ -103,8 +105,7 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
     log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}")
 
     # ACK inmediato — NotificarCobroFinalizado interno hacia FinalizarPedido
-    ack = build_message(graph, action, ACL.inform, agent_uri, sender)
-    return rdf_response(ack)
+    return build_message(graph, action, ACL.inform, agent_uri, sender)
 
 
 def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag, provider_url: str | None):
@@ -116,11 +117,11 @@ def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag
     if importe is None:
         importe = next(graph.objects(action, ECSDI.importeCobro), None)
     if importe is None:
-        return rdf_response(build_failure(agent_uri, sender, action, "Falta importe de la operacion"))
+        return build_failure(agent_uri, sender, action, "Falta importe de la operacion")
 
     amount = Decimal(str(importe))
     if amount <= 0:
-        return rdf_response(build_failure(agent_uri, sender, action, "Importe de la operacion invalido"))
+        return build_failure(agent_uri, sender, action, "Importe de la operacion invalido")
 
     if operacion is None:
         operacion = DATA[f"pago/{tag}/{uuid4()}"]
@@ -129,7 +130,7 @@ def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag
         provider_response = _request_provider_payment(provider_url, agent_uri, sender, action, operacion, operation_type, amount)
         if provider_response is not None:
             log("financiero", f"{tag} confirmado por proveedor: importe={amount}")
-            return rdf_response(provider_response)
+            return provider_response
         log("financiero", f"Proveedor no disponible para {tag}; usando simulacion local")
 
     response_graph = Graph()
@@ -146,7 +147,7 @@ def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag
     response_graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
 
     log("financiero", f"{tag} confirmado: importe={amount} ref={next(response_graph.objects(operacion, ECSDI.referenciaPago))}")
-    return rdf_response(build_message(response_graph, confirmation, ACL.inform, agent_uri, sender))
+    return build_message(response_graph, confirmation, ACL.inform, agent_uri, sender)
 
 
 def _request_provider_payment(

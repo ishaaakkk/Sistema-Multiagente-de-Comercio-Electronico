@@ -22,9 +22,9 @@ Agentes:
 - `CentroLogisticoAgent`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
 - `TransportistaAgent`: responde a `SolicitarPresupuestoTransporte` con una `OfertaTransporte`.
 - `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
-- `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria.
+- `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
 - `AgenteFeedback`: registra compras completadas y valoraciones.
-- `AgenteVendedorExterno`: recibe avisos de productos externos cuyo envio gestiona el vendedor.
+- `AgenteVendedorExterno`: anuncia productos externos al catalogo y recibe avisos de envio de los productos que gestiona.
 - `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados, solicita recogida y despues solicita reembolso.
 - `assistant_demo.py`: cliente de prueba que actua como `AsistenteVirtual`.
 - `devolucion_demo.py`: cliente de prueba que compra un producto y solicita su devolucion.

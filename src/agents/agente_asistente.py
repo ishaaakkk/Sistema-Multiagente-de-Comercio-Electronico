@@ -9,7 +9,7 @@ from rdflib.namespace import RDF
 from utilities.builders import build_order_message, build_search_message, build_valoracion_request
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
-from utilities.acl import build_message, build_not_understood, get_message
+from utilities.acl import build_message, build_not_understood, correlate_reply, get_message
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.runtime import (
     agent_address,
@@ -888,6 +888,8 @@ def create_app(
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido")
                 )
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             action = message.content
             if message.performative == ACL.request and (action, RDF.type, ECSDI.PedirFeedback) in graph:
                 pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
@@ -898,7 +900,7 @@ def create_app(
                     "from": str(message.sender),
                 })
                 log("asistente", f"PedirFeedback recibido: pedido={pedido} producto={product}")
-                return rdf_response(build_message(graph, action, ACL.inform, agent_uri, message.sender))
+                return reply(build_message(graph, action, ACL.inform, agent_uri, message.sender))
 
             # Recomendación proactiva (cap. 9): el agente feedback envía
             # ACL.inform con un grafo de Recomendaciones cada T minutos. El
@@ -917,11 +919,9 @@ def create_app(
                         }
                     )
                 log("asistente", f"Recomendaciones proactivas recibidas: {len(app._recommendations_inbox)} en inbox")
-                return rdf_response(build_message(graph, action, ACL.inform, agent_uri, message.sender))
+                return reply(build_message(graph, action, ACL.inform, agent_uri, message.sender))
 
-            return rdf_response(
-                build_not_understood(agent_uri, message.sender, "El AsistenteVirtual no acepta requests externos")
-            )
+            return reply(build_not_understood(agent_uri, message.sender, "El AsistenteVirtual no acepta requests externos"))
         except Exception as exc:
             from utilities.acl import build_failure
             return rdf_response(build_failure(agent_uri, AGENTS.AgenteComerciante, None, str(exc)), status=500)

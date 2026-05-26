@@ -406,6 +406,12 @@
                                                                rdfs:comment "Relación entre una respuesta múltiple del directorio y cada resultado de búsqueda individual" .
 
 
+###  http://www.semanticweb.org/ecsdi/directory/Capability
+<http://www.semanticweb.org/ecsdi/directory/Capability> rdf:type owl:ObjectProperty ;
+                                                        rdfs:range owl:Class ;
+                                                        rdfs:comment "Capacidad funcional declarada o solicitada en el directorio; su valor es una clase de acción o servicio de la ontología compartida" .
+
+
 #################################################################
 #    Data properties
 #################################################################
@@ -1088,8 +1094,8 @@
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/DecisionContratoTransporte
 :DecisionContratoTransporte rdf:type owl:Class ;
-                            rdfs:subClassOf :Accion ;
-                            rdfs:comment "Cierre de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta y el lote; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)" .
+                            rdfs:subClassOf :Respuesta ;
+                            rdfs:comment "Cierre informativo de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransporte

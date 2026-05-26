@@ -489,12 +489,6 @@ td {
                   </li>
                   <li>
                     <span>
-                      <a href="#DecisionContratoTransporte">DecisionContratoTransporte</a>
-                      <sup class="sup-c" title="OWL/RDFS Class">c</sup>
-                    </span>
-                  </li>
-                  <li>
-                    <span>
                       <a href="#PedirFeedback">PedirFeedback</a>
                       <sup class="sup-c" title="OWL/RDFS Class">c</sup>
                     </span>
@@ -1886,7 +1880,7 @@ td {
               <th>
                 <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
               </th>
-              <td><p>Cierre de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta y el lote; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)</p></td>
+              <td><p>Cierre informativo de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)</p></td>
             </tr>
             <tr>
               <th>
@@ -1894,7 +1888,7 @@ td {
               </th>
               <td>
                 <span>
-                  <a href="#Accion">Accion</a>
+                  <a href="#Respuesta">Respuesta</a>
                   <sup class="sup-c" title="OWL/RDFS Class">c</sup>
                 </span>
               </td>
@@ -2957,6 +2951,12 @@ td {
                   <li>
                     <span>
                       <a href="#ConfirmacionTransaccion">ConfirmacionTransaccion</a>
+                      <sup class="sup-c" title="OWL/RDFS Class">c</sup>
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      <a href="#DecisionContratoTransporte">DecisionContratoTransporte</a>
                       <sup class="sup-c" title="OWL/RDFS Class">c</sup>
                     </span>
                   </li>
@@ -6399,6 +6399,33 @@ td {
                   <a href="http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda">http://www.semanticweb.org/ecsdi/directory/RespuestaBusqueda</a>
                   <sup class="sup-c" title="OWL/RDFS Class">c</sup>
                 </span>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div class="property entity" id="Capability">
+          <h3>Capability
+            <sup class="sup-op" title="OWL Object Property">op</sup>
+          </h3>
+          <table>
+            <tr>
+              <th>IRI</th>
+              <td>
+                <code>http://www.semanticweb.org/ecsdi/directory/Capability</code>
+              </td>
+            </tr>
+            <tr>
+              <th>
+                <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
+              </th>
+              <td><p>Capacidad funcional declarada o solicitada en el directorio; su valor es una clase de acción o servicio de la ontología compartida</p></td>
+            </tr>
+            <tr>
+              <th>
+                <a class="hover_property" href="http://www.w3.org/2000/01/rdf-schema#range" title="A range of the subject property. Defined in The RDF Schema vocabulary (RDFS)">Range</a>
+              </th>
+              <td>
+                <a href="http://www.w3.org/2002/07/owl#Class">Class</a>
               </td>
             </tr>
           </table>
@@ -10362,6 +10389,9 @@ td {
             </li>
             <li>
               <a href="#resultadoContiene">resultado contiene</a>
+            </li>
+            <li>
+              <a href="#Capability">Capability</a>
             </li>
           </ul>
         </li>

@@ -143,6 +143,22 @@ def build_reply(
     )
 
 
+def correlate_reply(response_graph: Graph, request: ACLMessage) -> Graph:
+    """Marca un mensaje de respuesta como parte de la conversación entrante."""
+
+    response = get_message(response_graph)
+    if response is None:
+        return response_graph
+
+    if request.conversation_id is not None:
+        response_graph.set((response.node, ACL["conversation-id"], Literal(request.conversation_id)))
+    if request.reply_with is not None:
+        response_graph.set((response.node, ACL["in-reply-to"], Literal(request.reply_with)))
+    if request.protocol is not None:
+        response_graph.set((response.node, ACL.protocol, request.protocol))
+    return response_graph
+
+
 def build_failure(
     sender: URIRef | str,
     receiver: URIRef | str,

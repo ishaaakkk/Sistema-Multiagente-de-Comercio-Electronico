@@ -10,7 +10,7 @@ from flask import Flask, jsonify
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import (
     build_pedir_feedback_request,
     build_recommendation_inform,
@@ -100,15 +100,15 @@ def create_app(
                 return rdf_response(
                     build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido")
                 )
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative not in (ACL.request, ACL.inform):
-                return rdf_response(
-                    build_not_understood(agent_uri, message.sender, "Se esperaba performativa request o inform")
-                )
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request o inform"))
 
             action = message.content
 
             if (action, RDF.type, ECSDI.NotificarCompraCompletada) in graph:
-                return rdf_response(
+                return reply(
                     _handle_notify_purchase(
                         opinions_db,
                         db_lock,
@@ -122,14 +122,14 @@ def create_app(
                 )
 
             if (action, RDF.type, ECSDI.NotificarBusquedaRealizada) in graph:
-                return rdf_response(
+                return reply(
                     _handle_notify_search(
                         searches_db, db_lock, agent_uri, message.sender, action, graph
                     )
                 )
 
             if _is_recommendation_request(graph, action):
-                return rdf_response(
+                return reply(
                     _handle_recommendations(
                         opinions_db,
                         searches_db,
@@ -140,15 +140,13 @@ def create_app(
                 )
 
             if (action, RDF.type, ECSDI.EnviarOpinion) in graph or (action, RDF.type, ECSDI.RegistrarValoracion) in graph:
-                return rdf_response(
+                return reply(
                     _handle_registrar_valoracion(
                         opinions_db, db_lock, agent_uri, message.sender, action, graph
                     )
                 )
 
-            return rdf_response(
-                build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFeedback")
-            )
+            return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFeedback"))
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
 
@@ -872,9 +870,9 @@ def _persist_opinions_rdf(opinions_db: list[dict]) -> None:
         if record.get("pedido_id"):
             graph.add((node, ECSDI.valoracionDePedido, Literal(record["pedido_id"])))
         if record.get("puntuacion") is not None:
-            graph.add((node, ECSDI.valorValoracion, Literal(record["puntuacion"])))
+            graph.add((node, ECSDI.puntuacion, Literal(record["puntuacion"], datatype=XSD.integer)))
         if record.get("comentario"):
-            graph.add((node, ECSDI.comentarioValoracion, Literal(record["comentario"])))
+            graph.add((node, ECSDI.comentario, Literal(record["comentario"])))
         if record.get("asistente"):
             graph.add((node, ECSDI.accionSolicitadaPor, URIRef(record["asistente"])))
     save_named_graph("opinions", graph)

@@ -7,7 +7,7 @@ from flask import Flask, jsonify
 from rdflib import Graph, Literal
 from rdflib.namespace import FOAF, RDF
 
-from utilities.acl import build_message, build_not_understood, get_message, parse_graph, serialize_graph
+from utilities.acl import build_message, build_not_understood, correlate_reply, get_message, parse_graph, serialize_graph
 from utilities.http import graph_from_request, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, DSO, bind_namespaces
 from utilities.runtime import binding_from_args, configure_flask_logging, log
@@ -42,25 +42,27 @@ def create_app(schedule: str = "equaljobs"):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender if message else AGENTS.Unknown, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(AGENTS.DirectoryService, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
             if (action, RDF.type, DSO.RegistrarAgente) in graph:
-                return rdf_response(_handle_register(dsgraph, loadbalance, graph, action, message.sender, prefix))
+                return reply(_handle_register(dsgraph, loadbalance, graph, action, message.sender, prefix))
 
             if (action, RDF.type, DSO.BuscarAgente) in graph:
-                return rdf_response(_handle_search(dsgraph, loadbalance, graph, action, message.sender, schedule, prefix))
+                return reply(_handle_search(dsgraph, loadbalance, graph, action, message.sender, schedule, prefix))
 
             # Nueva accion: devuelve todos los agentes del tipo indicado
             if (action, RDF.type, DSO.BuscarTodosAgentes) in graph:
-                return rdf_response(_handle_search_all(dsgraph, graph, action, message.sender, prefix))
+                return reply(_handle_search_all(dsgraph, graph, action, message.sender, prefix))
 
             if (action, RDF.type, DSO.EliminarAgente) in graph:
-                return rdf_response(_handle_unregister(dsgraph, loadbalance, graph, action, message.sender, prefix))
+                return reply(_handle_unregister(dsgraph, loadbalance, graph, action, message.sender, prefix))
 
-            return rdf_response(build_not_understood(AGENTS.DirectoryService, message.sender, "Accion de directorio no reconocida"))
+            return reply(build_not_understood(AGENTS.DirectoryService, message.sender, "Accion de directorio no reconocida"))
 
         except Exception as exc:
             log(prefix, f"ERROR en /comm: {exc}")
@@ -89,7 +91,7 @@ def _handle_register(dsgraph, loadbalance, graph, action, sender, prefix):
     """Registra un agente en el directorio RDF.
 
     Acepta opcionalmente una o varias `dso:Capability` cuyo valor es una URI
-    de la ontología ECSDI (por ejemplo `ecsdi:BuscarEnCatalogo`). Esto
+    de la ontología ECSDI (por ejemplo `ecsdi:BuscarProductos`). Esto
     aproxima el registro a un perfil de servicio OWL-S (cap. 8.5.2 de los
     apuntes): un agente declara qué acciones de la ontología sabe atender.
     """
