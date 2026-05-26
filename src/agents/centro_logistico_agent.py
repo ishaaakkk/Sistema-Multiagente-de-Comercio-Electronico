@@ -99,7 +99,15 @@ def create_app(
             if pedido is None:
                 return reply(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
 
-            fulfillable_lines = _filter_lines_by_stock(graph, pedido, accepts_all, stock_set)
+            fulfillable_lines = _filter_lines_by_stock(
+                graph,
+                pedido,
+                center,
+                center_id,
+                accepts_all,
+                stock_set,
+                stock_reservations,
+            )
             if not fulfillable_lines:
                 log(log_tag, "Sin lineas servibles para este centro; respondiendo failure controlado")
                 return reply(
@@ -179,7 +187,13 @@ def create_app(
 
 
 def _filter_lines_by_stock(
-    graph: Graph, pedido: URIRef, accepts_all: bool, stock_set: set[str]
+    graph: Graph,
+    pedido: URIRef,
+    center: URIRef,
+    center_id: str,
+    accepts_all: bool,
+    stock_set: set[str],
+    reservations: dict,
 ) -> list[URIRef]:
     """Devuelve sólo las líneas que este centro logístico puede servir."""
 
@@ -188,13 +202,37 @@ def _filter_lines_by_stock(
         product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
         if product is None:
             continue
-        if accepts_all:
+        product_id = _product_id(graph, product)
+        if not product_id:
+            continue
+        if not accepts_all and product_id not in stock_set:
+            continue
+
+        requested = int(next(graph.objects(line, ECSDI.cantidad), 1))
+        available = _available_stock_for_center(graph, product, center)
+        if available is None:
             fulfillable.append(line)
             continue
-        product_id = str(next(graph.objects(product, ECSDI.idProducto), ""))
-        if product_id and product_id in stock_set:
+
+        reserved = int(reservations.get(center_id, {}).get(product_id, 0))
+        if available - reserved >= requested:
             fulfillable.append(line)
     return fulfillable
+
+
+def _product_id(graph: Graph, product: URIRef) -> str:
+    product_id = str(next(graph.objects(product, ECSDI.idProducto), ""))
+    return product_id or str(product).rsplit("/", 1)[-1]
+
+
+def _available_stock_for_center(graph: Graph, product: URIRef, center: URIRef) -> int | None:
+    for stock in graph.subjects(ECSDI.stockDeProducto, product):
+        if (stock, ECSDI.stockEnCentro, center) not in graph:
+            continue
+        available = next(graph.objects(stock, ECSDI.cantidadDisponible), None)
+        if available is not None:
+            return int(available)
+    return None
 
 
 def _product_quantities_for_lines(graph: Graph, lines: list[URIRef]) -> dict[str, int]:
@@ -461,6 +499,7 @@ def main():
             ),
         )
         create_app(
+            agent_uri=AGENTS[service_id],
             transport_url=fallback_transport,
             directory_url=args.dir,
             center_id=center_id,

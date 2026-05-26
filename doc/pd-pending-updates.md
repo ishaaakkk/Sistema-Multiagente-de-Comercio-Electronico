@@ -145,7 +145,32 @@ Listar en una única vista todas las fuentes:
 | Directorio               | `src/data/directory.ttl`                                        | Turtle              | Directory Service   |
 
 
-## 6. Comentarios de la 1ª y 2ª entrega
+Sobre SPARQL: el catálogo ya consulta productos con SPARQL y el recomendador
+materializa recomendaciones con SPARQL `CONSTRUCT`. Las escrituras/persistencias
+pueden seguir usando RDFLib porque son inserciones directas de triples; no hace
+falta convertir cada alta o actualización trivial a SPARQL `INSERT` si el dato
+queda igualmente en RDF/TriG. Lo importante para la memoria es defender que las
+BD compartidas son RDF y que las consultas semánticas relevantes se hacen con
+SPARQL.
+
+## 6. Normalización de nombres en el PD
+
+Aplicar estos cambios manualmente en PDT para que `finalMod.pd`, código y
+ontología usen los mismos nombres:
+
+| Nombre antiguo / incoherente | Sustituir por | Motivo |
+| ---------------------------- | ------------- | ------ |
+| `Notificar CL`               | `AvisarCL`    | Es la acción que el Comerciante solicita a cada Centro Logístico mediante `request`. |
+| `SeleccionarCL`              | `EscogerCL` o `FiltrarLineasPorStock` | En el código no se escoge un único CL: se avisa a todos y cada CL filtra sus líneas. |
+| `SolicitarReembolsso`        | `SolicitarReembolso` | Corregir errata y alinear con ontología/código. |
+| `PagarProdExterno`           | `PagarProductoExterno` | Alinear con ontología/código. |
+| `Mostrar Recomendaciones` como acción | `Recomendacion proactiva` / `RecibirRecomendaciones` | La recomendación es información enviada con `inform`, no una acción externa solicitada al agente. |
+
+Regla práctica para PDT: dejar como `Action` solo lo que tenga sentido en una
+performativa `request` y como API externa de un agente. Lo que solo comparte
+conocimiento entre agentes debe modelarse como mensaje/percepción/notificación.
+
+## 7. Comentarios de la 1ª y 2ª entrega
 
 Si en las entregas anteriores quedaron comentarios concretos en PDT
 (roles que faltaban, planes mal nombrados, escenarios sin cubrir),
@@ -153,7 +178,7 @@ aplicarlos aquí antes de exportar el report definitivo. Como el .pd no
 se ha tocado en este sprint, esta lista debe usarse junto al feedback
 recibido por el profesor.
 
-## 7. Antes de exportar el report HTML definitivo
+## 8. Antes de exportar el report HTML definitivo
 
 - Asegurar que cada plan tiene su **ficha textual** (precondiciones,
 postcondiciones, eventos, acciones), no solo el nombre.
@@ -161,4 +186,3 @@ postcondiciones, eventos, acciones), no solo el nombre.
 protocolos etiquetados.
 - Mover el report exportado a `doc/pdtool/<fecha>/` y referenciarlo
 desde la memoria.
-

@@ -178,7 +178,10 @@ def _handle_search(dsgraph, loadbalance, graph, action, sender, schedule, prefix
     response_graph.add((result, RDF.type, DSO.RespuestaBusqueda))
     response_graph.add((result, DSO.Uri, selected))
     response_graph.add((result, DSO.Address, address))
-    response_graph.add((result, DSO.AgentType, agent_type))
+    if agent_type is not None:
+        response_graph.add((result, DSO.AgentType, agent_type))
+    if requested_capability is not None:
+        response_graph.add((result, DSO.Capability, requested_capability))
     return build_message(response_graph, result, ACL.inform, AGENTS.DirectoryService, sender)
 
 
@@ -225,7 +228,10 @@ def _handle_search_all(dsgraph, graph, action, sender, prefix):
     # Un nodo raiz para el mensaje; los resultados individuales cuelgan de el
     root = DATA[f"directory/response/all/{uuid4()}"]
     response_graph.add((root, RDF.type, DSO.RespuestaBusquedaMultiple))
-    response_graph.add((root, DSO.AgentType, agent_type))
+    if agent_type is not None:
+        response_graph.add((root, DSO.AgentType, agent_type))
+    if requested_capability is not None:
+        response_graph.add((root, DSO.Capability, requested_capability))
 
     for uri in candidates:
         address = next(dsgraph.objects(uri, DSO.Address), None)
@@ -235,7 +241,10 @@ def _handle_search_all(dsgraph, graph, action, sender, prefix):
         response_graph.add((result, RDF.type, DSO.RespuestaBusqueda))
         response_graph.add((result, DSO.Uri, uri))
         response_graph.add((result, DSO.Address, address))
-        response_graph.add((result, DSO.AgentType, agent_type))
+        if agent_type is not None:
+            response_graph.add((result, DSO.AgentType, agent_type))
+        if requested_capability is not None:
+            response_graph.add((result, DSO.Capability, requested_capability))
         response_graph.add((root, DSO.resultadoContiene, result))
 
     log(prefix, f"SEARCH_ALL {agent_type} -> {len(candidates)} agente(s)")

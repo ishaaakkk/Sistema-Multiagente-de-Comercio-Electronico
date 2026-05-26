@@ -963,7 +963,7 @@ def main():
         "AGENTE_ASISTENTE",
         address,
         f"asistente-{args.port}",
-        capabilities=[ECSDI.PedirFeedback, ECSDI.Recomendacion],
+        capabilities=[ECSDI.PedirFeedback],
     )
 
     try:

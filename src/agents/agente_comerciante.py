@@ -2,6 +2,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
+from threading import Thread
 from uuid import uuid4
 
 from flask import Flask
@@ -477,10 +478,13 @@ def _post_safe(url: str, graph, tag: str) -> None:
     por diseño; si el agente destino no esta disponible el flujo principal
     no debe verse afectado.
     """
-    try:
-        post_graph(url, graph)
-    except Exception as exc:
-        log("comerciante", f"[{tag}] aviso fire-and-forget fallido ({url}): {exc}")
+    def _send() -> None:
+        try:
+            post_graph(url, graph)
+        except Exception as exc:
+            log("comerciante", f"[{tag}] aviso fire-and-forget fallido ({url}): {exc}")
+
+    Thread(target=_send, daemon=True).start()
 
 
 def _response_reason(graph: Graph) -> str:

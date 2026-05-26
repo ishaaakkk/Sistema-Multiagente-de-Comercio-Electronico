@@ -825,13 +825,7 @@ def main():
         "AGENTE_FEEDBACK",
         address,
         f"feedback-{args.port}",
-        capabilities=[
-            ECSDI.NotificarCompraCompletada,
-            ECSDI.NotificarBusquedaRealizada,
-            ECSDI.EnviarOpinion,
-            ECSDI.RegistrarValoracion,
-            ECSDI.Recomendacion,
-        ],
+        capabilities=[ECSDI.BuscarProductos],
     )
     try:
         log(
@@ -874,7 +868,7 @@ def _persist_opinions_rdf(opinions_db: list[dict]) -> None:
         if record.get("comentario"):
             graph.add((node, ECSDI.comentario, Literal(record["comentario"])))
         if record.get("asistente"):
-            graph.add((node, ECSDI.accionSolicitadaPor, URIRef(record["asistente"])))
+            graph.add((node, ECSDI.valoracionEnviadaPor, URIRef(record["asistente"])))
     save_named_graph("opinions", graph)
 
 
@@ -886,14 +880,9 @@ def _persist_searches_rdf(searches_db: list[dict]) -> None:
     for idx, record in enumerate(searches_db):
         node = DATA[f"busqueda/{idx}"]
         graph.add((node, RDF.type, ECSDI.NotificarBusquedaRealizada))
-        if record.get("asistente"):
-            graph.add((node, ECSDI.accionSolicitadaPor, URIRef(record["asistente"])))
+        graph.add((node, RDF.type, ECSDI.ResultadoBusqueda))
         if record.get("fecha"):
             graph.add((node, ECSDI.fechaBusqueda, Literal(record["fecha"])))
-        if record.get("brand"):
-            graph.add((node, ECSDI.marcaProducto, Literal(record["brand"])))
-        if record.get("name"):
-            graph.add((node, ECSDI.nombreProducto, Literal(record["name"])))
         for product_uri in record.get("results", []):
             graph.add((node, ECSDI.resultadoContieneProducto, URIRef(product_uri)))
     save_named_graph("searches", graph)

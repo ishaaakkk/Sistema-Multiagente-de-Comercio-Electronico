@@ -172,6 +172,7 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("TRANSPORTISTA", advertised_host, args.port)
+    agent_uri = AGENTS[service_id]
     registered = register_service(
         args.dir,
         service_id,
@@ -190,6 +191,7 @@ def main():
             f"tarifa_base={args.tarifa_base}€ tarifa_kg={args.tarifa_kg}€/kg tarifa_dia={args.tarifa_dia}€/dia"
         )
         create_app(
+            agent_uri=agent_uri,
             tarifa_base=args.tarifa_base,
             tarifa_kg=args.tarifa_kg,
             tarifa_dia=args.tarifa_dia,
