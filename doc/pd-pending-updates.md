@@ -160,11 +160,19 @@ ontología usen los mismos nombres:
 
 | Nombre antiguo / incoherente | Sustituir por | Motivo |
 | ---------------------------- | ------------- | ------ |
-| `Notificar CL`               | `AvisarCL`    | Es la acción que el Comerciante solicita a cada Centro Logístico mediante `request`. |
-| `SeleccionarCL`              | `EscogerCL` o `FiltrarLineasPorStock` | En el código no se escoge un único CL: se avisa a todos y cada CL filtra sus líneas. |
-| `SolicitarReembolsso`        | `SolicitarReembolso` | Corregir errata y alinear con ontología/código. |
-| `PagarProdExterno`           | `PagarProductoExterno` | Alinear con ontología/código. |
+| `AvisarPedidoACL`, `PreguntaRealizacionPedidoCL`, `RegistrarPedidoParaEnvio` | `AvisarCL` | Es la acción real que el Comerciante solicita a cada Centro Logístico mediante `request`. |
+| `Notificar CL` como `Action` | Integrarlo en `ConfirmacionEnvio` / `ConfirmacionCompra` | En el PD significa "notificar al usuario del CL escogido"; no es una API externa nueva. Es información de respuesta al asistente. |
+| `SeleccionarCL`              | `EscogerCL` + `AvisarCL` + `FiltrarLineasPorStock` | En el código no se escoge un único CL al inicio: se avisa a todos y cada CL filtra sus líneas. |
+| AUML de `Protocolo Reembolso`: `SolicitarReembolsso` | `SolicitarReembolso` | El objeto `Message` ya está bien; queda corregir el texto AUML interno. |
+| AUML de `Protocolo PagarProductoExterno`: `PagarProdExterno` | `PagarProductoExterno` | El objeto `Message` ya está bien; queda corregir el texto AUML interno. |
 | `Mostrar Recomendaciones` como acción | `Recomendacion proactiva` / `RecibirRecomendaciones` | La recomendación es información enviada con `inform`, no una acción externa solicitada al agente. |
+| `ListaProductos!`, `TicketCompra`, `ConfirmacionRegistroProducto`, `Notificar Resolucion Devolucion` como `Action` | Respuestas/notificaciones | Son resultados informados al solicitante, no funcionalidades solicitables mediante `request`. |
+| `Opinion?`                   | `PedirFeedback` | Es la acción real: Feedback solicita al Asistente una valoración. |
+| `Opiniion!`, `RegistrarValoracion` | `EnviarOpinion` / `RegistrarValoracion` como notificación | Es compartición de una valoración con `inform`, no una acción ofrecida por Feedback. |
+| `ProponerLoteAentregar`      | `SolicitarPresupuestoTransporte` | Es la CFP/request del Centro Logístico a los transportistas. |
+| `Informar Eleccion Transportista` como `Action` | `DecisionContratoTransporte` | Es el cierre del Contract Net con `accept-proposal` / `reject-proposal`; en la ontología es respuesta, no acción. |
+| `Protocolo PagarProductoExterno` con `start Protocolo Gestion Envios` | `start Protocolo PagarProductoExterno` | El texto AUML interno del protocolo tiene el nombre antiguo. |
+| `Protocolo AveriguarStockCL` con `start Protocolo Gestion Envios` | Actualizar o eliminar | El flujo actual multi-CL usa `AvisarCL` a todos los centros; no una consulta previa de stock separada. |
 
 Regla práctica para PDT: dejar como `Action` solo lo que tenga sentido en una
 performativa `request` y como API externa de un agente. Lo que solo comparte

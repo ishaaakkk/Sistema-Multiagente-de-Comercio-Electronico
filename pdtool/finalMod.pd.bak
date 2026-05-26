@@ -297,7 +297,7 @@
 																							<object type="Action" id="28">
 																							    <base type="Interaction">
 																								<base type="Entity">
-																								    <field name="name">Mostrar Recomendaciones (A)</field>
+																								    <field name="name">RecomendacionProactiva (A)</field>
 																								    <field name="description">El sistema envia al asistente sugerencias de productos basadas en el historial del usuario</field>
 																								    <field name="uniqueId">88</field>
 																								    <field name="connectTo"><list>
@@ -1083,7 +1083,7 @@ finish</field>
 																											<object type="Action" id="68">
 																											    <base type="Interaction">
 																												<base type="Entity">
-																												    <field name="name">Opinion? (A)</field>
+																												    <field name="name">PedirFeedback (A)</field>
 																												    <field name="description">La tienda solicita al asistente la valoracion del producto recibido</field>
 																												    <field name="uniqueId">85</field>
 																												    <field name="connectTo"><list>
@@ -1332,7 +1332,7 @@ finish</field>
 																																					<object type="Action" id="83">
 																																					    <base type="Interaction">
 																																						<base type="Entity">
-																																						    <field name="name">Notificar CL </field>
+																																						    <field name="name">Notificar CL (A)</field>
 																																						    <field name="description">Se notifica al usuario del Cl escogido</field>
 																																						    <field name="uniqueId">999</field>
 																																						    <field name="connectTo"><list>
@@ -9319,11 +9319,10 @@ finish</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="616">
-			    <field name="x">37</field>
-			    <field name="y">25</field>
+			    <field name="x">661</field>
+			    <field name="y">113</field>
 			</object>
 		    </field>
-		    <field name="userApproved">:false</field>
 		</object>
 
 		<object type="DiagramEntitySetting" id="617">
