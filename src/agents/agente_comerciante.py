@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import argparse
+import os
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
-from threading import Thread
+from threading import Event, Lock as ThreadLock, Thread
 from uuid import uuid4
 
 from flask import Flask
@@ -38,6 +41,7 @@ from utilities.storage import load_graph_collection, save_graph_item, save_named
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
+DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = float(os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", "8"))
 
 
 def create_app(
@@ -47,10 +51,13 @@ def create_app(
     financiero_url="http://127.0.0.1:9005/comm",
     feedback_url="http://127.0.0.1:9007/comm",
     vendedor_externo_url="http://127.0.0.1:9008/comm",
+    shipping_confirmation_timeout: float = DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT,
 ):
     app = Flask(__name__)
     completed_orders: dict[str, Graph] = load_graph_collection("completed_orders")
     fallback_logistics_urls = list(logistics_urls or [])
+    confirmation_buffers: dict[str, dict] = {}
+    confirmation_lock = ThreadLock()
 
     @app.get("/")
     def index():
@@ -65,6 +72,14 @@ def create_app(
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
             def reply(response_graph: Graph):
                 return rdf_response(correlate_reply(response_graph, message))
+
+            if message.performative == ACL.inform:
+                async_ack = _handle_async_shipping_confirmation(
+                    graph, message, agent_uri, confirmation_buffers, confirmation_lock
+                )
+                if async_ack is not None:
+                    return reply(async_ack)
+
             if message.performative != ACL.request:
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -88,6 +103,9 @@ def create_app(
                         feedback_url,
                         vendedor_externo_url,
                         completed_orders,
+                        confirmation_buffers,
+                        confirmation_lock,
+                        shipping_confirmation_timeout,
                     )
                 )
 
@@ -112,6 +130,9 @@ def _handle_order(
     feedback_url: str,
     vendedor_externo_url: str,
     completed_orders: dict[str, Graph],
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+    shipping_confirmation_timeout: float,
 ) -> Graph:
     """Orquestador del Plan «RealizarPedido» del Agente Comerciante.
 
@@ -147,6 +168,9 @@ def _handle_order(
         internal_lines + ext_envio_tienda,
         logistics_urls,
         client_dist=client_dist,
+        confirmation_buffers=confirmation_buffers,
+        confirmation_lock=confirmation_lock,
+        shipping_confirmation_timeout=shipping_confirmation_timeout,
     )
     if cl_error is not None:
         return cl_error
@@ -251,6 +275,9 @@ def _plan_escoger_cl(
     lines_for_logistics: list,
     logistics_urls: list[str],
     client_dist: int | None = None,
+    confirmation_buffers: dict[str, dict] | None = None,
+    confirmation_lock: ThreadLock | None = None,
+    shipping_confirmation_timeout: float = DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT,
 ) -> Graph | None:
     """Plan EscogerCL: ordena CLs por |dist_CL - dist_entrega| y contacta
     secuencialmente hasta asignar todas las líneas pendientes."""
@@ -265,6 +292,11 @@ def _plan_escoger_cl(
             "No hay centros logísticos disponibles para planificar el envío",
         )
 
+    pedido_id = _pedido_id(order_graph, pedido) or ""
+    if confirmation_buffers is not None and confirmation_lock is not None and pedido_id:
+        with confirmation_lock:
+            confirmation_buffers[pedido_id] = {"event": Event(), "graphs": []}
+
     # Reordenar por proximidad métrica dist (0-1000).
     ordered_urls = _sort_logistics_by_distance(logistics_urls, client_dist)
 
@@ -272,6 +304,14 @@ def _plan_escoger_cl(
     confirmaciones = _dispatch_to_logistics_ordered(
         agent_uri, logistics_graph, pedido, ordered_urls
     )
+    needs_async = any(_response_accepts_pending_lote(c) for c in confirmaciones) and not any(
+        list(c.subjects(RDF.type, ECSDI.ConfirmacionEnvio)) for c in confirmaciones
+    )
+    if needs_async and confirmation_buffers is not None and confirmation_lock is not None and pedido_id:
+        waited = _wait_shipping_confirmations(
+            pedido_id, confirmation_buffers, confirmation_lock, shipping_confirmation_timeout
+        )
+        confirmaciones.extend(waited)
     if not confirmaciones:
         return build_failure(
             agent_uri,
@@ -399,6 +439,66 @@ def _discover_logistics_centers(
     return [_comm_url(u) for u in fallback if u]
 
 
+def _response_accepts_pending_lote(response: Graph) -> bool:
+    for lote in response.subjects(RDF.type, ECSDI.LoteEnvio):
+        estado = str(next(response.objects(lote, ECSDI.estadoLote), ""))
+        if estado == "pendiente_envio":
+            return True
+    return False
+
+
+def _handle_async_shipping_confirmation(
+    graph: Graph,
+    message,
+    agent_uri: URIRef,
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+) -> Graph | None:
+    """RecibirDatosEnvio: ConfirmacionEnvio asíncrona del centro logístico."""
+
+    if not any(graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+        return None
+    pedido_id = ""
+    for conf in graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        envio = next(graph.objects(conf, ECSDI.confirmacionEnvio), None)
+        if envio is None:
+            continue
+        pedido = next(graph.objects(envio, ECSDI.envioDePedido), None)
+        if pedido is not None:
+            pedido_id = str(next(graph.objects(pedido, ECSDI.idPedido), _pedido_id(graph, pedido) or ""))
+            break
+    if not pedido_id:
+        return None
+    with confirmation_lock:
+        buf = confirmation_buffers.setdefault(pedido_id, {"event": Event(), "graphs": []})
+        buf["graphs"].append(graph)
+        buf["event"].set()
+    log("comerciante", f"ConfirmacionEnvio recibida para pedido {pedido_id}")
+    ack = DATA[f"ack/shipping/{uuid4()}"]
+    ack_graph = Graph()
+    bind_namespaces(ack_graph)
+    ack_graph.add((ack, RDF.type, ECSDI.Respuesta))
+    return build_message(ack_graph, ack, ACL.inform, agent_uri, message.sender)
+
+
+def _wait_shipping_confirmations(
+    pedido_id: str,
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+    timeout: float,
+) -> list[Graph]:
+    with confirmation_lock:
+        buf = confirmation_buffers.get(pedido_id)
+        if buf is None:
+            return []
+        event = buf["event"]
+    if not event.wait(timeout):
+        log("comerciante", f"Timeout ({timeout}s) esperando ConfirmacionEnvio de {pedido_id}")
+    with confirmation_lock:
+        buf = confirmation_buffers.pop(pedido_id, {"graphs": []})
+    return [g for g in buf.get("graphs", []) if any(g.subjects(RDF.type, ECSDI.ConfirmacionEnvio))]
+
+
 def _dispatch_to_logistics(
     agent_uri: URIRef,
     logistics_graph: Graph,
@@ -422,6 +522,8 @@ def _dispatch_to_logistics(
                 log("comerciante", f"CL {url} sin stock o sin transporte; se ignora")
                 return None
             if any(response.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+                return response
+            if _response_accepts_pending_lote(response):
                 return response
             return None
         except Exception as exc:

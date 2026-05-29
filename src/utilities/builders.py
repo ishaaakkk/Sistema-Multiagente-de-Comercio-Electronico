@@ -118,6 +118,34 @@ def build_search_response(sender: URIRef, receiver: URIRef, action: URIRef, prod
         _copy_stock_context(product_graph, graph, product)
     return build_message(graph, response, ACL.inform, sender, receiver)
 
+def build_busqueda_realizada_notification(
+    sender: URIRef,
+    receiver: URIRef,
+    solicitante: URIRef,
+    constraints: dict,
+    products: list[URIRef],
+) -> Graph:
+    """AgenteCatalogo → AgenteFeedback: NotificarBusquedaRealizada.
+
+    Protocolo Consulta Catálogo: informa al agente de feedback de los
+    productos devueltos en una búsqueda de compra para alimentar el
+    sistema de recomendación periódica.
+    """
+    graph = Graph()
+    bind_namespaces(graph)
+    action = DATA[f"action/busqueda-realizada/{uuid4()}"]
+    graph.add((action, RDF.type, ECSDI.NotificarBusquedaRealizada))
+    graph.add((action, ECSDI.notificacionSolicitadaPor, solicitante))
+
+    if constraints.get("name"):
+        _add_text_restriction(graph, action, ECSDI.RestriccionNombre, constraints["name"])
+    if constraints.get("brand"):
+        _add_text_restriction(graph, action, ECSDI.RestriccionMarca, constraints["brand"])
+
+    for product in products:
+        graph.add((action, ECSDI.notificacionContieneProducto, product))
+
+    return build_message(graph, action, ACL.inform, sender, receiver)
 
 def build_logistics_request(sender: URIRef, receiver: URIRef, order_graph: Graph, pedido: URIRef) -> Graph:
     """AgenteComerciante -> CentroLogistico: AvisarCL."""
@@ -176,6 +204,31 @@ def build_transport_offer(sender: URIRef, receiver: URIRef, action: URIRef, lote
     graph.add((offer, ECSDI.fechaEntregaEstimada, Literal(delivery_date.isoformat(timespec="seconds"), datatype=XSD.dateTime)))
     graph.add((offer, ECSDI.estadoOferta, Literal("propuesta")))
     return build_message(graph, offer, ACL.inform, sender, receiver)
+
+
+def build_aviso_cl_acceptance(
+    sender: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    pedido: URIRef,
+    lote: URIRef,
+    lote_graph: Graph,
+    fulfilled_lines: list[URIRef],  # noqa: ARG001 — líneas ya materializadas en lote_graph
+) -> Graph:
+    """CentroLogistico → Comerciante: líneas aceptadas en lote pendiente de envío."""
+
+    graph = Graph()
+    bind_namespaces(graph)
+    for triple in lote_graph:
+        graph.add(triple)
+
+    response = DATA[f"response/aviso-cl/{uuid4()}"]
+    graph.add((response, RDF.type, ECSDI.Respuesta))
+    graph.add((response, ECSDI.respuestaDeAccion, action))
+    graph.add((response, ECSDI.accionSobrePedido, pedido))
+    graph.add((response, ECSDI.accionSobreLote, lote))
+    graph.add((lote, ECSDI.estadoLote, Literal("pendiente_envio")))
+    return build_message(graph, response, ACL.inform, sender, receiver)
 
 
 def build_shipping_confirmation(
