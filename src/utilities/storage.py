@@ -1,5 +1,6 @@
 import json
 import threading
+from decimal import Decimal
 from pathlib import Path
 
 from rdflib import Dataset, Graph, URIRef
@@ -79,10 +80,22 @@ def load_json(name: str, default):
         return default
 
 
+class _JsonEncoder(json.JSONEncoder):
+    """Serializa tipos usados en historiales JSON (p. ej. restricciones con Decimal)."""
+
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().default(obj)
+
+
 def save_json(name: str, value) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     path = DATA_DIR / name
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2, cls=_JsonEncoder),
+        encoding="utf-8",
+    )
 
 
 def load_graph(name: str) -> Graph:

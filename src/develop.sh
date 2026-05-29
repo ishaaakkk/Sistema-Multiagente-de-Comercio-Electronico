@@ -57,6 +57,11 @@ shutdown_all() {
 
 trap shutdown_all EXIT INT TERM
 
+# Lotes: agrupar al AvisarCL y despachar en el ciclo CiertaHoraDia (segundos en demo).
+export LOT_DISPATCH_INTERVAL="${LOT_DISPATCH_INTERVAL:-3}"
+export LOT_MAX_LINES="${LOT_MAX_LINES:-8}"
+export SHIPPING_CONFIRMATION_TIMEOUT="${SHIPPING_CONFIRMATION_TIMEOUT:-10}"
+
 start_agent "DirectoryService" "$PYTHON" -m agents.directory_service --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
 sleep 1
 # Dos transportistas con tarifas distintas — extensión avanzada #1: el

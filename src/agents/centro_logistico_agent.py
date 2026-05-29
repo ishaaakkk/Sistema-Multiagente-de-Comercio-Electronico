@@ -1,19 +1,32 @@
 import argparse
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
+from threading import Lock, Thread
 from uuid import uuid4
 
-from flask import Flask
+from flask import Flask, jsonify
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
-from utilities.builders import build_shipping_confirmation, build_transport_request
-from utilities.catalog import center_uri, decimal_literal
+from utilities.builders import build_aviso_cl_acceptance, build_shipping_confirmation, build_transport_request
+from utilities.catalog import center_uri, decimal_literal, decrement_catalog_stock
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
+from utilities.pending_lotes import (
+    append_lines_to_pending_lote,
+    create_pending_lote,
+    destination_key,
+    finalize_dispatched_lote,
+    find_open_lote,
+    list_pending_lote_ids,
+    load_pending_meta,
+    mark_lote_in_transit,
+    select_lotes_for_dispatch,
+)
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -22,6 +35,7 @@ from utilities.runtime import (
     log,
     register_service,
     search_all_services,
+    search_service,
     unregister_service,
 )
 from utilities.storage import load_json, save_json
@@ -38,6 +52,10 @@ DEFAULT_STOCK_ANY = ("*",)
 # Timeout por transportista en la fase de CFP (Contract Net cap. 7.3.2).
 DEFAULT_TRANSPORT_TIMEOUT = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
 
+# Plan DecidirLotesAEntregar: intervalo del evento CiertaHoraDia (segundos en demo).
+DEFAULT_LOT_DISPATCH_INTERVAL = float(os.environ.get("LOT_DISPATCH_INTERVAL", "3"))
+DEFAULT_LOT_MAX_LINES = int(os.environ.get("LOT_MAX_LINES", "8"))
+
 
 def create_app(
     agent_uri=DEFAULT_AGENT_URI,
@@ -47,6 +65,9 @@ def create_app(
     center_city: str = "Barcelona",
     stock_products: tuple[str, ...] = DEFAULT_STOCK_ANY,
     dist: int = 0,
+    lot_dispatch_interval: float = DEFAULT_LOT_DISPATCH_INTERVAL,
+    max_lines_per_lote: int = DEFAULT_LOT_MAX_LINES,
+    enable_lot_scheduler: bool = True,
 ):
     """Crea la aplicación Flask del centro logístico.
 
@@ -70,6 +91,17 @@ def create_app(
 
     @app.get("/info")
     def info():
+        pending = []
+        for lote_id in list_pending_lote_ids(center_id):
+            meta = load_pending_meta(center_id, lote_id)
+            pending.append(
+                {
+                    "lote_id": lote_id,
+                    "estado": meta.get("estado"),
+                    "prioridad": meta.get("prioridad"),
+                    "pedidos": [p.get("pedido_id") for p in meta.get("pedidos", [])],
+                }
+            )
         return {
             "center_id": center_id,
             "center_uri": str(center),
@@ -77,7 +109,60 @@ def create_app(
             "accepts_all": accepts_all,
             "stock_products": sorted(stock_set) if not accepts_all else [],
             "dist": dist,
+            "lot_dispatch_interval": lot_dispatch_interval,
+            "max_lines_per_lote": max_lines_per_lote,
+            "pending_lotes": pending,
         }
+
+    @app.get("/status/pending-lotes")
+    def pending_lotes_status():
+        return jsonify(app.config.get("pending_lotes_snapshot", []))
+
+    dispatch_lock = Lock()
+
+    def _run_dispatch_cycle() -> None:
+        """Plan SeleccionarLotesAEntregar + NegociarConTransportistas (CiertaHoraDia)."""
+
+        with dispatch_lock:
+            selected = select_lotes_for_dispatch(center_id)
+            if not selected:
+                return
+            transport_urls = _discover_transportistas(directory_url, transport_url, agent_uri, log_tag)
+            if not transport_urls:
+                log(log_tag, "Dispatch diferido: sin transportistas disponibles")
+                return
+            for lote_id, lote_graph, lote in selected:
+                mark_lote_in_transit(center_id, lote_id)
+                product_quantities = _product_quantities_from_lote(lote_graph, lote)
+                best_offer_graph, best_offer, best_transportista, all_offers = _negotiate_transport(
+                    agent_uri, lote_graph, lote, transport_urls, log_tag
+                )
+                if best_offer is None:
+                    log(log_tag, f"Lote {lote_id}: sin ofertas de transporte")
+                    continue
+                _close_contract_net(
+                    agent_uri, lote, lote_graph, best_offer, best_transportista, all_offers, log_tag
+                )
+                best_offer_graph.set((best_offer, ECSDI.estadoOferta, Literal("aceptada")))
+                _merge_graphs(best_offer_graph, lote_graph)
+                _reserve_stock_from_lote(stock_reservations, lote_graph, lote, center, product_quantities)
+                save_json("stock_reservations.json", stock_reservations)
+                decrement_catalog_stock(center_id, product_quantities)
+                _notify_comerciantes_dispatch(
+                    center_id,
+                    lote_id,
+                    agent_uri,
+                    best_offer_graph,
+                    lote,
+                    best_offer,
+                    best_transportista,
+                    center,
+                    center_id,
+                    center_city,
+                    dist,
+                    log_tag,
+                )
+                finalize_dispatched_lote(center_id, lote_id, best_offer_graph, lote)
 
     @app.post("/comm")
     def comm():
@@ -90,6 +175,7 @@ def create_app(
                 )
             def reply(response_graph: Graph):
                 return rdf_response(correlate_reply(response_graph, message))
+
             if message.performative != ACL.request:
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -121,70 +207,74 @@ def create_app(
                     )
                 )
 
-            lote_graph, lote = _build_lote_graph(graph, pedido, fulfillable_lines, center, center_city)
-            product_quantities = _product_quantities_for_lines(graph, fulfillable_lines)
-
-            transport_urls = _discover_transportistas(directory_url, transport_url, agent_uri, log_tag)
-            if not transport_urls:
-                return reply(
-                    build_failure(agent_uri, message.sender, action, "No hay transportistas disponibles")
+            shop_url = _discover_comerciante_url(directory_url, agent_uri)
+            comerciante_uri = str(message.sender)
+            dest_key = destination_key(graph, pedido)
+            open_lote = find_open_lote(center_id, dest_key, max_lines_per_lote, len(fulfillable_lines))
+            if open_lote is None:
+                lote_id, lote_graph, lote = create_pending_lote(
+                    graph,
+                    pedido,
+                    fulfillable_lines,
+                    center,
+                    center_id,
+                    center_city,
+                    shop_url,
+                    action,
+                    comerciante_uri,
+                )
+                log(log_tag, f"AgruparPedidoEnLote: nuevo lote {lote_id} ({len(fulfillable_lines)} lineas)")
+            else:
+                lote_id, lote_graph, lote = open_lote
+                lote_graph = append_lines_to_pending_lote(
+                    center_id,
+                    lote_id,
+                    lote_graph,
+                    lote,
+                    graph,
+                    pedido,
+                    fulfillable_lines,
+                    shop_url,
+                    action,
+                    comerciante_uri,
+                )
+                log(
+                    log_tag,
+                    f"AgruparPedidoEnLote: lineas añadidas al lote {lote_id} "
+                    f"(destino={dest_key}, total lineas={len(list(lote_graph.objects(lote, ECSDI.loteTieneLinea)))})",
                 )
 
-            best_offer_graph, best_offer, best_transportista, all_offers = _negotiate_transport(
-                agent_uri, lote_graph, lote, transport_urls, log_tag
-            )
-
-            if best_offer is None:
-                return reply(
-                    build_failure(
-                        agent_uri,
-                        message.sender,
-                        action,
-                        "Ningun transportista respondio con oferta valida",
-                    )
-                )
-
-            _close_contract_net(
-                agent_uri,
+            response = build_aviso_cl_acceptance(
+                URIRef(agent_uri),
+                message.sender,
+                action,
+                pedido,
                 lote,
                 lote_graph,
-                best_offer,
-                best_transportista,
-                all_offers,
-                log_tag,
+                fulfillable_lines,
             )
-
-            best_offer_graph.set((best_offer, ECSDI.estadoOferta, Literal("aceptada")))
-            _merge_graphs(best_offer_graph, lote_graph)
-            _reserve_stock(stock_reservations, graph, center, product_quantities)
-            save_json("stock_reservations.json", stock_reservations)
-
-            # Anotar el envío con el centro para que el asistente lo identifique.
-            envio = DATA[f"envio/{uuid4()}"]
-            for triple in best_offer_graph:
-                if triple[1] == RDF.type and triple[2] == ECSDI.EnvioInterno:
-                    envio = triple[0]
-                    break
-
-            response = build_shipping_confirmation(
-                sender=URIRef(agent_uri),
-                receiver=message.sender,
-                action=action,
-                pedido=pedido,
-                lote=lote,
-                offer_graph=best_offer_graph,
-                offer=best_offer,
-                transportista=best_transportista,
-            )
-            # Etiqueta del centro en la respuesta (multi-CL).
-            envio_in_resp = next(response.subjects(RDF.type, ECSDI.EnvioInterno), envio)
-            response.add((envio_in_resp, ECSDI.envioDesdeCentro, center))
-            response.add((envio_in_resp, ECSDI.idCentroLogistico, Literal(center_id)))
-            response.add((envio_in_resp, ECSDI.ciudadCentroLogistico, Literal(center_city)))
-            response.add((envio_in_resp, ECSDI.distanciaCentroLogistico, Literal(dist)))
+            if lot_dispatch_interval <= 0:
+                _run_dispatch_cycle()
             return reply(response)
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)
+
+    if enable_lot_scheduler and lot_dispatch_interval > 0:
+
+        def _lot_dispatch_scheduler() -> None:
+            time.sleep(max(1.0, lot_dispatch_interval))
+            while True:
+                try:
+                    _run_dispatch_cycle()
+                except Exception as exc:
+                    log(log_tag, f"Error en dispatch programado de lotes: {exc}")
+                time.sleep(lot_dispatch_interval)
+
+        Thread(target=_lot_dispatch_scheduler, daemon=True).start()
+        log(
+            log_tag,
+            f"Scheduler CiertaHoraDia activo (cada {lot_dispatch_interval}s, max {max_lines_per_lote} lineas/lote)",
+        )
 
     return app
 
@@ -259,6 +349,91 @@ def _reserve_stock(reservations: dict, graph: Graph, center: URIRef, product_qua
     center_reservations = reservations.setdefault(center_id, {})
     for product_id, quantity in product_quantities.items():
         center_reservations[product_id] = int(center_reservations.get(product_id, 0)) + quantity
+
+
+def _discover_comerciante_url(directory_url: str | None, requester: URIRef) -> str:
+    if directory_url:
+        found = search_service(directory_url, "AGENTE_COMERCIANTE", requester)
+        if found:
+            return _comm_url(found)
+    return "http://127.0.0.1:9001/comm"
+
+
+def _product_quantities_from_lote(lote_graph: Graph, lote: URIRef) -> dict[str, int]:
+    quantities: dict[str, int] = {}
+    for line in lote_graph.objects(lote, ECSDI.loteTieneLinea):
+        product = next(lote_graph.objects(line, ECSDI.lineaDeProducto), None)
+        if product is None:
+            continue
+        product_id = str(next(lote_graph.objects(product, ECSDI.idProducto), ""))
+        if not product_id:
+            product_id = str(product).rsplit("/", 1)[-1]
+        quantity = int(next(lote_graph.objects(line, ECSDI.cantidad), 1))
+        quantities[product_id] = quantities.get(product_id, 0) + quantity
+    return quantities
+
+
+def _reserve_stock_from_lote(
+    reservations: dict,
+    lote_graph: Graph,
+    lote: URIRef,
+    center: URIRef,
+    product_quantities: dict[str, int],
+) -> None:
+    center_id = str(next(lote_graph.objects(center, ECSDI.idCentroLogistico), ""))
+    if not center_id:
+        center_id = str(center).rsplit("/", 1)[-1]
+    center_reservations = reservations.setdefault(center_id, {})
+    for product_id, quantity in product_quantities.items():
+        center_reservations[product_id] = int(center_reservations.get(product_id, 0)) + quantity
+
+
+def _notify_comerciantes_dispatch(
+    center_id: str,
+    lote_id: str,
+    agent_uri: URIRef,
+    offer_graph: Graph,
+    lote: URIRef,
+    best_offer: URIRef,
+    best_transportista: URIRef,
+    center: URIRef,
+    center_id_literal: str,
+    center_city: str,
+    dist: int,
+    log_tag: str,
+) -> None:
+    """InformarDatosEnvio / ConfirmacionEnvio al comerciante por cada pedido del lote."""
+
+    meta = load_pending_meta(center_id, lote_id)
+    for record in meta.get("pedidos", []):
+        pedido = URIRef(record["pedido_uri"])
+        action = URIRef(record["action_uri"])
+        shop_url = record.get("comerciante_url") or "http://127.0.0.1:9001/comm"
+        comerciante = URIRef(record.get("comerciante_uri") or str(AGENTS.AgenteComerciante))
+        try:
+            response = build_shipping_confirmation(
+                sender=URIRef(agent_uri),
+                receiver=comerciante,
+                action=action,
+                pedido=pedido,
+                lote=lote,
+                offer_graph=offer_graph,
+                offer=best_offer,
+                transportista=best_transportista,
+            )
+            envio_in_resp = next(response.subjects(RDF.type, ECSDI.EnvioInterno), None)
+            if envio_in_resp is not None:
+                response.add((envio_in_resp, ECSDI.envioDesdeCentro, center))
+                response.add((envio_in_resp, ECSDI.idCentroLogistico, Literal(center_id_literal)))
+                response.add((envio_in_resp, ECSDI.ciudadCentroLogistico, Literal(center_city)))
+                response.add((envio_in_resp, ECSDI.distanciaCentroLogistico, Literal(dist)))
+            post_graph(shop_url, response)
+            log(
+                log_tag,
+                f"ConfirmacionEnvio enviada a comerciante pedido={record.get('pedido_id')} lote={lote_id}",
+            )
+        except Exception as exc:
+            log(log_tag, f"No se pudo notificar al comerciante {shop_url}: {exc}")
 
 
 def _discover_transportistas(
