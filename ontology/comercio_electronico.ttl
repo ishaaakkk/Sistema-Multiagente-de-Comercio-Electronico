@@ -44,12 +44,6 @@ xsd:date rdf:type rdfs:Datatype .
 #    Object Properties
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#metodoPagoDeAsistente
-:metodoPagoDeAsistente rdf:type owl:ObjectProperty ;
-                       rdfs:domain :AsistenteVirtual ;
-                       rdfs:range :MetodoDePago .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobreLote
 :accionSobreLote rdf:type owl:ObjectProperty ;
                  rdfs:domain :Accion ;
@@ -231,6 +225,12 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:domain :LoteEnvio ;
                 rdfs:range :LineaPedido ;
                 rdfs:comment "Relación que indica las líneas de pedido incluidas en un lote de envío" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/metodoPagoDeAsistente
+:metodoPagoDeAsistente rdf:type owl:ObjectProperty ;
+                       rdfs:domain :AsistenteVirtual ;
+                       rdfs:range :MetodoDePago .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/notificacionSobrePedido
@@ -445,17 +445,22 @@ xsd:date rdf:type rdfs:Datatype .
 #    Data properties
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#tarjeta
-:tarjeta rdf:type owl:DatatypeProperty ;
-         rdfs:domain :MetodoDePago ,
-                     :RespuestaDatosEnvio ;
-         rdfs:range xsd:string .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#tarifaBase
+:tarifaBase rdf:type owl:DatatypeProperty ;
+            rdfs:domain :Transportista ;
+            rdfs:range xsd:float .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#urgencia
-:urgencia rdf:type owl:DatatypeProperty ;
-          rdfs:domain :RespuestaDatosEnvio ;
-          rdfs:range xsd:string .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#tarifaDia
+:tarifaDia rdf:type owl:DatatypeProperty ;
+           rdfs:domain :Transportista ;
+           rdfs:range xsd:float .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#tarifaKG
+:tarifaKG rdf:type owl:DatatypeProperty ;
+          rdfs:domain :Transportista ;
+          rdfs:range xsd:float .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/calle
@@ -532,9 +537,13 @@ xsd:date rdf:type rdfs:Datatype .
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/dist
 :dist rdf:type owl:DatatypeProperty ;
-      rdfs:domain :RespuestaDatosEnvio ,
-                  :CentroLogistico ;
-      rdfs:range xsd:unsignedInt .
+      rdfs:subPropertyOf owl:topDataProperty ;
+      rdfs:domain :CentroLogistico ,
+                  :Direccion ,
+                  :RespuestaDatosEnvio ;
+      rdfs:range xsd:integer ,
+                 xsd:unsignedInt ;
+      rdfs:comment "Métrica logística unidimensional (0-1000) de proximidad operativa de la dirección de entrega" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/estadoLote
@@ -772,6 +781,14 @@ xsd:date rdf:type rdfs:Datatype .
                rdfs:comment "Marca comercial de un producto" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/metodoPago
+:metodoPago rdf:type owl:DatatypeProperty ;
+            rdfs:subPropertyOf owl:topDataProperty ;
+            rdfs:domain :Pedido ;
+            rdfs:range xsd:string ;
+            rdfs:comment "Método de pago elegido por el cliente (tarjeta, paypal, transferencia, etc.)" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/motivoDevolucion
 :motivoDevolucion rdf:type owl:DatatypeProperty ;
                   rdfs:subPropertyOf owl:topDataProperty ;
@@ -891,22 +908,6 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:comment "Precio de una unidad de producto dentro de una línea de pedido" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/metodoPago
-:metodoPago rdf:type owl:DatatypeProperty ;
-            rdfs:subPropertyOf owl:topDataProperty ;
-            rdfs:domain :Pedido ;
-            rdfs:range xsd:string ;
-            rdfs:comment "Método de pago elegido por el cliente (tarjeta, paypal, transferencia, etc.)" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/dist
-:dist rdf:type owl:DatatypeProperty ;
-      rdfs:subPropertyOf owl:topDataProperty ;
-      rdfs:domain :Direccion ;
-      rdfs:range xsd:integer ;
-      rdfs:comment "Métrica logística unidimensional (0-1000) de proximidad operativa de la dirección de entrega" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/prioridadEntrega
 :prioridadEntrega rdf:type owl:DatatypeProperty ;
                   rdfs:subPropertyOf owl:topDataProperty ;
@@ -947,6 +948,13 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:comment "Referencia externa asociada a una operación de pago" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/tarjeta
+:tarjeta rdf:type owl:DatatypeProperty ;
+         rdfs:domain :MetodoDePago ,
+                     :RespuestaDatosEnvio ;
+         rdfs:range xsd:string .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/tipoBusqueda
 :tipoBusqueda rdf:type owl:DatatypeProperty ;
               rdfs:subPropertyOf owl:topDataProperty ;
@@ -961,6 +969,12 @@ xsd:date rdf:type rdfs:Datatype .
            rdfs:domain :LineaPedido ,
                        :Pedido ;
            rdfs:range xsd:string .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/urgencia
+:urgencia rdf:type owl:DatatypeProperty ;
+          rdfs:domain :RespuestaDatosEnvio ;
+          rdfs:range xsd:string .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/valorTextoRestriccion
@@ -1022,16 +1036,6 @@ xsd:date rdf:type rdfs:Datatype .
 #################################################################
 #    Classes
 #################################################################
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#MetodoDePago
-:MetodoDePago rdf:type owl:Class ;
-              rdfs:comment "Metodo de Pago proporcionado por el Asistente Virtual para realizar las compras o donde se le devuelve el importe al hacer una devolucion" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#RespuestaDatosEnvio
-:RespuestaDatosEnvio rdf:type owl:Class ;
-                     rdfs:subClassOf :Respuesta .
-
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
@@ -1173,6 +1177,11 @@ xsd:date rdf:type rdfs:Datatype .
            rdfs:comment "Agrupación de productos o líneas de pedido con destino y prioridad compatibles para ser enviados por un transportista" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/MetodoDePago
+:MetodoDePago rdf:type owl:Class ;
+              rdfs:comment "Metodo de Pago proporcionado por el Asistente Virtual para realizar las compras o donde se le devuelve el importe al hacer una devolucion" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Notificacion
 :Notificacion rdf:type owl:Class ;
               rdfs:comment "Comunicación informativa entre agentes que comparte conocimiento o eventos, sin solicitar una funcionalidad externa al receptor" .
@@ -1290,6 +1299,11 @@ xsd:date rdf:type rdfs:Datatype .
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Respuesta
 :Respuesta rdf:type owl:Class ;
            rdfs:comment "Representa las respuestas generadas por los agentes después de procesar una acción o petición" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/RespuestaDatosEnvio
+:RespuestaDatosEnvio rdf:type owl:Class ;
+                     rdfs:subClassOf :Respuesta .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/RespuestaFeedback
@@ -1559,8 +1573,8 @@ xsd:date rdf:type rdfs:Datatype .
                            :calle "Carrer Mallurca 401" ;
                            :ciudad "Barcelona" ;
                            :codigoPostal "08013" ;
-                           :pais "España" ;
-                           :dist 130 .
+                           :dist 130 ;
+                           :pais "España" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/envioExternoAuricularesSoni
@@ -1635,18 +1649,18 @@ xsd:date rdf:type rdfs:Datatype .
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoiPhone19
 :pedidoiPhone19 rdf:type owl:NamedIndividual ,
-                          :Pedido ;
-                 :pedidoEnviadoA :direccionClienteBarcelona ;
-                 :pedidoSolicitadoPor :asistenteUsuario ;
-                 :pedidoTieneFactura :facturaPedidoiPhone19 ;
-                 :pedidoTieneLinea :lineaPedidoiPhone19 ;
-                 :pedidoTieneOperacionPago :cobroPedidoiPhone19 ;
-                 :estadoPedido "pendiente_envio" ;
-                 :fechaPedido "2025-05-03T10:32:57"^^xsd:dateTime ;
-                 :idPedido "P001" ;
-                 :importeTotalPedido 1199 ;
-                 :prioridadEntrega 1 ;
-                 :metodoPago "tarjeta" .
+                         :Pedido ;
+                :pedidoEnviadoA :direccionClienteBarcelona ;
+                :pedidoSolicitadoPor :asistenteUsuario ;
+                :pedidoTieneFactura :facturaPedidoiPhone19 ;
+                :pedidoTieneLinea :lineaPedidoiPhone19 ;
+                :pedidoTieneOperacionPago :cobroPedidoiPhone19 ;
+                :estadoPedido "pendiente_envio" ;
+                :fechaPedido "2025-05-03T10:32:57"^^xsd:dateTime ;
+                :idPedido "P001" ;
+                :importeTotalPedido 1199 ;
+                :metodoPago "tarjeta" ;
+                :prioridadEntrega 1 .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/productoAuricularesSoni
