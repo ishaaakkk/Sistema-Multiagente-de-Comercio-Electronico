@@ -20,6 +20,7 @@ from utilities.pending_lotes import (
     find_open_lote,
     list_pending_lote_ids,
     load_pending_lote,
+    load_pending_meta,
 )
 from utilities.storage import DATA_DIR
 from decimal import Decimal
@@ -91,6 +92,23 @@ class PendingLotesAgruparTests(unittest.TestCase):
             "http://127.0.0.1:9001/comm", a2, "http://comerciante",
         )
         self.assertEqual(len(list_pending_lote_ids(self.center_id)), 2)
+
+    def test_lote_keeps_most_urgent_priority(self):
+        g1, p1, lines1, a1 = self._order("PED-NORMAL", "Carrer Tres 3", priority=3)
+        lote_id, lote_graph, lote = create_pending_lote(
+            g1, p1, lines1, center_uri(self.center_id), self.center_id, "Barcelona",
+            "http://127.0.0.1:9001/comm", a1, "http://comerciante",
+        )
+        g2, p2, lines2, a2 = self._order("PED-URGENT", "Carrer Tres 3", priority=1)
+        append_lines_to_pending_lote(
+            self.center_id, lote_id, lote_graph, lote, g2, p2, lines2,
+            "http://127.0.0.1:9001/comm", a2, "http://comerciante",
+        )
+        loaded = load_pending_lote(self.center_id, lote_id)
+        self.assertIsNotNone(loaded)
+        _, loaded_lote = loaded
+        self.assertEqual(int(next(loaded[0].objects(loaded_lote, ECSDI.prioridadLote))), 1)
+        self.assertEqual(load_pending_meta(self.center_id, lote_id)["prioridad"], 1)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from utilities.catalog import (
     load_persisted_catalog,
     persist_catalog,
     stock_uri,
+    update_product_average_rating,
 )
 from utilities.namespaces import ECSDI, bind_namespaces
 from utilities.storage import DATA_DIR, load_graph, load_named_graph
@@ -58,6 +59,14 @@ class CatalogPersistenceTests(unittest.TestCase):
             int(next(stock_graph.objects(stock, ECSDI.cantidadDisponible))),
             23,
         )
+
+    def test_update_product_average_rating_updates_catalog(self):
+        persist_catalog(build_catalog_graph())
+        updated = update_product_average_rating("P-IPHONE19", "3.50")
+        self.assertTrue(updated)
+        catalog = load_persisted_catalog()
+        product = next(catalog.subjects(ECSDI.idProducto, Literal("P-IPHONE19")))
+        self.assertEqual(str(next(catalog.objects(product, ECSDI.valoracionMedia))), "3.50")
 
 
 class StockGraphTests(unittest.TestCase):

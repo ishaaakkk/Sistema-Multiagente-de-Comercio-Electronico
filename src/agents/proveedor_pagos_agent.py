@@ -62,7 +62,10 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
 
             # Accion: Realizar Transaccion — simula el cobro y genera ConfirmacionTransaccion
             operation_type = _operation_type(graph, operacion)
-            response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe)
+            metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
+            if metodo_pago is None:
+                metodo_pago = next(graph.objects(operacion, ECSDI.metodoPago), None)
+            response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe, metodo_pago)
             log("pagos", f"Operacion confirmada: {importe} EUR para operacion {operacion}")
             return reply(response)
 
@@ -79,6 +82,7 @@ def _build_confirmacion(
     operacion: URIRef,
     operation_type: URIRef,
     importe: Decimal,
+    metodo_pago=None,
 ) -> Graph:
     graph = Graph()
     bind_namespaces(graph)
@@ -95,6 +99,8 @@ def _build_confirmacion(
     graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
     graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
     graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+    if metodo_pago is not None:
+        graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
 
     return build_message(graph, confirmacion, ACL.inform, sender, receiver)
 

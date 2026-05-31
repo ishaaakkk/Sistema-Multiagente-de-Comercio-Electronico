@@ -7042,33 +7042,33 @@ finish</field>
 																							<object ref="45"/>
 
 																							<object ref="40"/>
-																							</list>
-																						    </field>
-																						    <field name="actions"><list>
-																							<object ref="44"/>
 
-																							<object type="Action" id="342">
+																							<object type="Percept" id="342">
 																							    <base type="Interaction">
 																								<base type="Entity">
-																								    <field name="name">RecomendacionProactiva (A)</field>
-																								    <field name="description">El AsistenteVirtual recibe del Agente Feedback recomendaciones generadas proactivamente a partir del historial de compras, búsquedas y valoraciones.</field>
-																								    <field name="uniqueId">1047</field>
-																								    <field name="connectTo"><list>
-																									<object ref="8"/>
-
-																									<object ref="6"/>
-																									</list>
-																								    </field>
+																								    <field name="name">RecomendacionProactiva (P)</field>
+																								    <field name="description">El AsistenteVirtual recibe del Agente Feedback recomendaciones generadas proactivamente a partir del historial de compras, búsquedas y valoraciones.
+</field>
+																								    <field name="uniqueId">1046</field>
 																								</base>
 
 																							    </base>
 
-																							    <field name="parameters"></field>
-																							    <field name="durationDescription"></field>
-																							    <field name="failureNotificationDescription"></field>
-																							    <field name="partialChange"></field>
-																							    <field name="sideEffects"></field>
+																							    <field name="source"></field>
+																							    <field name="informationCarried"></field>
+																							    <field name="knowledgeUpdated"></field>
+																							    <field name="processing"></field>
+																							    <field name="frequency"></field>
+																							    <field name="agentsResponding"><list>
+																								<object ref="42"/>
+																								</list>
+																							    </field>
+																							    <field name="externalPath"></field>
 																							</object>
+																							</list>
+																						    </field>
+																						    <field name="actions"><list>
+																							<object ref="44"/>
 																							</list>
 																						    </field>
 																						    <field name="roles"><list>
@@ -7118,12 +7118,10 @@ finish</field>
 																								<object ref="341"/>
 																								</list>
 																							    </field>
-																							    <field name="actions"><list>
-																								<object ref="342"/>
-																								</list>
-																							    </field>
 																							    <field name="percepts"><list>
 																								<object ref="40"/>
+
+																								<object ref="342"/>
 																								</list>
 																							    </field>
 																							    <field name="dataRead"><list>
@@ -7423,6 +7421,8 @@ finish</field>
 										<object ref="232"/>
 
 										<object ref="46"/>
+
+										<object ref="342"/>
 										</list>
 									    </field>
 									</base>
@@ -7458,6 +7458,8 @@ finish</field>
 						    <object ref="77"/>
 
 						    <object ref="58"/>
+
+						    <object ref="342"/>
 						    </list>
 						</field>
 					    </base>
@@ -7672,8 +7674,8 @@ finish</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="384">
-			    <field name="x">354</field>
-			    <field name="y">744</field>
+			    <field name="x">307</field>
+			    <field name="y">735</field>
 			</object>
 		    </field>
 		</object>
@@ -8823,24 +8825,24 @@ finish</field>
 
 		<object type="DiagramEntitySetting" id="578">
 		    <field name="entity">
-			<object ref="11"/>
+			<object ref="342"/>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="579">
-			    <field name="x">1134</field>
-			    <field name="y">276</field>
+			    <field name="x">74</field>
+			    <field name="y">617</field>
 			</object>
 		    </field>
 		</object>
 
 		<object type="DiagramEntitySetting" id="580">
 		    <field name="entity">
-			<object ref="342"/>
+			<object ref="11"/>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="581">
-			    <field name="x">91</field>
-			    <field name="y">623</field>
+			    <field name="x">1134</field>
+			    <field name="y">276</field>
 			</object>
 		    </field>
 		</object>
@@ -12070,8 +12072,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		    </field>
 		    <field name="location">
 			<object type="Coordinate" id="1047">
-			    <field name="x">1059</field>
-			    <field name="y">245</field>
+			    <field name="x">1010</field>
+			    <field name="y">215</field>
 			</object>
 		    </field>
 		</object>
@@ -14104,8 +14106,6 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		<object ref="77"/>
 
 		<object ref="58"/>
-
-		<object ref="342"/>
 		</list>
 	    </field>
 	    <field name="agents"><list>
@@ -15040,6 +15040,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 		<object ref="118"/>
 
 		<object ref="5"/>
+
+		<object ref="342"/>
 		</list>
 	    </field>
 	    <field name="plans"><list>
@@ -16669,6 +16671,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 			<object ref="5"/>
 
 			<object ref="79"/>
+
+			<object ref="342"/>
 			</list>
 		    </field>
 		    <field name="actions"><list>
@@ -16693,8 +16697,6 @@ producto externo, registrar producto y registrar tipo de envio</field>
 			<object ref="77"/>
 
 			<object ref="58"/>
-
-			<object ref="342"/>
 			</list>
 		    </field>
 		    <field name="protocolsDistributionPairs"><list>
@@ -16803,8 +16805,6 @@ producto externo, registrar producto y registrar tipo de envio</field>
 			<object ref="77"/>
 
 			<object ref="58"/>
-
-			<object ref="342"/>
 			</list>
 		    </field>
 		    <field name="percepts"><list>
@@ -16829,6 +16829,8 @@ producto externo, registrar producto y registrar tipo de envio</field>
 			<object ref="5"/>
 
 			<object ref="79"/>
+
+			<object ref="342"/>
 			</list>
 		    </field>
 		    <field name="notes"><list>
@@ -19050,10 +19052,6 @@ producto externo, registrar producto y registrar tipo de envio</field>
 
 		<object type="Entity" id="2058">
 		    <field name="name">RecomendacionProactiva (A)</field>
-		</object>
-
-		<object type="Entity" id="2059">
-		    <field name="name">RecomendacionProactiva (P)</field>
 		</object>
 		</list>
 	    </field>
