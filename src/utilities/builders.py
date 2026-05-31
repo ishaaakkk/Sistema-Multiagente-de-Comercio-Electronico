@@ -172,7 +172,7 @@ def build_recogida_devolucion_request(
     product: URIRef,
     source_graph: Graph,
 ) -> Graph:
-    """AgenteDevolucion -> Transportista: SolicitarRecogidaDevolucion."""
+    """Legado: transportistas ya no reciben recogidas de devolución (mensajería interna mock en AgenteDevolucion)."""
     graph = Graph()
     bind_namespaces(graph)
     _copy_business_graph(source_graph, graph)

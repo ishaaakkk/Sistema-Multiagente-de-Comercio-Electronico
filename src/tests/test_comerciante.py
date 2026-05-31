@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Literal
 from rdflib.namespace import RDF
 
-from agents.agente_catalogo import build_catalog_graph
+from tests.fixtures.catalog_fixtures import build_catalog_graph
 from agents.agente_comerciante import _build_order_graph
 from utilities.builders import build_order_message
 from utilities.catalog import product_uri

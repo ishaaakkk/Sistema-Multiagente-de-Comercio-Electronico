@@ -73,6 +73,8 @@ def create_app(
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
+            # Recogida de devolución: solo mensajería interna (PDT); los transportistas
+            # atienden presupuestos de lotes de envío comercial.
             if (action, RDF.type, ECSDI.SolicitarRecogidaDevolucion) in graph:
                 return reply(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -17,6 +19,9 @@ from .storage import DATA_DIR, save_graph_item, save_named_graph
 PENDING_ROOT = DATA_DIR / "pending_lotes"
 ESTADO_PENDIENTE_ENVIO = "pendiente_envio"
 ESTADO_EN_TRANSITO = "en_negociacion_transporte"
+DIST_ZONE_SIZE = int(os.environ.get("LOT_DIST_ZONE_SIZE", "200"))
+DEFAULT_LOT_DEBOUNCE_SECONDS = float(os.environ.get("LOT_DEBOUNCE_SECONDS", "90"))
+DEFAULT_LOT_URGENT_DEBOUNCE_SECONDS = float(os.environ.get("LOT_URGENT_DEBOUNCE", "5"))
 
 
 def _safe_name(value: str) -> str:
@@ -36,6 +41,8 @@ def _ttl_path(center_id: str, lote_id: str) -> Path:
 
 
 def destination_key(graph: Graph, pedido: URIRef) -> str:
+    """Clave detallada de dirección (depuración); no se usa para agrupar lotes."""
+
     address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
     if address is None:
         return "unknown"
@@ -45,6 +52,42 @@ def destination_key(graph: Graph, pedido: URIRef) -> str:
         if value is not None:
             parts.append(str(value))
     return "|".join(parts) if parts else str(address)
+
+
+def _delivery_dist(graph: Graph, pedido: URIRef) -> int:
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    if address is None:
+        return 0
+    dist_raw = next(graph.objects(address, ECSDI.dist), 0)
+    try:
+        return max(0, int(dist_raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def dist_zone(dist: int, zone_size: int = DIST_ZONE_SIZE) -> int:
+    """Banda de distancia: 0-199 → 0, 200-399 → 1, …"""
+
+    return max(0, dist) // zone_size
+
+
+def grouping_key(center_id: str, graph: Graph, pedido: URIRef) -> str:
+    """Clave de agrupación: centro + ciudad + banda de dist (misma zona logística)."""
+
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    if address is None:
+        return f"{center_id}|unknown|zone-0"
+    city = str(next(graph.objects(address, ECSDI.ciudad), "unknown")).casefold()
+    zone = dist_zone(_delivery_dist(graph, pedido))
+    return f"{center_id}|{city}|zone-{zone}"
+
+
+def touch_lote_activity(center_id: str, lote_id: str) -> None:
+    """Reinicia la ventana de agrupación (debounce) del lote."""
+
+    meta = load_pending_meta(center_id, lote_id)
+    meta["last_activity_at"] = time.time()
+    save_pending_meta(center_id, lote_id, meta)
 
 
 def count_lote_lines(graph: Graph, lote: URIRef) -> int:
@@ -112,17 +155,18 @@ def delete_pending_lote(center_id: str, lote_id: str) -> None:
 
 def find_open_lote(
     center_id: str,
-    destination_key_value: str,
+    grouping_key_value: str,
     max_lines: int,
     additional_lines: int,
 ) -> tuple[str, Graph, URIRef] | None:
-    """Busca un lote abierto con la misma dirección y capacidad libre."""
+    """Busca un lote abierto con la misma zona logística y capacidad libre."""
 
     for lote_id in list_pending_lote_ids(center_id):
         meta = load_pending_meta(center_id, lote_id)
         if meta.get("estado") != ESTADO_PENDIENTE_ENVIO:
             continue
-        if meta.get("destination_key") != destination_key_value:
+        stored_key = meta.get("grouping_key") or meta.get("destination_key")
+        if stored_key != grouping_key_value:
             continue
         loaded = load_pending_lote(center_id, lote_id)
         if loaded is None:
@@ -178,7 +222,10 @@ def create_pending_lote(
     lote = DATA[f"lote/{uuid4()}"]
     lote_id = f"LOT-{uuid4().hex[:8].upper()}"
     dest = destination_key(order_graph, pedido)
+    group_key = grouping_key(center_id, order_graph, pedido)
+    zone = dist_zone(_delivery_dist(order_graph, pedido))
     priority = int(next(order_graph.objects(pedido, ECSDI.prioridadEntrega), 3))
+    now = time.time()
 
     graph.add((lote, RDF.type, ECSDI.LoteEnvio))
     graph.add((lote, ECSDI.idLote, Literal(lote_id)))
@@ -200,10 +247,13 @@ def create_pending_lote(
         lote_id,
         {
             "estado": ESTADO_PENDIENTE_ENVIO,
+            "grouping_key": group_key,
+            "dist_zone": zone,
             "destination_key": dest,
             "prioridad": priority,
             "pedidos": [],
             "comerciante_url": comerciante_url,
+            "last_activity_at": now,
         },
     )
     _register_pedido_in_meta(
@@ -270,6 +320,7 @@ def append_lines_to_pending_lote(
     )
     meta = load_pending_meta(center_id, lote_id)
     meta["prioridad"] = min(int(meta.get("prioridad", 3)), priority)
+    meta["last_activity_at"] = time.time()
     save_pending_meta(center_id, lote_id, meta)
     return graph
 
@@ -296,10 +347,57 @@ def _append_lines_to_lote(
     _recalculate_lote_weight(graph, lote)
 
 
-def select_lotes_for_dispatch(center_id: str) -> list[tuple[str, Graph, URIRef]]:
-    """Plan SeleccionarLotesAEntregar: lotes pendientes ordenados por urgencia."""
+def _lote_idle_seconds(meta: dict, now: float | None = None) -> float:
+    reference = now if now is not None else time.time()
+    last = float(meta.get("last_activity_at", 0))
+    return max(0.0, reference - last)
 
-    candidates: list[tuple[int, str, Graph, URIRef]] = []
+
+def _lote_debounce_threshold(priority: int, debounce_seconds: float, urgent_debounce_seconds: float) -> float:
+    if priority <= 1:
+        return urgent_debounce_seconds
+    return debounce_seconds
+
+
+def describe_pending_lote(center_id: str, lote_id: str, now: float | None = None) -> dict:
+    """Metadatos de un lote pendiente para status/depuración."""
+
+    meta = load_pending_meta(center_id, lote_id)
+    loaded = load_pending_lote(center_id, lote_id)
+    line_count = 0
+    if loaded is not None:
+        graph, lote = loaded
+        line_count = count_lote_lines(graph, lote)
+    reference = now if now is not None else time.time()
+    priority = int(meta.get("prioridad", 3))
+    idle = _lote_idle_seconds(meta, reference)
+    threshold = _lote_debounce_threshold(
+        priority, DEFAULT_LOT_DEBOUNCE_SECONDS, DEFAULT_LOT_URGENT_DEBOUNCE_SECONDS
+    )
+    return {
+        "lote_id": lote_id,
+        "estado": meta.get("estado"),
+        "prioridad": priority,
+        "grouping_key": meta.get("grouping_key"),
+        "dist_zone": meta.get("dist_zone"),
+        "destination_key": meta.get("destination_key"),
+        "lineas": line_count,
+        "pedidos": [p.get("pedido_id") for p in meta.get("pedidos", [])],
+        "idle_seconds": round(idle, 1),
+        "ready_for_dispatch": idle >= threshold and meta.get("estado") == ESTADO_PENDIENTE_ENVIO,
+    }
+
+
+def select_lotes_for_dispatch(
+    center_id: str,
+    debounce_seconds: float = DEFAULT_LOT_DEBOUNCE_SECONDS,
+    urgent_debounce_seconds: float = DEFAULT_LOT_URGENT_DEBOUNCE_SECONDS,
+    now: float | None = None,
+) -> list[tuple[str, Graph, URIRef]]:
+    """Plan SeleccionarLotesAEntregar: lotes inactivos listos, ordenados por urgencia."""
+
+    reference = now if now is not None else time.time()
+    candidates: list[tuple[int, float, str, Graph, URIRef]] = []
     for lote_id in list_pending_lote_ids(center_id):
         meta = load_pending_meta(center_id, lote_id)
         if meta.get("estado") != ESTADO_PENDIENTE_ENVIO:
@@ -309,10 +407,13 @@ def select_lotes_for_dispatch(center_id: str) -> list[tuple[str, Graph, URIRef]]
             continue
         graph, lote = loaded
         priority = int(meta.get("prioridad", lote_priority(graph, lote)))
-        candidates.append((priority, lote_id, graph, lote))
-  # mayor urgencia primero (prioridad numérica baja = más urgente en convención 1=alta)
-    candidates.sort(key=lambda item: item[0])
-    return [(lote_id, graph, lote) for _, lote_id, graph, lote in candidates]
+        idle = _lote_idle_seconds(meta, reference)
+        threshold = _lote_debounce_threshold(priority, debounce_seconds, urgent_debounce_seconds)
+        if idle < threshold:
+            continue
+        candidates.append((priority, float(meta.get("last_activity_at", 0)), lote_id, graph, lote))
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return [(lote_id, graph, lote) for _, _, lote_id, graph, lote in candidates]
 
 
 def mark_lote_in_transit(center_id: str, lote_id: str) -> None:
