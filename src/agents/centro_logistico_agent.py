@@ -19,9 +19,10 @@ from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.pending_lotes import (
     append_lines_to_pending_lote,
     create_pending_lote,
-    destination_key,
+    describe_pending_lote,
     finalize_dispatched_lote,
     find_open_lote,
+    grouping_key,
     list_pending_lote_ids,
     load_pending_meta,
     mark_lote_in_transit,
@@ -52,8 +53,10 @@ DEFAULT_STOCK_ANY = ("*",)
 # Timeout por transportista en la fase de CFP (Contract Net cap. 7.3.2).
 DEFAULT_TRANSPORT_TIMEOUT = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
 
-# Plan DecidirLotesAEntregar: intervalo del evento CiertaHoraDia (segundos en demo).
-DEFAULT_LOT_DISPATCH_INTERVAL = float(os.environ.get("LOT_DISPATCH_INTERVAL", "3"))
+# Plan DecidirLotesAEntregar: intervalo de sondeo CiertaHoraDia (segundos en demo).
+DEFAULT_LOT_DISPATCH_INTERVAL = float(os.environ.get("LOT_DISPATCH_INTERVAL", "10"))
+DEFAULT_LOT_DEBOUNCE_SECONDS = float(os.environ.get("LOT_DEBOUNCE_SECONDS", "90"))
+DEFAULT_LOT_URGENT_DEBOUNCE_SECONDS = float(os.environ.get("LOT_URGENT_DEBOUNCE", "5"))
 DEFAULT_LOT_MAX_LINES = int(os.environ.get("LOT_MAX_LINES", "8"))
 
 
@@ -66,6 +69,8 @@ def create_app(
     stock_products: tuple[str, ...] = DEFAULT_STOCK_ANY,
     dist: int = 0,
     lot_dispatch_interval: float = DEFAULT_LOT_DISPATCH_INTERVAL,
+    lot_debounce_seconds: float = DEFAULT_LOT_DEBOUNCE_SECONDS,
+    lot_urgent_debounce_seconds: float = DEFAULT_LOT_URGENT_DEBOUNCE_SECONDS,
     max_lines_per_lote: int = DEFAULT_LOT_MAX_LINES,
     enable_lot_scheduler: bool = True,
 ):
@@ -91,17 +96,7 @@ def create_app(
 
     @app.get("/info")
     def info():
-        pending = []
-        for lote_id in list_pending_lote_ids(center_id):
-            meta = load_pending_meta(center_id, lote_id)
-            pending.append(
-                {
-                    "lote_id": lote_id,
-                    "estado": meta.get("estado"),
-                    "prioridad": meta.get("prioridad"),
-                    "pedidos": [p.get("pedido_id") for p in meta.get("pedidos", [])],
-                }
-            )
+        pending = [describe_pending_lote(center_id, lote_id) for lote_id in list_pending_lote_ids(center_id)]
         return {
             "center_id": center_id,
             "center_uri": str(center),
@@ -110,6 +105,8 @@ def create_app(
             "stock_products": sorted(stock_set) if not accepts_all else [],
             "dist": dist,
             "lot_dispatch_interval": lot_dispatch_interval,
+            "lot_debounce_seconds": lot_debounce_seconds,
+            "lot_urgent_debounce_seconds": lot_urgent_debounce_seconds,
             "max_lines_per_lote": max_lines_per_lote,
             "pending_lotes": pending,
         }
@@ -124,7 +121,11 @@ def create_app(
         """Plan SeleccionarLotesAEntregar + NegociarConTransportistas (CiertaHoraDia)."""
 
         with dispatch_lock:
-            selected = select_lotes_for_dispatch(center_id)
+            selected = select_lotes_for_dispatch(
+                center_id,
+                debounce_seconds=lot_debounce_seconds,
+                urgent_debounce_seconds=lot_urgent_debounce_seconds,
+            )
             if not selected:
                 return
             transport_urls = _discover_transportistas(directory_url, transport_url, agent_uri, log_tag)
@@ -209,8 +210,8 @@ def create_app(
 
             shop_url = _discover_comerciante_url(directory_url, agent_uri)
             comerciante_uri = str(message.sender)
-            dest_key = destination_key(graph, pedido)
-            open_lote = find_open_lote(center_id, dest_key, max_lines_per_lote, len(fulfillable_lines))
+            group_key = grouping_key(center_id, graph, pedido)
+            open_lote = find_open_lote(center_id, group_key, max_lines_per_lote, len(fulfillable_lines))
             if open_lote is None:
                 lote_id, lote_graph, lote = create_pending_lote(
                     graph,
@@ -223,7 +224,11 @@ def create_app(
                     action,
                     comerciante_uri,
                 )
-                log(log_tag, f"AgruparPedidoEnLote: nuevo lote {lote_id} ({len(fulfillable_lines)} lineas)")
+                log(
+                    log_tag,
+                    f"AgruparPedidoEnLote: nuevo lote {lote_id} "
+                    f"({len(fulfillable_lines)} lineas, zona={group_key})",
+                )
             else:
                 lote_id, lote_graph, lote = open_lote
                 lote_graph = append_lines_to_pending_lote(
@@ -241,7 +246,7 @@ def create_app(
                 log(
                     log_tag,
                     f"AgruparPedidoEnLote: lineas añadidas al lote {lote_id} "
-                    f"(destino={dest_key}, total lineas={len(list(lote_graph.objects(lote, ECSDI.loteTieneLinea)))})",
+                    f"(zona={group_key}, total lineas={len(list(lote_graph.objects(lote, ECSDI.loteTieneLinea)))})",
                 )
 
             response = build_aviso_cl_acceptance(
@@ -262,18 +267,19 @@ def create_app(
     if enable_lot_scheduler and lot_dispatch_interval > 0:
 
         def _lot_dispatch_scheduler() -> None:
-            time.sleep(max(1.0, lot_dispatch_interval))
             while True:
                 try:
                     _run_dispatch_cycle()
                 except Exception as exc:
                     log(log_tag, f"Error en dispatch programado de lotes: {exc}")
-                time.sleep(lot_dispatch_interval)
+                time.sleep(max(1.0, lot_dispatch_interval))
 
         Thread(target=_lot_dispatch_scheduler, daemon=True).start()
         log(
             log_tag,
-            f"Scheduler CiertaHoraDia activo (cada {lot_dispatch_interval}s, max {max_lines_per_lote} lineas/lote)",
+            f"Scheduler CiertaHoraDia activo (sondeo cada {lot_dispatch_interval}s, "
+            f"debounce {lot_debounce_seconds}s / urgente {lot_urgent_debounce_seconds}s, "
+            f"max {max_lines_per_lote} lineas/lote)",
         )
 
     return app

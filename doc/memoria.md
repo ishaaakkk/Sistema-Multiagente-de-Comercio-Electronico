@@ -913,6 +913,10 @@ Durante el desarrollo se hicieron ajustes para alinear PD, ontología y código:
 - Se modelaron operaciones de pago como acciones solicitadas al Financiero y al
   Proveedor de pagos.
 - Se implementó devolución como agente propio.
+- Los lotes de envío se agrupan por **centro logístico, ciudad y banda de `dist`**
+  (0–199, 200–399, …), no por calle exacta. La prioridad del lote es la más
+  urgente de sus pedidos. El despacho (`CiertaHoraDia`) espera una ventana de
+  inactividad configurable (`LOT_DEBOUNCE_SECONDS`, más corta si prioridad 1).
 
 ## Capítulo 9. Resultados y límites de la solución
 
