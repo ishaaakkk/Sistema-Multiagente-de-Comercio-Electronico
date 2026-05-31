@@ -299,7 +299,7 @@ def _handle_search(
     if feedback_url and tipo == "compra":
         try:
             notify = build_busqueda_realizada_notification(
-                agent_uri, AGENTS.AgenteFeedback, receiver, constraints, products
+                agent_uri, AGENTS.AgenteFeedback, receiver, constraints, products, catalog
             )
             post_graph(feedback_url, notify)
             log("catalogo", f"Protocolo Consulta Catálogo → feedback notificado ({len(products)} resultados)")

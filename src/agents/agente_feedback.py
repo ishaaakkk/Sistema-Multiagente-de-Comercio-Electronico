@@ -16,7 +16,7 @@ from utilities.builders import (
     build_recommendation_inform,
     build_valoracion_response,
 )
-from utilities.catalog import product_uri
+from utilities.catalog import product_uri, update_product_average_rating
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -273,7 +273,20 @@ def _handle_notify_search(
             if v is not None:
                 min_rating = str(v)
 
-    products = [str(p) for p in graph.objects(action, ECSDI.resultadoContieneProducto)]
+    result_nodes = list(graph.objects(action, ECSDI.resultadoContieneProducto))
+    products = [str(p) for p in result_nodes]
+    result_details = [
+        _product_detail_from_graph(graph, product, fallback_brand=brand)
+        for product in result_nodes
+    ]
+    catalog_nodes = set(result_nodes)
+    catalog_nodes.update(graph.subjects(RDF.type, ECSDI.Producto))
+    catalog_nodes.update(graph.subjects(RDF.type, ECSDI.ProductoInterno))
+    catalog_nodes.update(graph.subjects(RDF.type, ECSDI.ProductoExterno))
+    catalog_details = [
+        _product_detail_from_graph(graph, product)
+        for product in sorted(catalog_nodes, key=str)
+    ]
 
     record = {
         "asistente": str(asistente),
@@ -284,6 +297,8 @@ def _handle_notify_search(
         "max_price": max_price,
         "min_rating": min_rating,
         "results": products,
+        "result_details": result_details,
+        "catalog_details": catalog_details,
     }
     with db_lock:
         searches_db.append(record)
@@ -336,6 +351,9 @@ def _handle_registrar_valoracion(
         record["fecha_valoracion"] = datetime.now().isoformat(timespec="seconds")
         save_json("opinions.json", opinions_db)
         _persist_opinions_rdf(opinions_db)
+        new_average = _average_rating_for_product(opinions_db, product_id)
+        if new_average is not None:
+            update_product_average_rating(product_id, f"{new_average:.2f}")
 
     valoracion_graph = Graph()
     bind_namespaces(valoracion_graph)
@@ -418,6 +436,8 @@ def _build_recommendation_graph(
         scored.append((score, product))
 
     scored.sort(key=lambda x: x[0], reverse=True)
+    if not scored:
+        scored = _neutral_recommendations(candidates, profile["purchased"])
     top = scored[:top_n]
 
     response = DATA[f"response/recomendaciones/{uuid4()}"]
@@ -431,11 +451,14 @@ _RECOMMENDATION_CONSTRUCT_SPARQL = """
 PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ecsdi: <http://www.semanticweb.org/ecsdi/comercio_electronico/>
 
-CONSTRUCT {
-    ?response rdf:type ecsdi:Respuesta .
-    ?product rdf:type ecsdi:Producto ;
-             ecsdi:idProducto ?pid ;
-             ecsdi:marcaProducto ?brand .
+    CONSTRUCT {
+        ?response rdf:type ecsdi:Respuesta .
+        ?product rdf:type ecsdi:Producto ;
+                 ecsdi:idProducto ?pid ;
+                 ecsdi:marcaProducto ?brand ;
+                 ecsdi:nombreProducto ?name ;
+                 ecsdi:precioProducto ?price ;
+                 ecsdi:valoracionMedia ?rating .
     ?rec rdf:type ecsdi:Recomendacion ;
          ecsdi:recomendacionDeProducto ?product ;
          ecsdi:recomendacionParaAsistente ?receiver ;
@@ -447,10 +470,13 @@ CONSTRUCT {
          ecsdi:puntosRecomendacion ?score ;
          ecsdi:motivoRecomendacion ?motivo ;
          ecsdi:fechaRecomendacion ?fecha .
-    ?product ecsdi:idProducto ?pid .
-    OPTIONAL { ?product ecsdi:marcaProducto ?brand }
-}
-"""
+        ?product ecsdi:idProducto ?pid .
+        OPTIONAL { ?product ecsdi:marcaProducto ?brand }
+        OPTIONAL { ?product ecsdi:nombreProducto ?name }
+        OPTIONAL { ?product ecsdi:precioProducto ?price }
+        OPTIONAL { ?product ecsdi:valoracionMedia ?rating }
+    }
+    """
 
 
 def _materialize_recommendations_sparql(
@@ -480,6 +506,12 @@ def _materialize_recommendations_sparql(
         seed.add((product_node, ECSDI.idProducto, Literal(product["id"])))
         if product.get("brand"):
             seed.add((product_node, ECSDI.marcaProducto, Literal(product["brand"])))
+        if product.get("name"):
+            seed.add((product_node, ECSDI.nombreProducto, Literal(product["name"])))
+        if product.get("price") is not None:
+            seed.add((product_node, ECSDI.precioProducto, Literal(str(product["price"]), datatype=XSD.decimal)))
+        if product.get("rating") is not None:
+            seed.add((product_node, ECSDI.valoracionMedia, Literal(str(product["rating"]), datatype=XSD.decimal)))
         seed.add((recommendation, ECSDI.recomendacionDeProducto, product_node))
         seed.add((recommendation, ECSDI.recomendacionParaAsistente, receiver))
         seed.add(
@@ -538,6 +570,10 @@ def _user_profile(asistente_uri: str, opinions_db: list[dict], searches_db: list
         brand = record.get("brand") or ""
         if brand:
             brand_counts[brand] += 0.3  # peso búsqueda menor
+        for product in record.get("result_details", []):
+            brand = product.get("brand") or ""
+            if brand:
+                brand_counts[brand] += 0.2
 
     rating_avg_per_brand = {b: (sum(rs) / len(rs)) for b, rs in brand_ratings.items() if rs}
     return {
@@ -569,6 +605,18 @@ def _candidate_products(asistente_uri: str, opinions_db: list[dict], searches_db
         )
 
     for record in searches_db:
+        for product in record.get("catalog_details", []):
+            product_id = product.get("id")
+            if not product_id or product_id in purchased:
+                continue
+            candidates.setdefault(product_id, _normalize_product_candidate(product))
+
+        for product in record.get("result_details", []):
+            product_id = product.get("id")
+            if not product_id or product_id in purchased:
+                continue
+            candidates.setdefault(product_id, _normalize_product_candidate(product))
+
         for uri in record.get("results", []):
             product_id = uri.rsplit("/producto/", 1)[-1] if "/producto/" in uri else uri.rsplit("/", 1)[-1]
             if product_id in purchased:
@@ -585,6 +633,17 @@ def _candidate_products(asistente_uri: str, opinions_db: list[dict], searches_db
     return list(candidates.values())
 
 
+def _normalize_product_candidate(product: dict) -> dict:
+    return {
+        "id": str(product.get("id") or ""),
+        "uri": str(product.get("uri") or product_uri(str(product.get("id") or ""))),
+        "brand": str(product.get("brand") or ""),
+        "name": str(product.get("name") or product.get("id") or ""),
+        "price": product.get("price"),
+        "rating": product.get("rating"),
+    }
+
+
 def _score_product(profile: dict, product: dict) -> float:
     brand = product.get("brand") or ""
     brand_count = float(profile["brand_counts"].get(brand, 0))
@@ -592,6 +651,29 @@ def _score_product(profile: dict, product: dict) -> float:
     # Score combinado: la presencia de la marca en historial pesa más y se
     # bonifica con la valoración media que el usuario ha dado a esa marca.
     return brand_count * (1.0 + rating_bonus)
+
+
+def _neutral_recommendations(candidates: list[dict], purchased: set[str]) -> list[tuple[float, dict]]:
+    """Fallback: ranking neutral por valoración/precio cuando no hay perfil."""
+
+    if not candidates:
+        return []
+    pool = [p for p in candidates if p.get("id") not in purchased] or candidates
+    scored: list[tuple[float, dict]] = []
+    for product in pool:
+        try:
+            rating = float(product.get("rating") or 0)
+        except (TypeError, ValueError):
+            rating = 0.0
+        try:
+            price = float(product.get("price") or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        # La valoración domina; el precio sólo desempata de forma suave.
+        score = max(rating, 0.1) + (1.0 / (1.0 + price) if price > 0 else 0)
+        scored.append((score, product))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored
 
 
 # --- Schedulers --------------------------------------------------------------
@@ -769,6 +851,23 @@ def _product_id_from_uri(product: URIRef) -> str:
     return uri.rsplit("/", 1)[-1]
 
 
+def _product_detail_from_graph(graph: Graph, product: URIRef, fallback_brand: str | None = None) -> dict:
+    product_id = str(next(graph.objects(product, ECSDI.idProducto), _product_id_from_uri(product)))
+    return {
+        "id": product_id,
+        "uri": str(product),
+        "name": str(next(graph.objects(product, ECSDI.nombreProducto), product_id)),
+        "brand": str(next(graph.objects(product, ECSDI.marcaProducto), fallback_brand or "")),
+        "price": _literal_str(graph, product, ECSDI.precioProducto),
+        "rating": _literal_str(graph, product, ECSDI.valoracionMedia),
+    }
+
+
+def _literal_str(graph: Graph, subject: URIRef, predicate: URIRef) -> str | None:
+    value = next(graph.objects(subject, predicate), None)
+    return str(value) if value is not None else None
+
+
 def _find_pending(opinions_db: list[dict], pedido_id: str, product_id: str) -> dict | None:
     for record in reversed(opinions_db):
         if record["puntuacion"] is not None:
@@ -776,6 +875,17 @@ def _find_pending(opinions_db: list[dict], pedido_id: str, product_id: str) -> d
         if record["pedido_id"] == pedido_id and record["product_id"] == product_id:
             return record
     return None
+
+
+def _average_rating_for_product(opinions_db: list[dict], product_id: str) -> float | None:
+    ratings = [
+        int(record["puntuacion"])
+        for record in opinions_db
+        if record.get("product_id") == product_id and record.get("puntuacion") is not None
+    ]
+    if not ratings:
+        return None
+    return sum(ratings) / len(ratings)
 
 
 def main():

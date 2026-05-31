@@ -10,7 +10,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.builders import build_cobro_request, build_order_message
+from agents.agente_catalogo import build_catalog_graph
+from utilities.builders import (
+    build_busqueda_realizada_notification,
+    build_cobro_request,
+    build_order_message,
+    build_provider_payment_request,
+)
+from utilities.catalog import product_uri
 from utilities.namespaces import AGENTS, DATA, ECSDI
 
 
@@ -53,6 +60,40 @@ class BuildCobroRequestTests(unittest.TestCase):
         operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago))
         self.assertEqual(str(next(graph.objects(action, ECSDI.metodoPago))), "tarjeta")
         self.assertEqual(str(next(graph.objects(operacion, ECSDI.metodoPago))), "tarjeta")
+
+
+class BuildProviderPaymentRequestTests(unittest.TestCase):
+    def test_propagates_metodo_pago_to_provider(self):
+        original = DATA["action/cobro/test"]
+        operacion = DATA["pago/cobro/test"]
+        graph = build_provider_payment_request(
+            AGENTS.AgenteFinanciero,
+            AGENTS.ProveedorPagos,
+            original,
+            operacion,
+            ECSDI.CobroCliente,
+            Decimal("50.00"),
+            metodo_pago="tarjeta ****1111",
+        )
+        action = next(graph.subjects(RDF.type, ECSDI.SolicitarOperacionPago))
+        self.assertEqual(str(next(graph.objects(action, ECSDI.metodoPago))), "tarjeta ****1111")
+        self.assertEqual(str(next(graph.objects(operacion, ECSDI.metodoPago))), "tarjeta ****1111")
+
+
+class BuildBusquedaRealizadaNotificationTests(unittest.TestCase):
+    def test_carries_product_metadata_for_recommendations(self):
+        catalog = build_catalog_graph()
+        iphone = product_uri("P-IPHONE19")
+        graph = build_busqueda_realizada_notification(
+            AGENTS.AgenteCatalogo,
+            AGENTS.AgenteFeedback,
+            AGENTS.AsistenteVirtual,
+            {"name": "iphone"},
+            [iphone],
+            catalog,
+        )
+        self.assertIn((iphone, ECSDI.nombreProducto, Literal("iPhone 19")), graph)
+        self.assertIn((product_uri("P-EBOOK-AURORA"), ECSDI.nombreProducto, Literal("Ebook Reader Aurora")), graph)
 
 
 if __name__ == "__main__":

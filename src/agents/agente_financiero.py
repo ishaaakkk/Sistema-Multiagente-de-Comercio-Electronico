@@ -83,6 +83,7 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     importe = next(graph.objects(action, ECSDI.importeCobro), None)
     operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
+    metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
 
     if pedido is None or importe is None:
         return build_failure(agent_uri, sender, action, "Faltan pedido o importe en SolicitarCobro")
@@ -92,7 +93,7 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
     if provider_url and operacion is not None:
         Thread(
             target=_realizar_transaccion_proveedor,
-            args=(provider_url, agent_uri, action, operacion, ECSDI.CobroCliente, amount, pedido),
+            args=(provider_url, agent_uri, action, operacion, ECSDI.CobroCliente, amount, pedido, metodo_pago),
             daemon=True,
         ).start()
     else:
@@ -102,7 +103,6 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
             daemon=True,
         ).start()
 
-    metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
     if metodo_pago is not None:
         log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}, metodo {metodo_pago}")
     else:
@@ -131,7 +131,8 @@ def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag
         operacion = DATA[f"pago/{tag}/{uuid4()}"]
 
     if provider_url:
-        provider_response = _request_provider_payment(provider_url, agent_uri, sender, action, operacion, operation_type, amount)
+        metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
+        provider_response = _request_provider_payment(provider_url, agent_uri, sender, action, operacion, operation_type, amount, metodo_pago)
         if provider_response is not None:
             log("financiero", f"{tag} confirmado por proveedor: importe={amount}")
             return provider_response
@@ -162,9 +163,10 @@ def _request_provider_payment(
     operacion: URIRef,
     operation_type: URIRef,
     amount: Decimal,
+    metodo_pago=None,
 ) -> Graph | None:
     try:
-        request = build_provider_payment_request(agent_uri, AGENTS.ProveedorPagos, action, operacion, operation_type, amount)
+        request = build_provider_payment_request(agent_uri, AGENTS.ProveedorPagos, action, operacion, operation_type, amount, metodo_pago)
         provider_response = post_graph(provider_url, request)
         msg = get_message(provider_response)
         if not msg or msg.performative != ACL.inform:
@@ -196,8 +198,9 @@ def _realizar_transaccion_proveedor(
     operation_type: URIRef,
     importe: Decimal,
     pedido: URIRef,
+    metodo_pago=None,
 ) -> None:
-    response = _request_provider_payment(provider_url, agent_uri, AGENTS.AgenteComerciante, action, operacion, operation_type, importe)
+    response = _request_provider_payment(provider_url, agent_uri, AGENTS.AgenteComerciante, action, operacion, operation_type, importe, metodo_pago)
     if response is None:
         _realizar_transaccion(pedido, importe)
         return

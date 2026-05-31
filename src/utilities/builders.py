@@ -314,6 +314,7 @@ def build_provider_payment_request(
     operacion: URIRef,
     operation_type: URIRef,
     importe: Decimal,
+    metodo_pago: str | None = None,
 ) -> Graph:
     """AgenteFinanciero -> ProveedorPagos: SolicitarOperacionPago."""
     graph = Graph()
@@ -325,6 +326,9 @@ def build_provider_payment_request(
     graph.add((operacion, RDF.type, operation_type))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
+    if metodo_pago is not None:
+        graph.add((action, ECSDI.metodoPago, Literal(str(metodo_pago))))
+        graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -359,6 +363,7 @@ def build_busqueda_realizada_notification(
     asistente: URIRef,
     constraints: dict,
     product_uris: list[URIRef],
+    product_graph: Graph | None = None,
 ) -> Graph:
     """Protocolo Consulta Catálogo (AgenteCatalogo → AgenteFeedback).
 
@@ -409,8 +414,21 @@ def build_busqueda_realizada_notification(
         )
         graph.add((action, ECSDI.accionTieneRestriccion, restriction))
 
+    snapshot_products = set(product_uris)
+    if product_graph is not None:
+        snapshot_products.update(product_graph.subjects(RDF.type, ECSDI.Producto))
+        snapshot_products.update(product_graph.subjects(RDF.type, ECSDI.ProductoInterno))
+        snapshot_products.update(product_graph.subjects(RDF.type, ECSDI.ProductoExterno))
+
     for product in product_uris:
         graph.add((action, ECSDI.resultadoContieneProducto, product))
+
+    # Además de las URIs devueltas, el Feedback necesita metadatos para poder
+    # recomendar sin volver a consultar el catálogo.
+    if product_graph is not None:
+        for product in snapshot_products:
+            for triple in product_graph.triples((product, None, None)):
+                graph.add(triple)
 
     return build_message(graph, action, ACL.inform, sender, receiver)
 

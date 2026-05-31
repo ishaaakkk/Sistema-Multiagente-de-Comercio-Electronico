@@ -4,9 +4,14 @@ from uuid import uuid4
 
 from flask import Flask, request as flask_request
 from rdflib import Graph, Literal
-from rdflib.namespace import RDF
+from rdflib.namespace import RDF, RDFS
 
-from utilities.builders import build_order_message, build_search_message, build_valoracion_request
+from utilities.builders import (
+    build_devolucion_request,
+    build_order_message,
+    build_search_message,
+    build_valoracion_request,
+)
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.acl import build_message, build_not_understood, correlate_reply, get_message
@@ -445,6 +450,9 @@ IFACE_HTML = """<!DOCTYPE html>
       <button class="btn secondary" onclick="showTab('buscar', document.querySelector('nav button'))">
         Cambiar producto
       </button>
+      <button class="btn secondary" onclick="addSelectedToCart()">
+        Añadir al carrito
+      </button>
     </div>
     <div id="no-product-banner" class="empty-state">
       ← Selecciona primero un producto en la pestaña Buscar.
@@ -482,17 +490,22 @@ IFACE_HTML = """<!DOCTYPE html>
         </div>
         <div class="field">
           <label>Método de pago</label>
-          <select id="o-payment">
+          <select id="o-payment" onchange="toggleCardField()">
             <option value="tarjeta" selected>Tarjeta</option>
             <option value="paypal">PayPal</option>
             <option value="transferencia">Transferencia</option>
           </select>
+        </div>
+        <div class="field" id="card-field">
+          <label>Número tarjeta</label>
+          <input id="o-card" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="4111111111111111">
         </div>
         <div class="field">
           <label>Distancia logística entrega (0–1000)</label>
           <input id="o-dist" type="number" min="0" max="1000" value="130">
         </div>
       </div>
+      <div id="cart-box" style="margin-top:16px"></div>
       <button class="btn" onclick="hacerPedido()">Confirmar pedido →</button>
     </div>
 
@@ -528,7 +541,9 @@ IFACE_HTML = """<!DOCTYPE html>
     </div>
   </div>
   <button class="btn" onclick="enviarValoracion()">Enviar valoración →</button>
+  <button class="btn secondary" onclick="solicitarDevolucion()">Solicitar devolución</button>
   <div id="val-result" style="margin-top:16px;font-size:12px;color:var(--muted)"></div>
+  <div id="return-result" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
   <div id="feedback-pending" style="margin-top:24px"></div>
 </div>
 
@@ -556,6 +571,7 @@ IFACE_HTML = """<!DOCTYPE html>
 <script>
   // ── Estado global ────────────────────────────────────────
   let selectedProduct = null;   // { id, name, price, uri, catalog_data }
+  let cart = [];
   let lastPedidoId = '';
   let starRating = 0;
   let recPollTimer = null;
@@ -665,21 +681,74 @@ IFACE_HTML = """<!DOCTYPE html>
       form.style.display = 'none';
     }
     confirmBox.style.display = 'none';
+    renderCart();
+    toggleCardField();
+  }
+
+  function addSelectedToCart() {
+    if (!selectedProduct) { setStatus('Selecciona un producto primero', 'error'); return; }
+    const qty = parseInt(document.getElementById('o-qty').value) || 1;
+    const existing = cart.find(item => item.id === selectedProduct.id);
+    if (existing) {
+      existing.quantity += qty;
+    } else {
+      cart.push({ ...selectedProduct, quantity: qty });
+    }
+    renderCart();
+    setStatus(`${selectedProduct.name} añadido al carrito`, 'ok');
+  }
+
+  function removeCartItem(index) {
+    cart.splice(index, 1);
+    renderCart();
+  }
+
+  function renderCart() {
+    const box = document.getElementById('cart-box');
+    if (!box) return;
+    if (!cart.length) {
+      box.innerHTML = '<div class="empty-state" style="padding:8px 0">Carrito vacío: se pedirá el producto seleccionado.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="product-list">' + cart.map((item, i) =>
+      `<div class="product-row" style="grid-template-columns:1fr 80px 100px 100px">
+        <span class="product-name">${item.name}</span>
+        <span>${item.quantity} ud.</span>
+        <span class="product-price">${(parseFloat(item.price) * item.quantity).toFixed(2)} €</span>
+        <button class="btn secondary" style="margin:0;padding:7px 10px" onclick="removeCartItem(${i})">Quitar</button>
+      </div>`
+    ).join('') + '</div>';
+  }
+
+  function toggleCardField() {
+    const field = document.getElementById('card-field');
+    const method = document.getElementById('o-payment');
+    if (field && method) field.style.display = method.value === 'tarjeta' ? 'flex' : 'none';
   }
 
   async function hacerPedido() {
-    if (!selectedProduct) { setStatus('Selecciona un producto primero', 'error'); return; }
-
-    const body = {
-      product_id: selectedProduct.id,
+    if (!selectedProduct && !cart.length) { setStatus('Selecciona un producto primero', 'error'); return; }
+    const items = cart.length ? cart : [{
+      id: selectedProduct.id,
       price: selectedProduct.price,
       quantity: parseInt(document.getElementById('o-qty').value) || 1,
+      name: selectedProduct.name,
+    }];
+
+    const body = {
+      items: items.map(item => ({
+        product_id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        name: item.name,
+      })),
       city: document.getElementById('o-city').value,
       street: document.getElementById('o-street').value,
       postal_code: document.getElementById('o-postal').value,
       country: document.getElementById('o-country').value,
       priority: parseInt(document.getElementById('o-priority').value),
       payment_method: document.getElementById('o-payment').value,
+      payment_card: document.getElementById('o-card').value,
       delivery_dist: parseInt(document.getElementById('o-dist').value) || 0,
     };
 
@@ -691,6 +760,8 @@ IFACE_HTML = """<!DOCTYPE html>
       renderConfirmation(data);
       setStatus('Pedido realizado correctamente', 'ok');
       lastPedidoId = data.pedido_id || '';
+      cart = [];
+      renderCart();
     } catch (e) {
       setStatus('Error al realizar el pedido', 'error');
     }
@@ -707,6 +778,9 @@ IFACE_HTML = """<!DOCTYPE html>
       + row('Estado', data.estado || '—')
       + row('Factura', data.factura_id || '—')
       + row('Importe', (data.importe ? parseFloat(data.importe).toFixed(2) + ' €' : '—'), true);
+    if (data.items && data.items.length) {
+      html += row('Líneas', data.items.map(i => `${i.product_id} ×${i.quantity}`).join(', '));
+    }
 
     if (data.envio_interno) {
       html += row('Envío', 'Interno — ' + (data.transportista || '').split('/').pop())
@@ -718,7 +792,7 @@ IFACE_HTML = """<!DOCTYPE html>
 
     // Pre-rellenar pestaña valoración
     document.getElementById('v-pedido').value = data.pedido_id || '';
-    document.getElementById('v-product').value = selectedProduct ? selectedProduct.id : '';
+    document.getElementById('v-product').value = data.items && data.items.length ? data.items[0].product_id : (selectedProduct ? selectedProduct.id : '');
 
     box.innerHTML = html
       + `<button class="btn" style="margin-top:12px" onclick="showTab('valoracion', document.querySelectorAll('nav button')[2])">
@@ -755,6 +829,32 @@ IFACE_HTML = """<!DOCTYPE html>
       document.getElementById('val-result').textContent = '✓ Valoración enviada correctamente.';
     } catch (e) {
       setStatus('Error al enviar valoración', 'error');
+    }
+  }
+
+  async function solicitarDevolucion() {
+    const pedido_id = document.getElementById('v-pedido').value.trim();
+    const product_id = document.getElementById('v-product').value.trim();
+    const motivo = document.getElementById('v-comment').value.trim() || 'Producto defectuoso';
+    const box = document.getElementById('return-result');
+
+    if (!pedido_id || !product_id) { setStatus('Rellena ID de pedido y producto', 'error'); return; }
+
+    setStatus('Solicitando devolución…', 'loading');
+    try {
+      const res = await fetch('/devolucion', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ pedido_id, product_id, motivo })
+      });
+      const data = await res.json();
+      if (data.error) { setStatus(data.error, 'error'); box.textContent = data.error; return; }
+      setStatus(data.accepted ? 'Devolución aceptada' : 'Devolución denegada', data.accepted ? 'ok' : 'error');
+      box.textContent = data.accepted
+        ? `✓ Recogida: ${data.pickup || 'pendiente'} · Reembolso: ${data.refund_ref || 'sin referencia'}`
+        : `Denegada: ${data.instructions || 'sin motivo'}`;
+    } catch (e) {
+      setStatus('Error al solicitar devolución', 'error');
     }
   }
 
@@ -893,6 +993,7 @@ def create_app(
     catalog_url="http://127.0.0.1:9006/comm",
     shop_url="http://127.0.0.1:9001/comm",
     feedback_url="http://127.0.0.1:9007/comm",
+    devolucion_url="http://127.0.0.1:9009/comm",
 ):
     app = Flask(__name__)
     app._feedback_requests = []
@@ -970,6 +1071,11 @@ def create_app(
 
         # Guardamos el grafo de catálogo en la sesión de la app para el pedido
         app._last_search_graph = response
+        cache = getattr(app, "_catalog_cache_graph", Graph())
+        bind_namespaces(cache)
+        for triple in response:
+            cache.add(triple)
+        app._catalog_cache_graph = cache
 
         return app.response_class(
             json.dumps({"products": products}),
@@ -982,25 +1088,43 @@ def create_app(
         import json
         data = flask_request.get_json(force=True)
 
-        product_id = data.get("product_id")
-        price      = Decimal(str(data.get("price", "0")))
-        quantity   = int(data.get("quantity", 1))
+        raw_items = data.get("items") or []
+        if raw_items:
+            product_quantities = {
+                str(item.get("product_id")): int(item.get("quantity", 1))
+                for item in raw_items
+                if item.get("product_id")
+            }
+            product_prices = {
+                str(item.get("product_id")): Decimal(str(item.get("price", "0")))
+                for item in raw_items
+                if item.get("product_id")
+            }
+        else:
+            product_id = data.get("product_id")
+            product_quantities = {product_id: int(data.get("quantity", 1))} if product_id else {}
+            product_prices = {product_id: Decimal(str(data.get("price", "0")))} if product_id else {}
         city       = data.get("city", "")
         street     = data.get("street", "")
         postal_code= data.get("postal_code", "")
         country    = data.get("country", "")
         priority   = int(data.get("priority", 3))
-        payment_method = data.get("payment_method", "tarjeta")
+        payment_method = _payment_label(data.get("payment_method", "tarjeta"), data.get("payment_card", ""))
         delivery_dist = int(data.get("delivery_dist", 130))
+        if not product_quantities:
+            return app.response_class(
+                json.dumps({"error": "Selecciona al menos un producto."}),
+                mimetype="application/json"
+            )
 
-        catalog_graph = getattr(app, "_last_search_graph", None)
+        catalog_graph = getattr(app, "_catalog_cache_graph", None) or getattr(app, "_last_search_graph", None)
 
         try:
             order_message = build_order_message(
                 sender=agent_uri,
                 receiver=AGENTS.AgenteComerciante,
-                product_quantities={product_id: quantity},
-                product_prices={product_id: price},
+                product_quantities=product_quantities,
+                product_prices=product_prices,
                 city=city,
                 street=street,
                 postal_code=postal_code,
@@ -1028,6 +1152,10 @@ def create_app(
             "importe":    str(next(order_response.objects(factura, _ECSDI.importeFactura), "0")),
             "envio_interno": False,
             "envio_externo": False,
+            "items": [
+                {"product_id": pid, "quantity": qty}
+                for pid, qty in product_quantities.items()
+            ],
         }
 
         confirmacion = next(order_response.objects(pedido, _ECSDI.pedidoTieneConfirmacion), None)
@@ -1076,7 +1204,14 @@ def create_app(
                 puntuacion=puntuacion,
                 comentario=comentario,
             )
-            post_graph(feedback_url, val_message)
+            response = post_graph(feedback_url, val_message)
+            msg = get_message(response)
+            if msg is not None and msg.performative == ACL.failure:
+                reason = str(next(response.objects(None, RDFS.comment), "")) or "Feedback rechazó la valoración"
+                return app.response_class(
+                    json.dumps({"error": reason}),
+                    mimetype="application/json"
+                )
         except Exception as exc:
             return app.response_class(
                 json.dumps({"error": f"No se pudo contactar con feedback: {exc}"}),
@@ -1087,6 +1222,49 @@ def create_app(
             json.dumps({"ok": True}),
             mimetype="application/json"
         )
+
+    @app.post("/devolucion")
+    def devolucion():
+        """Solicita una devolución al AgenteDevolucion."""
+        import json
+        data = flask_request.get_json(force=True)
+        pedido_id = data.get("pedido_id", "")
+        product_id = data.get("product_id", "")
+        motivo = data.get("motivo", "Producto defectuoso")
+
+        if not pedido_id or not product_id:
+            return app.response_class(
+                json.dumps({"error": "Rellena ID de pedido y producto"}),
+                mimetype="application/json"
+            )
+
+        try:
+            response = post_graph(
+                devolucion_url,
+                build_devolucion_request(
+                    sender=agent_uri,
+                    receiver=AGENTS.AgenteDevolucion,
+                    pedido_id=pedido_id,
+                    product_id=product_id,
+                    motivo=motivo,
+                ),
+            )
+        except Exception as exc:
+            return app.response_class(
+                json.dumps({"error": f"No se pudo contactar con devolución: {exc}"}),
+                mimetype="application/json"
+            )
+
+        devolucion_node = next(response.subjects(RDF.type, ECSDI.Devolucion), None)
+        reembolso = next(response.objects(devolucion_node, ECSDI.devolucionTieneReembolso), None) if devolucion_node else None
+        accepted_raw = str(next(response.objects(devolucion_node, ECSDI.devolucionAceptada), "false")).lower() if devolucion_node else "false"
+        result = {
+            "accepted": accepted_raw in ("true", "1"),
+            "instructions": str(next(response.objects(devolucion_node, ECSDI.instruccionesDevolucion), "")) if devolucion_node else "",
+            "pickup": str(next(response.objects(devolucion_node, ECSDI.fechaRecogidaDevolucion), "")) if devolucion_node else "",
+            "refund_ref": str(next(response.objects(reembolso, ECSDI.referenciaPago), "")) if reembolso else "",
+        }
+        return app.response_class(json.dumps(result), mimetype="application/json")
 
     @app.get("/feedback-requests")
     def feedback_requests():
@@ -1128,6 +1306,10 @@ def create_app(
             product = next(response.objects(rec, ECSDI.recomendacionDeProducto), None)
             items.append({
                 "product_id": str(next(response.objects(product, ECSDI.idProducto), "")) if product else "",
+                "name": str(next(response.objects(product, ECSDI.nombreProducto), "")) if product else "",
+                "brand": str(next(response.objects(product, ECSDI.marcaProducto), "")) if product else "",
+                "price": str(next(response.objects(product, ECSDI.precioProducto), "")) if product else "",
+                "rating": str(next(response.objects(product, ECSDI.valoracionMedia), "")) if product else "",
                 "score": str(next(response.objects(rec, ECSDI.puntosRecomendacion), "")),
                 "reason": str(next(response.objects(rec, ECSDI.motivoRecomendacion), "")),
             })
@@ -1168,6 +1350,10 @@ def create_app(
                     app._recommendations_inbox.append(
                         {
                             "product_id": str(next(graph.objects(product, ECSDI.idProducto), "")) if product else "",
+                            "name": str(next(graph.objects(product, ECSDI.nombreProducto), "")) if product else "",
+                            "brand": str(next(graph.objects(product, ECSDI.marcaProducto), "")) if product else "",
+                            "price": str(next(graph.objects(product, ECSDI.precioProducto), "")) if product else "",
+                            "rating": str(next(graph.objects(product, ECSDI.valoracionMedia), "")) if product else "",
                             "score": str(next(graph.objects(rec, ECSDI.puntosRecomendacion), "")),
                             "reason": str(next(graph.objects(rec, ECSDI.motivoRecomendacion), "")),
                             "date": str(next(graph.objects(rec, ECSDI.fechaRecomendacion), "")),
@@ -1185,6 +1371,16 @@ def create_app(
     return app
 
 
+def _payment_label(method: str, card_number: str) -> str:
+    method = (method or "tarjeta").strip()
+    if method != "tarjeta":
+        return method
+    digits = "".join(ch for ch in str(card_number) if ch.isdigit())
+    if len(digits) >= 4:
+        return f"tarjeta ****{digits[-4:]}"
+    return method
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -1195,6 +1391,7 @@ def main():
     parser.add_argument("--catalog-url", default=None)
     parser.add_argument("--shop-url", default=None)
     parser.add_argument("--feedback-url", default=None)
+    parser.add_argument("--devolucion-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -1208,10 +1405,12 @@ def main():
     catalog_base  = args.catalog_url  or search_service(args.dir, "AGENTE_CATALOGO", service_id)   or "http://127.0.0.1:9006"
     shop_base     = args.shop_url     or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
     feedback_base = args.feedback_url or search_service(args.dir, "AGENTE_FEEDBACK", service_id)   or "http://127.0.0.1:9007"
+    devolucion_base = args.devolucion_url or search_service(args.dir, "AGENTE_DEVOLUCION", service_id) or "http://127.0.0.1:9009"
 
     catalog_url  = _comm_url(catalog_base)
     shop_url     = _comm_url(shop_base)
     feedback_url = _comm_url(feedback_base)
+    devolucion_url = _comm_url(devolucion_base)
 
     registered = register_service(
         args.dir,
@@ -1226,13 +1425,14 @@ def main():
         log(
             f"asistente-{args.port}",
             f"listening on {bind_host}:{args.port} | "
-            f"catalog={catalog_url} shop={shop_url} feedback={feedback_url} | "
+            f"catalog={catalog_url} shop={shop_url} feedback={feedback_url} devolucion={devolucion_url} | "
             f"iface → http://{advertised_host}:{args.port}/iface"
         )
         create_app(
             catalog_url=catalog_url,
             shop_url=shop_url,
             feedback_url=feedback_url,
+            devolucion_url=devolucion_url,
         ).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:

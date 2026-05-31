@@ -241,7 +241,7 @@ def _register_pedido_in_meta(
             }
         )
     meta["pedidos"] = records
-    meta["prioridad"] = max(int(meta.get("prioridad", 3)), int(next(order_graph.objects(pedido, ECSDI.prioridadEntrega), 3)))
+    meta["prioridad"] = min(int(meta.get("prioridad", 3)), int(next(order_graph.objects(pedido, ECSDI.prioridadEntrega), 3)))
     save_pending_meta(center_id, lote_id, meta)
 
 
@@ -260,7 +260,7 @@ def append_lines_to_pending_lote(
     _append_lines_to_lote(graph, lote, order_graph, pedido, lines, comerciante_url, action)
     priority = int(next(order_graph.objects(pedido, ECSDI.prioridadEntrega), 3))
     current = lote_priority(graph, lote)
-    if priority > current:
+    if priority < current:
         for _, pred, obj in list(graph.triples((lote, ECSDI.prioridadLote, None))):
             graph.remove((lote, pred, obj))
         graph.add((lote, ECSDI.prioridadLote, Literal(priority, datatype=XSD.integer)))
@@ -269,7 +269,7 @@ def append_lines_to_pending_lote(
         center_id, lote_id, order_graph, pedido, comerciante_url, action, comerciante_uri
     )
     meta = load_pending_meta(center_id, lote_id)
-    meta["prioridad"] = max(int(meta.get("prioridad", 3)), priority)
+    meta["prioridad"] = min(int(meta.get("prioridad", 3)), priority)
     save_pending_meta(center_id, lote_id, meta)
     return graph
 

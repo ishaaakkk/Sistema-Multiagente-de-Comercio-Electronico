@@ -222,6 +222,27 @@ def decrement_catalog_stock(center_id: str, product_quantities: dict[str, int]) 
     persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
 
 
+def update_product_average_rating(product_id: str, rating: Decimal | str | int | float) -> bool:
+    """Actualiza `valoracionMedia` de un producto en ProductosDB."""
+
+    catalog = load_persisted_catalog()
+    if len(catalog) == 0:
+        return False
+    product = product_uri(product_id)
+    if (product, None, None) not in catalog:
+        return False
+    catalog.set((product, ECSDI.valoracionMedia, decimal_literal(Decimal(str(rating)))))
+    persist_catalog(catalog)
+    for stock in catalog.subjects(ECSDI.stockDeProducto, product):
+        center = next(catalog.objects(stock, ECSDI.stockEnCentro), None)
+        if center is None:
+            continue
+        center_id = _str_value(catalog, center, ECSDI.idCentroLogistico)
+        if center_id:
+            persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
+    return True
+
+
 def persist_lote(lote_graph: Graph, lote: URIRef) -> None:
     """LotesEnviosDB: persiste un lote de envío en fichero TTL y en el Dataset común."""
 
