@@ -15,6 +15,7 @@ from utilities.catalog import (
     describe_product,
     extract_search_constraints,
     filter_products,
+    persist_catalog,
     product_uri,
     stock_uri,
 )
@@ -31,12 +32,12 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
-from utilities.storage import load_graph, save_graph, save_named_graph
+from utilities.storage import load_graph, load_json
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteCatalogo
 
-# --- Datos del catalogo (futura ProductosDB via SPARQL) ---
+# --- Datos del catalogo (ProductosDB en catalog.ttl + grafo nombrado catalog) ---
 
 CATALOG_PRODUCTS = [
     {
@@ -141,9 +142,7 @@ LOGISTIC_CENTERS = [
 
 
 def build_catalog_graph() -> Graph:
-    """Construye el grafo RDF inicial con productos y centros logisticos.
-    Futura sustitucion: carga desde ProductosDB via SPARQL.
-    """
+    """Construye el grafo RDF inicial con productos y centros logisticos (seed de demo)."""
     graph = Graph()
     bind_namespaces(graph)
 
@@ -196,14 +195,26 @@ def build_catalog_graph() -> Graph:
     return graph
 
 
+def load_catalog_graph() -> Graph:
+    """ProductosDB: carga desde disco o inicializa el seed de demo y lo persiste."""
+
+    catalog = load_graph("catalog.ttl")
+    if len(catalog) > 0:
+        return catalog
+    catalog = build_catalog_graph()
+    persist_catalog(catalog)
+    return catalog
+
+
 def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
     app = Flask(__name__)
-    catalog = build_catalog_graph()
-    for triple in load_graph("catalog.ttl"):
-        catalog.add(triple)
+    catalog = load_catalog_graph()
+    log("catalogo", f"ProductosDB lista ({len(catalog)} tripletas)")
 
-    # Historial de busquedas en memoria (futura HistorialBusquedasDB via SPARQL)
-    search_history: list[dict] = []
+    # Historial de búsquedas local del Catálogo (útil para depurar).
+    # Para persistencia del sistema de recomendación se usa el protocolo hacia AgenteFeedback,
+    # pero mantenemos también esta traza local en disco.
+    search_history: list[dict] = load_json("catalog_searches.json", [])
 
     @app.get("/")
     def index():
@@ -279,6 +290,8 @@ def _handle_search(
             "results": [str(p) for p in products],
             "tipo": tipo,
         })
+        from utilities.storage import save_json
+        save_json("catalog_searches.json", search_history)
         log("catalogo", f"Busqueda registrada en historial: {constraints} -> {len(products)} productos")
 
     log("catalogo", f"Busqueda: {constraints} -> {len(products)} productos encontrados")
@@ -339,8 +352,7 @@ def _handle_external_product_registration(
         _copy_subject(catalog, response_graph, product)
 
     log("catalogo", f"Alta externa registrada: {len(products)} producto(s)")
-    save_graph("catalog.ttl", catalog)
-    save_named_graph("catalog", catalog)
+    persist_catalog(catalog)
     return build_message(response_graph, response, ACL.inform, agent_uri, sender)
 
 

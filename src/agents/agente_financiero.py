@@ -102,7 +102,11 @@ def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
             daemon=True,
         ).start()
 
-    log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}")
+    metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
+    if metodo_pago is not None:
+        log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}, metodo {metodo_pago}")
+    else:
+        log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}")
 
     # ACK inmediato — NotificarCobroFinalizado interno hacia FinalizarPedido
     return build_message(graph, action, ACL.inform, agent_uri, sender)

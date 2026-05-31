@@ -299,6 +299,90 @@ IFACE_HTML = """<!DOCTYPE html>
     font-size: 12px;
   }
 
+  .rec-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .rec-hint {
+    color: var(--muted);
+    font-size: 11px;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .rec-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 860px;
+  }
+
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .rec-card.proactive { border-left: 3px solid var(--accent2); }
+  .rec-card.on-demand { border-left: 3px solid var(--accent); }
+
+  .rec-title { font-size: 14px; margin-bottom: 4px; }
+
+  .rec-meta {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .rec-score {
+    font-size: 22px;
+    color: var(--accent);
+    text-align: right;
+    line-height: 1;
+  }
+
+  .rec-score span {
+    display: block;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .rec-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .nav-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+    background: var(--accent);
+    color: #0e0e0e;
+    border-radius: 10px;
+    vertical-align: middle;
+  }
+
+  nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
   pb-20 { padding-bottom: 20px; }
 </style>
 </head>
@@ -313,6 +397,9 @@ IFACE_HTML = """<!DOCTYPE html>
   <button class="active" onclick="showTab('buscar', this)">01 / Buscar</button>
   <button onclick="showTab('pedido', this)">02 / Pedido</button>
   <button onclick="showTab('valoracion', this)">03 / Valoración</button>
+  <button onclick="showTab('recomendaciones', this)">
+    04 / Recomendaciones<span id="rec-badge" class="nav-badge" style="display:none">0</span>
+  </button>
 </nav>
 
 <!-- TAB: BUSCAR -->
@@ -393,6 +480,18 @@ IFACE_HTML = """<!DOCTYPE html>
             <option value="3" selected>3 — Económico (5 días)</option>
           </select>
         </div>
+        <div class="field">
+          <label>Método de pago</label>
+          <select id="o-payment">
+            <option value="tarjeta" selected>Tarjeta</option>
+            <option value="paypal">PayPal</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Distancia logística entrega (0–1000)</label>
+          <input id="o-dist" type="number" min="0" max="1000" value="130">
+        </div>
       </div>
       <button class="btn" onclick="hacerPedido()">Confirmar pedido →</button>
     </div>
@@ -430,6 +529,23 @@ IFACE_HTML = """<!DOCTYPE html>
   </div>
   <button class="btn" onclick="enviarValoracion()">Enviar valoración →</button>
   <div id="val-result" style="margin-top:16px;font-size:12px;color:var(--muted)"></div>
+  <div id="feedback-pending" style="margin-top:24px"></div>
+</div>
+
+<!-- TAB: RECOMENDACIONES -->
+<div class="tab" id="tab-recomendaciones">
+  <p class="section-title">Recomendaciones para ti</p>
+  <div class="rec-toolbar">
+    <button class="btn secondary" onclick="cargarRecomendacionesInbox()">Actualizar buzón</button>
+    <button class="btn" onclick="pedirRecomendaciones()">Pedir ahora al feedback</button>
+    <span class="rec-hint">
+      El Agente Feedback envía sugerencias proactivas periódicamente (tras búsquedas/compras).
+      También puedes solicitarlas al instante.
+    </span>
+  </div>
+  <div id="rec-list" class="rec-list">
+    <p class="empty-state">Pulsa «Actualizar buzón» o espera recomendaciones proactivas.</p>
+  </div>
 </div>
 
 <div id="status-bar">
@@ -442,6 +558,8 @@ IFACE_HTML = """<!DOCTYPE html>
   let selectedProduct = null;   // { id, name, price, uri, catalog_data }
   let lastPedidoId = '';
   let starRating = 0;
+  let recPollTimer = null;
+  let lastInboxCount = 0;
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -519,7 +637,14 @@ IFACE_HTML = """<!DOCTYPE html>
     document.getElementById('tab-' + name).classList.add('active');
     if (btn) btn.classList.add('active');
 
+    if (recPollTimer) { clearInterval(recPollTimer); recPollTimer = null; }
+
     if (name === 'pedido') refreshOrderPanel();
+    if (name === 'recomendaciones') {
+      cargarRecomendacionesInbox();
+      recPollTimer = setInterval(cargarRecomendacionesInbox, 15000);
+    }
+    if (name === 'valoracion') cargarFeedbackPendiente();
   }
 
   function refreshOrderPanel() {
@@ -554,6 +679,8 @@ IFACE_HTML = """<!DOCTYPE html>
       postal_code: document.getElementById('o-postal').value,
       country: document.getElementById('o-country').value,
       priority: parseInt(document.getElementById('o-priority').value),
+      payment_method: document.getElementById('o-payment').value,
+      delivery_dist: parseInt(document.getElementById('o-dist').value) || 0,
     };
 
     setStatus('Procesando pedido…', 'loading');
@@ -631,8 +758,130 @@ IFACE_HTML = """<!DOCTYPE html>
     }
   }
 
+  // ── Recomendaciones ───────────────────────────────────────
+  function updateRecBadge(count) {
+    const badge = document.getElementById('rec-badge');
+    if (!badge) return;
+    if (count > lastInboxCount) {
+      badge.textContent = String(count);
+      badge.style.display = 'inline-block';
+    } else if (count === 0) {
+      badge.style.display = 'none';
+    }
+    lastInboxCount = count;
+  }
+
+  function renderRecommendations(items) {
+    const el = document.getElementById('rec-list');
+    if (!items || !items.length) {
+      el.innerHTML = '<p class="empty-state">Sin recomendaciones. Haz búsquedas o compras y vuelve más tarde, o pulsa «Pedir ahora».</p>';
+      return;
+    }
+
+    el.innerHTML = items.map((r, i) => {
+      const title = r.name || r.product_id || 'Producto';
+      const sub = [r.brand, r.product_id, r.price ? `${parseFloat(r.price).toFixed(2)} €` : null]
+        .filter(Boolean).join(' · ');
+      const score = r.score ? parseFloat(r.score).toFixed(2) : '—';
+      const reason = r.reason || 'Basado en tu historial de búsquedas y compras.';
+      const date = r.date ? `<div class="rec-meta">Recibida: ${r.date}</div>` : '';
+      const src = r.source === 'inbox' ? 'Proactiva (Agente Feedback)' : 'Bajo demanda';
+      const cardClass = r.source === 'inbox' ? 'proactive' : 'on-demand';
+      return `<div class="rec-card ${cardClass}">
+        <div>
+          <div class="rec-title">${title}</div>
+          ${sub ? `<div class="rec-meta">${sub}</div>` : ''}
+          <div class="rec-meta" style="margin-top:6px">${reason}</div>
+          <div class="rec-meta">${src}</div>
+          ${date}
+          <div class="rec-actions">
+            <button class="btn secondary" onclick="usarRecomendacion(${i})">Usar en pedido →</button>
+          </div>
+        </div>
+        <div class="rec-score">${score}<span>puntos</span></div>
+      </div>`;
+    }).join('');
+    el._items = items;
+  }
+
+  function usarRecomendacion(index) {
+    const r = (document.getElementById('rec-list')._items || [])[index];
+    if (!r || !r.product_id) { setStatus('Recomendación sin ID de producto', 'error'); return; }
+    selectedProduct = {
+      id: r.product_id,
+      name: r.name || r.product_id,
+      brand: r.brand || '',
+      price: r.price || '0',
+      rating: r.rating || '0',
+      type: 'interno',
+    };
+    setStatus(`Producto ${selectedProduct.name} listo para pedir`, 'ok');
+    showTab('pedido', document.querySelectorAll('nav button')[1]);
+  }
+
+  async function cargarRecomendacionesInbox() {
+    try {
+      const res = await fetch('/recommendations-inbox');
+      const data = await res.json();
+      const items = (data.inbox || []).map(r => ({ ...r, source: 'inbox' }));
+      updateRecBadge(items.length);
+      if (document.getElementById('tab-recomendaciones').classList.contains('active')) {
+        renderRecommendations(items);
+        lastInboxCount = items.length;
+        const badge = document.getElementById('rec-badge');
+        if (badge) badge.style.display = 'none';
+      }
+    } catch (e) {
+      if (document.getElementById('tab-recomendaciones').classList.contains('active')) {
+        document.getElementById('rec-list').innerHTML = '<p class="empty-state">No se pudo leer el buzón.</p>';
+      }
+    }
+  }
+
+  async function pedirRecomendaciones() {
+    setStatus('Solicitando recomendaciones…', 'loading');
+    try {
+      const res = await fetch('/recommendations');
+      const data = await res.json();
+      if (data.error) {
+        setStatus(data.error, 'error');
+        document.getElementById('rec-list').innerHTML = `<p class="empty-state">${data.error}</p>`;
+        return;
+      }
+      const items = (data.recommendations || []).map(r => ({ ...r, source: 'on_demand' }));
+      renderRecommendations(items);
+      setStatus(`${items.length} recomendación(es)`, items.length ? 'ok' : '');
+    } catch (e) {
+      setStatus('Error al contactar con feedback', 'error');
+    }
+  }
+
+  async function cargarFeedbackPendiente() {
+    const box = document.getElementById('feedback-pending');
+    if (!box) return;
+    try {
+      const res = await fetch('/feedback-requests');
+      const data = await res.json();
+      const reqs = data.requests || [];
+      if (!reqs.length) { box.innerHTML = ''; return; }
+      const last = reqs[reqs.length - 1];
+      box.innerHTML = `<div class="selected-product-info" style="border-color:var(--accent2)">
+        <div>
+          <div style="font-size:12px;color:var(--accent2)">PedirFeedback pendiente</div>
+          <div style="margin-top:6px">Pedido <strong>${last.pedido_id}</strong> · Producto <strong>${last.product_id}</strong></div>
+        </div>
+        <button class="btn secondary" onclick="document.getElementById('v-pedido').value='${last.pedido_id}';document.getElementById('v-product').value='${last.product_id}'">
+          Rellenar formulario
+        </button>
+      </div>`;
+    } catch (e) {
+      box.innerHTML = '';
+    }
+  }
+
   // ── Init ─────────────────────────────────────────────────
   setStatus('Listo', 'ok');
+  cargarRecomendacionesInbox();
 </script>
 </body>
 </html>
@@ -653,7 +902,10 @@ def create_app(
 
     @app.get("/iface")
     def iface():
-        return IFACE_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
+        return IFACE_HTML, 200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+        }
 
     @app.get("/")
     def index():
@@ -738,6 +990,8 @@ def create_app(
         postal_code= data.get("postal_code", "")
         country    = data.get("country", "")
         priority   = int(data.get("priority", 3))
+        payment_method = data.get("payment_method", "tarjeta")
+        delivery_dist = int(data.get("delivery_dist", 130))
 
         catalog_graph = getattr(app, "_last_search_graph", None)
 
@@ -752,6 +1006,8 @@ def create_app(
                 postal_code=postal_code,
                 country=country,
                 priority=priority,
+                payment_method=payment_method,
+                delivery_dist=delivery_dist,
                 catalog_graph=catalog_graph,
             )
             order_response = post_graph(shop_url, order_message)

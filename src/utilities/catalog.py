@@ -4,6 +4,7 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from .namespaces import DATA, ECSDI, bind_namespaces
+from .storage import load_graph, load_named_graph, save_graph, save_graph_item, save_named_graph
 
 
 def product_uri(product_id: str) -> URIRef:
@@ -152,6 +153,81 @@ def reserve_stock(graph: Graph, center: URIRef, product_quantities: dict[str, in
                 continue
             available = _int_value(graph, stock, ECSDI.cantidadDisponible) or 0
             graph.set((stock, ECSDI.cantidadDisponible, Literal(available - quantity, datatype=XSD.integer)))
+
+
+def persist_catalog(graph: Graph) -> None:
+    """ProductosDB: serializa el catálogo en Turtle y en el Dataset común (TriG)."""
+
+    save_graph("catalog.ttl", graph)
+    save_named_graph("catalog", graph)
+
+
+def load_persisted_catalog() -> Graph:
+    """Devuelve el catálogo persistido o un grafo vacío si aún no existe."""
+
+    graph = load_graph("catalog.ttl")
+    if len(graph) > 0:
+        return graph
+    return load_named_graph("catalog")
+
+
+def stock_graph_name(center_id: str) -> str:
+    return f"stock/{center_id}"
+
+
+def build_stock_graph(catalog: Graph, center_id: str) -> Graph:
+    """StockProductosDB: vista RDF del stock de un centro dentro del catálogo."""
+
+    graph = Graph()
+    bind_namespaces(graph)
+    center = center_uri(center_id)
+    for stock in catalog.subjects(ECSDI.stockEnCentro, center):
+        for triple in catalog.triples((stock, None, None)):
+            graph.add(triple)
+        product = next(catalog.objects(stock, ECSDI.stockDeProducto), None)
+        if product is not None:
+            copy_product(catalog, graph, product)
+    copy_center(catalog, graph, center)
+    return graph
+
+
+def persist_stock_graph(center_id: str, graph: Graph) -> None:
+    save_named_graph(stock_graph_name(center_id), graph)
+
+
+def load_stock_graph(center_id: str) -> Graph:
+    """Carga el grafo de stock del centro; si no existe, lo materializa desde ProductosDB."""
+
+    stock = load_named_graph(stock_graph_name(center_id))
+    if len(stock) > 0:
+        return stock
+    catalog = load_persisted_catalog()
+    if len(catalog) == 0:
+        return stock
+    stock = build_stock_graph(catalog, center_id)
+    persist_stock_graph(center_id, stock)
+    return stock
+
+
+def decrement_catalog_stock(center_id: str, product_quantities: dict[str, int]) -> None:
+    """Descuenta unidades en ProductosDB y actualiza el grafo nombrado stock/<CL>."""
+
+    if not product_quantities:
+        return
+    catalog = load_persisted_catalog()
+    if len(catalog) == 0:
+        return
+    reserve_stock(catalog, center_uri(center_id), product_quantities)
+    persist_catalog(catalog)
+    persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
+
+
+def persist_lote(lote_graph: Graph, lote: URIRef) -> None:
+    """LotesEnviosDB: persiste un lote de envío en fichero TTL y en el Dataset común."""
+
+    lote_id = _str_value(lote_graph, lote, ECSDI.idLote) or str(lote).rsplit("/", 1)[-1]
+    save_graph_item("lotes", lote_id, lote_graph)
+    save_named_graph(f"lotes/{lote_id}", lote_graph)
 
 
 def order_total(graph: Graph, product_quantities: dict[str, int]) -> Decimal:

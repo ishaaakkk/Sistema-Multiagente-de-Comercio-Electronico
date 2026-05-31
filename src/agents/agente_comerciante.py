@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import argparse
+import os
+import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
-from threading import Thread
+from threading import Event, Lock as ThreadLock, Thread
 from uuid import uuid4
 
 from flask import Flask
@@ -37,6 +41,7 @@ from utilities.storage import load_graph_collection, save_graph_item, save_named
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
+DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = float(os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", "8"))
 
 
 def create_app(
@@ -46,10 +51,13 @@ def create_app(
     financiero_url="http://127.0.0.1:9005/comm",
     feedback_url="http://127.0.0.1:9007/comm",
     vendedor_externo_url="http://127.0.0.1:9008/comm",
+    shipping_confirmation_timeout: float = DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT,
 ):
     app = Flask(__name__)
     completed_orders: dict[str, Graph] = load_graph_collection("completed_orders")
     fallback_logistics_urls = list(logistics_urls or [])
+    confirmation_buffers: dict[str, dict] = {}
+    confirmation_lock = ThreadLock()
 
     @app.get("/")
     def index():
@@ -64,6 +72,14 @@ def create_app(
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AsistenteVirtual, "Mensaje ACL no reconocido"))
             def reply(response_graph: Graph):
                 return rdf_response(correlate_reply(response_graph, message))
+
+            if message.performative == ACL.inform:
+                async_ack = _handle_async_shipping_confirmation(
+                    graph, message, agent_uri, confirmation_buffers, confirmation_lock
+                )
+                if async_ack is not None:
+                    return reply(async_ack)
+
             if message.performative != ACL.request:
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -87,6 +103,9 @@ def create_app(
                         feedback_url,
                         vendedor_externo_url,
                         completed_orders,
+                        confirmation_buffers,
+                        confirmation_lock,
+                        shipping_confirmation_timeout,
                     )
                 )
 
@@ -111,36 +130,36 @@ def _handle_order(
     feedback_url: str,
     vendedor_externo_url: str,
     completed_orders: dict[str, Graph],
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+    shipping_confirmation_timeout: float,
 ) -> Graph:
     """Orquestador del Plan «RealizarPedido» del Agente Comerciante.
 
-    Cada paso del plan se delega en una capacidad concreta (subfunción)
+    Cada paso del plan se delega en un plan concreto (subfunción)
     siguiendo el desglose del PD:
 
-      1. `_capability_preguntar_datos_compra`  → valida y normaliza el pedido.
-      2. `_capability_registrar_pedido_pendiente` → construye el grafo del pedido.
-      3. `_capability_escoger_cl` → contacta con los centros logísticos.
-      4. `_capability_gestionar_vendedores_externos` → pago + aviso vendedor.
-      5. `_capability_realizar_cobro` → orden de cobro al cliente.
-      6. `_capability_finalizar_pedido` → notifica compra completada + persiste.
+      1. `_plan_preguntar_datos_compra`         → valida campos obligatorios del pedido.
+      2. `_plan_preparar_pedido`                 → registra pedido y clasifica líneas.
+      3. `_plan_escoger_cl`                      → selecciona CL por métrica dist y confirma envío.
+      4. `_plan_gestionar_vendedores_externos`   → pago + aviso vendedor externo.
+      5. `_plan_realizar_cobro`                  → orden de cobro al cliente (con metodoPago).
+      6. `_plan_finalizar_pedido`                → notifica compra completada + persiste.
     """
 
-    pedido, lines, error = _capability_preguntar_datos_compra(
+    pedido, lines, error = _plan_preguntar_datos_compra(
         agent_uri, receiver, action, graph
     )
     if error is not None:
         return error
 
-    order_graph = _capability_registrar_pedido_pendiente(graph, action, pedido, lines)
+    order_graph, internal_lines, ext_envio_tienda, ext_envio_propio = _plan_preparar_pedido(
+        graph, action, pedido, lines
+    )
 
-    internal_lines, ext_envio_tienda, ext_envio_propio = _classify_lines(graph, lines)
-    log("comerciante", (
-        f"Pedido clasificado: {len(internal_lines)} internas, "
-        f"{len(ext_envio_tienda)} ext-envio-tienda, "
-        f"{len(ext_envio_propio)} ext-envio-propio"
-    ))
+    client_dist = _extract_client_dist(graph, pedido)
 
-    cl_error = _capability_escoger_cl(
+    cl_error = _plan_escoger_cl(
         agent_uri,
         receiver,
         action,
@@ -148,11 +167,15 @@ def _handle_order(
         pedido,
         internal_lines + ext_envio_tienda,
         logistics_urls,
+        client_dist=client_dist,
+        confirmation_buffers=confirmation_buffers,
+        confirmation_lock=confirmation_lock,
+        shipping_confirmation_timeout=shipping_confirmation_timeout,
     )
     if cl_error is not None:
         return cl_error
 
-    _capability_gestionar_vendedores_externos(
+    _plan_gestionar_vendedores_externos(
         agent_uri,
         order_graph,
         graph,
@@ -165,35 +188,76 @@ def _handle_order(
 
     order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
 
-    _capability_realizar_cobro(agent_uri, order_graph, pedido, financiero_url)
-    _capability_finalizar_pedido(
+    _plan_realizar_cobro(agent_uri, order_graph, pedido, financiero_url)
+    _plan_finalizar_pedido(
         agent_uri, order_graph, pedido, feedback_url, completed_orders
     )
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
 
-# --- Capacidades del Agente Comerciante (subfunciones nombradas como en el PD) ---
+# --- Planes del Agente Comerciante (subfunciones nombradas como en el PD) ---
 
 
-def _capability_preguntar_datos_compra(
+def _plan_preguntar_datos_compra(
     agent_uri: URIRef,
     receiver: URIRef,
     action: URIRef,
     graph: Graph,
 ) -> tuple[URIRef | None, list, Graph | None]:
-    """Valida que el mensaje contenga el pedido y al menos una línea."""
+    """Valida que el mensaje contenga el pedido, al menos una línea y los
+    tres campos obligatorios: direccionEntrega, prioridadEntrega, metodoPago."""
 
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     if pedido is None:
         return None, [], build_failure(agent_uri, receiver, action, "Falta accionSobrePedido")
+
     lines = list(graph.objects(pedido, ECSDI.pedidoTieneLinea))
     if not lines:
         return None, [], build_failure(agent_uri, receiver, action, "El pedido no contiene lineas")
+
+    if next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None) is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta direccionEntrega (pedidoEnviadoA)")
+
+    if next(graph.objects(pedido, ECSDI.prioridadEntrega), None) is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta prioridadEntrega")
+
+    if next(graph.objects(pedido, ECSDI.metodoPago), None) is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta metodoPago")
+
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    dist_raw = next(graph.objects(address, ECSDI.dist), None) if address is not None else None
+    if dist_raw is None:
+        return None, [], build_failure(agent_uri, receiver, action, "Falta dist en direccionEntrega")
+    try:
+        dist_val = int(dist_raw)
+    except (TypeError, ValueError):
+        return None, [], build_failure(agent_uri, receiver, action, "dist debe ser un entero 0-1000")
+    if not 0 <= dist_val <= 1000:
+        return None, [], build_failure(agent_uri, receiver, action, "dist debe estar entre 0 y 1000")
+
     return pedido, lines, None
 
 
-def _capability_registrar_pedido_pendiente(
+def _plan_preparar_pedido(
+    request_graph: Graph,
+    action: URIRef,
+    pedido: URIRef,
+    lines: list,
+) -> tuple[Graph, list, list, list]:
+    """Plan PrepararPedido: registra el pedido pendiente y clasifica las líneas."""
+
+    order_graph = _plan_registrar_pedido_pendiente(request_graph, action, pedido, lines)
+    internal_lines, ext_envio_tienda, ext_envio_propio = _classify_lines(request_graph, lines)
+    log("comerciante", (
+        f"Pedido clasificado: {len(internal_lines)} internas, "
+        f"{len(ext_envio_tienda)} ext-envio-tienda, "
+        f"{len(ext_envio_propio)} ext-envio-propio"
+    ))
+    return order_graph, internal_lines, ext_envio_tienda, ext_envio_propio
+
+
+def _plan_registrar_pedido_pendiente(
     request_graph: Graph, action: URIRef, pedido: URIRef, lines: list
 ) -> Graph:
     """Plan RegistrarPedidoPendiente: genera factura y deja el pedido en
@@ -202,7 +266,7 @@ def _capability_registrar_pedido_pendiente(
     return _build_order_graph(request_graph, action, pedido, lines)
 
 
-def _capability_escoger_cl(
+def _plan_escoger_cl(
     agent_uri: URIRef,
     receiver: URIRef,
     action: URIRef,
@@ -210,11 +274,13 @@ def _capability_escoger_cl(
     pedido: URIRef,
     lines_for_logistics: list,
     logistics_urls: list[str],
+    client_dist: int | None = None,
+    confirmation_buffers: dict[str, dict] | None = None,
+    confirmation_lock: ThreadLock | None = None,
+    shipping_confirmation_timeout: float = DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT,
 ) -> Graph | None:
-    """Plan EscogerCL: contacta con TODOS los centros logísticos en paralelo
-    (extensión avanzada #3 multi-CL). Devuelve `None` si se planificó al
-    menos un envío, o un mensaje de fallo si no hay forma de servir.
-    """
+    """Plan EscogerCL: ordena CLs por |dist_CL - dist_entrega| y contacta
+    secuencialmente hasta asignar todas las líneas pendientes."""
 
     if not lines_for_logistics:
         return None
@@ -226,10 +292,26 @@ def _capability_escoger_cl(
             "No hay centros logísticos disponibles para planificar el envío",
         )
 
+    pedido_id = _pedido_id(order_graph, pedido) or ""
+    if confirmation_buffers is not None and confirmation_lock is not None and pedido_id:
+        with confirmation_lock:
+            confirmation_buffers[pedido_id] = {"event": Event(), "graphs": []}
+
+    # Reordenar por proximidad métrica dist (0-1000).
+    ordered_urls = _sort_logistics_by_distance(logistics_urls, client_dist)
+
     logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
-    confirmaciones = _dispatch_to_logistics(
-        agent_uri, logistics_graph, pedido, logistics_urls
+    confirmaciones = _dispatch_to_logistics_ordered(
+        agent_uri, logistics_graph, pedido, ordered_urls
     )
+    needs_async = any(_response_accepts_pending_lote(c) for c in confirmaciones) and not any(
+        list(c.subjects(RDF.type, ECSDI.ConfirmacionEnvio)) for c in confirmaciones
+    )
+    if needs_async and confirmation_buffers is not None and confirmation_lock is not None and pedido_id:
+        waited = _wait_shipping_confirmations(
+            pedido_id, confirmation_buffers, confirmation_lock, shipping_confirmation_timeout
+        )
+        confirmaciones.extend(waited)
     if not confirmaciones:
         return build_failure(
             agent_uri,
@@ -247,12 +329,12 @@ def _capability_escoger_cl(
             order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
     log(
         "comerciante",
-        f"Envíos planificados por {len(confirmaciones)} centro(s) para {len(lines_for_logistics)} línea(s)",
+        f"Envío planificado por {len(confirmaciones)} centro(s) para {len(lines_for_logistics)} línea(s)",
     )
     return None
 
 
-def _capability_gestionar_vendedores_externos(
+def _plan_gestionar_vendedores_externos(
     agent_uri: URIRef,
     order_graph: Graph,
     request_graph: Graph,
@@ -276,23 +358,25 @@ def _capability_gestionar_vendedores_externos(
     )
 
 
-def _capability_realizar_cobro(
+def _plan_realizar_cobro(
     agent_uri: URIRef,
     order_graph: Graph,
     pedido: URIRef,
     financiero_url: str,
 ) -> None:
-    """Plan RealizarCobro: dispara SolicitarCobro al Agente Financiero."""
+    """Plan RealizarCobro: dispara SolicitarCobro al Agente Financiero,
+    propagando el método de pago elegido por el cliente."""
 
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
+    metodo_pago = next(order_graph.objects(pedido, ECSDI.metodoPago), None)
     _post_safe(
         financiero_url,
-        build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total),
+        build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total, metodo_pago),
         "cobro",
     )
 
 
-def _capability_finalizar_pedido(
+def _plan_finalizar_pedido(
     agent_uri: URIRef,
     order_graph: Graph,
     pedido: URIRef,
@@ -341,15 +425,78 @@ def _discover_logistics_centers(
     """Descubre todos los centros logísticos registrados (extensión avanzada #3 multi-CL).
 
     Si hay directorio, devuelve la lista de centros registrados como
-    CENTRO_LOGISTICO; si no, usa la lista de fallback heredada de la CLI.
+    CENTRO_LOGISTICO; si no hay resultados usa la lista de fallback.
     Las URLs se normalizan a /comm.
     """
 
     if directory_url:
         urls = search_all_services(directory_url, "CENTRO_LOGISTICO", requester)
         if urls:
-            return [_comm_url(u) for u in urls]
+            comm_urls = [_comm_url(u) for u in urls]
+            log("comerciante", f"Centros logísticos descubiertos via directorio: {comm_urls}")
+            return comm_urls
+        log("comerciante", "No se encontraron centros logísticos en el directorio, usando fallback")
     return [_comm_url(u) for u in fallback if u]
+
+
+def _response_accepts_pending_lote(response: Graph) -> bool:
+    for lote in response.subjects(RDF.type, ECSDI.LoteEnvio):
+        estado = str(next(response.objects(lote, ECSDI.estadoLote), ""))
+        if estado == "pendiente_envio":
+            return True
+    return False
+
+
+def _handle_async_shipping_confirmation(
+    graph: Graph,
+    message,
+    agent_uri: URIRef,
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+) -> Graph | None:
+    """RecibirDatosEnvio: ConfirmacionEnvio asíncrona del centro logístico."""
+
+    if not any(graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+        return None
+    pedido_id = ""
+    for conf in graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        envio = next(graph.objects(conf, ECSDI.confirmacionEnvio), None)
+        if envio is None:
+            continue
+        pedido = next(graph.objects(envio, ECSDI.envioDePedido), None)
+        if pedido is not None:
+            pedido_id = str(next(graph.objects(pedido, ECSDI.idPedido), _pedido_id(graph, pedido) or ""))
+            break
+    if not pedido_id:
+        return None
+    with confirmation_lock:
+        buf = confirmation_buffers.setdefault(pedido_id, {"event": Event(), "graphs": []})
+        buf["graphs"].append(graph)
+        buf["event"].set()
+    log("comerciante", f"ConfirmacionEnvio recibida para pedido {pedido_id}")
+    ack = DATA[f"ack/shipping/{uuid4()}"]
+    ack_graph = Graph()
+    bind_namespaces(ack_graph)
+    ack_graph.add((ack, RDF.type, ECSDI.Respuesta))
+    return build_message(ack_graph, ack, ACL.inform, agent_uri, message.sender)
+
+
+def _wait_shipping_confirmations(
+    pedido_id: str,
+    confirmation_buffers: dict[str, dict],
+    confirmation_lock: ThreadLock,
+    timeout: float,
+) -> list[Graph]:
+    with confirmation_lock:
+        buf = confirmation_buffers.get(pedido_id)
+        if buf is None:
+            return []
+        event = buf["event"]
+    if not event.wait(timeout):
+        log("comerciante", f"Timeout ({timeout}s) esperando ConfirmacionEnvio de {pedido_id}")
+    with confirmation_lock:
+        buf = confirmation_buffers.pop(pedido_id, {"graphs": []})
+    return [g for g in buf.get("graphs", []) if any(g.subjects(RDF.type, ECSDI.ConfirmacionEnvio))]
 
 
 def _dispatch_to_logistics(
@@ -361,7 +508,7 @@ def _dispatch_to_logistics(
     """Envía AvisarCL a todos los centros logísticos en paralelo y agrega
     las confirmaciones válidas. Ignora los failures (centros sin stock).
     """
-
+    log("comerciante", "ENTRANDO EN DISPATCH LOGISTICS")
     def _ask(url: str) -> Graph | None:
         try:
             message = build_logistics_request(
@@ -375,6 +522,8 @@ def _dispatch_to_logistics(
                 log("comerciante", f"CL {url} sin stock o sin transporte; se ignora")
                 return None
             if any(response.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+                return response
+            if _response_accepts_pending_lote(response):
                 return response
             return None
         except Exception as exc:
@@ -394,6 +543,101 @@ def _dispatch_to_logistics(
     return confirmaciones
 
 
+def _extract_client_dist(graph: Graph, pedido: URIRef) -> float | None:
+    """Extrae dist (0-1000) de la dirección de entrega si está presente."""
+    address = next(graph.objects(pedido, ECSDI.pedidoEnviadoA), None)
+    if address is None:
+        return None
+
+    dist = next(graph.objects(address, ECSDI.dist), None)
+    try:
+        return float(dist) if dist is not None else None
+    except Exception:
+        return None
+
+
+def _sort_logistics_by_distance(logistics_urls, client_dist):
+    """Reordena URLs de CL por |dist_CL - dist_entrega| vía GET /info."""
+    if client_dist is None:
+        return list(logistics_urls)
+
+    distances = {}
+
+    for url in logistics_urls:
+        try:
+            info_url = url.rstrip("/").rsplit("/", 1)[0] + "/info"
+            resp = requests.get(info_url, timeout=1.0)
+            data = resp.json()
+
+            cl_dist = data.get("dist")  # cada CL tiene su posición en la recta
+
+            if cl_dist is None:
+                distances[url] = float("inf")
+            else:
+                # distancia 1D
+                distances[url] = abs(float(cl_dist) - client_dist)
+
+        except Exception:
+            distances[url] = float("inf")
+
+    return sorted(logistics_urls, key=lambda u: distances[u])
+
+
+def _dispatch_to_logistics_ordered(
+    agent_uri: URIRef,
+    logistics_graph: Graph,
+    pedido: URIRef,
+    ordered_urls: list[str],
+) -> list[Graph]:
+    """
+    Asignación greedy:
+    - se prueba CL más cercano primero
+    - si acepta → se asigna y se termina
+    - si no → siguiente CL
+    """
+    log("comerciante", "ENTRANDO EN DISPATCH LOGISTICS ORDERED")
+    remaining_lines = list(logistics_graph.objects(pedido, ECSDI.pedidoTieneLinea))
+    if not remaining_lines:
+        return []
+
+    confirmations: list[Graph] = []
+
+    for url in ordered_urls:
+        if not remaining_lines:
+            break
+
+        partial = _build_partial_order_graph(
+            logistics_graph,
+            pedido,
+            remaining_lines
+        )
+
+        results = _dispatch_to_logistics(
+            agent_uri,
+            partial,
+            pedido,
+            [url]
+        )
+
+        if not results:
+            continue
+
+        for resp in results:
+            confirmations.append(resp)
+
+            for lote in resp.subjects(RDF.type, ECSDI.LoteEnvio):
+                for line in resp.objects(lote, ECSDI.loteTieneLinea):
+                    if line in remaining_lines:
+                        remaining_lines.remove(line)
+
+            for envio in resp.subjects(RDF.type, ECSDI.EnvioInterno):
+                lote = next(resp.objects(envio, ECSDI.envioTieneLote), None)
+                if lote:
+                    for line in resp.objects(lote, ECSDI.loteTieneLinea):
+                        if line in remaining_lines:
+                            remaining_lines.remove(line)
+
+    return confirmations
 def _classify_lines(graph: Graph, lines: list) -> tuple[list, list, list]:
     """Clasifica lineas en (internas, externas-envio-tienda, externas-envio-propio)."""
     internal, ext_tienda, ext_propio = [], [], []
