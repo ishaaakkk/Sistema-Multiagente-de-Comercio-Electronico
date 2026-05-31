@@ -1168,9 +1168,11 @@ def create_app(
         if confirmacion:
             envio = next(order_response.objects(confirmacion, _ECSDI.confirmacionEnvio), None)
             transportista = next(order_response.objects(envio, _ECSDI.envioRealizadoPor), None) if envio else None
-            oferta = next(order_response.subjects(RDF.type, _ECSDI.OfertaTransporte), None)
-            fecha = next(order_response.objects(oferta, _ECSDI.fechaEntregaEstimada), None) if oferta else None
-            precio_envio = next(order_response.objects(oferta, _ECSDI.precioOferta), None) if oferta else None
+            from utilities.transport_proto import find_transport_offer, offer_delivery_datetime, offer_price
+
+            oferta = find_transport_offer(order_response)
+            fecha = offer_delivery_datetime(order_response, oferta) if oferta else None
+            precio_envio = str(offer_price(order_response, oferta)) if oferta else None
             result.update({
                 "envio_interno": True,
                 "transportista": str(transportista) if transportista else "",

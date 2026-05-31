@@ -403,8 +403,10 @@ def _return_allowed(motivo: str, delivery_date: datetime | None) -> bool:
 
 
 def _extract_delivery_date(graph: Graph) -> datetime | None:
-    for offer in graph.subjects(RDF.type, ECSDI.OfertaTransporte):
-        value = next(graph.objects(offer, ECSDI.fechaEntregaEstimada), None)
+    from utilities.transport_proto import iter_transport_offers, offer_delivery_datetime
+
+    for offer in iter_transport_offers(graph):
+        value = offer_delivery_datetime(graph, offer)
         if value is not None:
             parsed = _parse_datetime(str(value))
             if parsed is not None:

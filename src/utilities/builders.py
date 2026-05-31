@@ -159,14 +159,9 @@ def build_logistics_request(sender: URIRef, receiver: URIRef, order_graph: Graph
 
 
 def build_transport_request(sender: URIRef, receiver: URIRef, lote_graph: Graph, lote: URIRef) -> Graph:
-    graph = Graph()
-    bind_namespaces(graph)
-    for triple in lote_graph:
-        graph.add(triple)
-    action = DATA[f"action/transport/request/{uuid4()}"]
-    graph.add((action, RDF.type, ECSDI.SolicitarPresupuestoTransporte))
-    graph.add((action, ECSDI.accionSobreLote, lote))
-    return build_message(graph, action, ACL.request, sender, receiver)
+    from .transport_proto import build_demanar_oferta_message
+
+    return build_demanar_oferta_message(sender, receiver, lote_graph, lote)
 
 
 def build_recogida_devolucion_request(
@@ -191,19 +186,21 @@ def build_recogida_devolucion_request(
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
-def build_transport_offer(sender: URIRef, receiver: URIRef, action: URIRef, lote: URIRef, transportista: URIRef, price: Decimal, max_days: int) -> Graph:
-    graph = Graph()
-    bind_namespaces(graph)
-    offer = DATA[f"oferta/{uuid4()}"]
-    delivery_date = datetime.now() + timedelta(days=max_days)
-    graph.add((offer, RDF.type, ECSDI.OfertaTransporte))
-    graph.add((offer, ECSDI.ofertaParaLote, lote))
-    graph.add((offer, ECSDI.ofertaRealizadaPor, transportista))
-    graph.add((offer, ECSDI.precioOferta, decimal_literal(price)))
-    graph.add((offer, ECSDI.plazoMaximoDias, Literal(max_days, datatype=XSD.integer)))
-    graph.add((offer, ECSDI.fechaEntregaEstimada, Literal(delivery_date.isoformat(timespec="seconds"), datatype=XSD.dateTime)))
-    graph.add((offer, ECSDI.estadoOferta, Literal("propuesta")))
-    return build_message(graph, offer, ACL.inform, sender, receiver)
+def build_transport_offer(
+    sender: URIRef,
+    receiver: URIRef,
+    action: URIRef,
+    lote_graph: Graph,
+    lote: URIRef,
+    transportista: URIRef,
+    price: Decimal,
+    max_days: int,
+) -> Graph:
+    from .transport_proto import build_oferta_transport_message
+
+    return build_oferta_transport_message(
+        sender, receiver, action, lote_graph, lote, transportista, price, max_days
+    )
 
 
 def build_aviso_cl_acceptance(

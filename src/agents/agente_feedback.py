@@ -829,16 +829,18 @@ def _is_recommendation_request(graph: Graph, action: URIRef) -> bool:
 
 
 def _extract_delivery_date(graph: Graph) -> str | None:
-    for offer in graph.subjects(RDF.type, ECSDI.OfertaTransporte):
-        fecha = next(graph.objects(offer, ECSDI.fechaEntregaEstimada), None)
+    from utilities.transport_proto import iter_transport_offers, offer_delivery_datetime
+
+    for offer in iter_transport_offers(graph):
+        fecha = offer_delivery_datetime(graph, offer)
         if fecha is not None:
-            return str(fecha)
+            return fecha
     for envio in graph.subjects(RDF.type, ECSDI.EnvioInterno):
         lote = next(graph.objects(envio, ECSDI.envioTieneLote), None)
         if lote is not None:
-            for offer in graph.subjects(RDF.type, ECSDI.OfertaTransporte):
+            for offer in iter_transport_offers(graph):
                 if (offer, ECSDI.ofertaParaLote, lote) in graph:
-                    fecha = next(graph.objects(offer, ECSDI.fechaEntregaEstimada), None)
+                    fecha = offer_delivery_datetime(graph, offer)
                     if fecha is not None:
                         return str(fecha)
     return None

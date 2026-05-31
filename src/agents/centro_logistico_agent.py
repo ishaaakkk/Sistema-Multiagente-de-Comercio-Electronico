@@ -39,6 +39,14 @@ from utilities.runtime import (
     unregister_service,
 )
 from utilities.storage import load_json, save_json
+from utilities.transport_proto import (
+    find_transport_offer,
+    offer_is_accepted,
+    offer_max_days,
+    offer_price,
+    offer_transportista,
+    set_offer_accepted,
+)
 
 
 DEFAULT_AGENT_URI = AGENTS.CentroLogisticoBarcelona
@@ -143,7 +151,7 @@ def create_app(
                 _close_contract_net(
                     agent_uri, lote, lote_graph, best_offer, best_transportista, all_offers, log_tag
                 )
-                best_offer_graph.set((best_offer, ECSDI.estadoOferta, Literal("aceptada")))
+                set_offer_accepted(best_offer_graph, best_offer, True)
                 _merge_graphs(best_offer_graph, lote_graph)
                 _reserve_stock_from_lote(stock_reservations, lote_graph, lote, center, product_quantities)
                 save_json("stock_reservations.json", stock_reservations)
@@ -473,15 +481,12 @@ def _negotiate_transport(
         try:
             request_msg = build_transport_request(agent_uri, AGENTS.TransportistaExpress, lote_graph, lote)
             offer_graph = post_graph(url, request_msg, timeout=DEFAULT_TRANSPORT_TIMEOUT)
-            offer = next(offer_graph.subjects(RDF.type, ECSDI.OfertaTransporte), None)
-            if offer is None:
+            offer = find_transport_offer(offer_graph)
+            if offer is None or not offer_is_accepted(offer_graph, offer):
                 return None
-            price = Decimal(str(next(offer_graph.objects(offer, ECSDI.precioOferta), "99999")))
-            transportista = next(
-                offer_graph.objects(offer, ECSDI.ofertaRealizadaPor),
-                AGENTS.TransportistaExpress,
-            )
-            days = next(offer_graph.objects(offer, ECSDI.plazoMaximoDias), "?")
+            price = offer_price(offer_graph, offer)
+            transportista = offer_transportista(offer_graph, offer, AGENTS.TransportistaExpress)
+            days = offer_max_days(offer_graph, offer)
             return {
                 "url": url,
                 "graph": offer_graph,
@@ -537,28 +542,22 @@ def _close_contract_net(
     está disponible, simplemente se loguea.
     """
 
-    def _decision_msg(performative: URIRef, offer: URIRef, transportista: URIRef) -> Graph:
-        msg = Graph()
-        bind_namespaces(msg)
-        decision = DATA[f"decision/{uuid4()}"]
-        msg.add((decision, RDF.type, ECSDI.DecisionContratoTransporte))
-        msg.add((decision, ECSDI.respuestaSobreOferta, offer))
-        return build_message(msg, decision, performative, agent_uri, transportista)
-
     for proposal in proposals:
         try:
-            if proposal["offer"] == best_offer:
-                msg = _decision_msg(ACL["accept-proposal"], proposal["offer"], proposal["transportista"])
-                log(log_tag, f"accept-proposal → {proposal['url']}")
-            else:
-                msg = _decision_msg(ACL["reject-proposal"], proposal["offer"], proposal["transportista"])
-                log(log_tag, f"reject-proposal → {proposal['url']}")
+            offer_graph = proposal["graph"]
+            offer = proposal["offer"]
+            accepted = proposal["offer"] == best_offer
+            set_offer_accepted(offer_graph, offer, accepted)
+            performative = ACL["accept-proposal"] if accepted else ACL["reject-proposal"]
+            msg = build_message(offer_graph, offer, performative, agent_uri, proposal["transportista"])
+            label = "accept-proposal" if accepted else "reject-proposal"
+            log(log_tag, f"{label} → {proposal['url']}")
             try:
                 post_graph(proposal["url"], msg, timeout=DEFAULT_TRANSPORT_TIMEOUT)
             except Exception as exc:
                 log(log_tag, f"No se pudo notificar a {proposal['url']}: {exc}")
         except Exception as exc:
-            log(log_tag, f"Fallo construyendo decision para {proposal['url']}: {exc}")
+            log(log_tag, f"Fallo cerrando contrato para {proposal['url']}: {exc}")
 
 
 def _build_lote_graph(

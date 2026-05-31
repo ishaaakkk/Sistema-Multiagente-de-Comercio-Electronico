@@ -1,0 +1,35 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
+@prefix ecom: <http://www.semanticweb.org/ecsdipractica/ontology#> .
+
+# Puente ontologico CL <-> Transportista (grupo ecsdipractica).
+# El codigo ACL de negociacion usa el vocabulario ecom:; el resto del sistema
+# (pedidos, catalogo, envios internos) sigue en : (comercio_electronico).
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/transport_interop> rdf:type owl:Ontology ;
+    rdfs:label "Interoperabilidad transporte ECSDI / ecsdipractica" ;
+    owl:imports <http://www.semanticweb.org/ecsdipractica/ontology> .
+
+:Transportista owl:deprecated "true"^^xsd:boolean ;
+    rdfs:comment "Sustituido por ecom:Transportista en mensajes CL-transportista" ;
+    owl:equivalentClass ecom:Transportista .
+
+:LoteEnvio owl:equivalentClass ecom:LotEnviament .
+
+:SolicitarPresupuestoTransporte owl:deprecated "true"^^xsd:boolean ;
+    owl:equivalentClass ecom:DemanarOfertaTransport .
+
+:OfertaTransporte owl:deprecated "true"^^xsd:boolean ;
+    owl:equivalentClass ecom:OfertaTransport .
+
+:DecisionContratoTransporte owl:deprecated "true"^^xsd:boolean ;
+    rdfs:comment "Sustituido por ecom:acceptada en OfertaTransport (1 ronda, sin contraoferta)" .
+
+:precioOferta owl:equivalentProperty ecom:preuTransport .
+:plazoMaximoDias owl:equivalentProperty ecom:terminiDies .
+:fechaEntregaEstimada owl:equivalentProperty ecom:dataPrevista .
+:ofertaRealizadaPor owl:equivalentProperty ecom:ofertaDeTransportista .
+:nombreEmpresaTransportista owl:equivalentProperty ecom:nomTransportista .
