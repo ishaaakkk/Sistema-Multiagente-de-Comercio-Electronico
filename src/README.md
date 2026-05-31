@@ -25,7 +25,7 @@ Agentes:
 - `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
 - `AgenteFeedback`: registra compras completadas y valoraciones.
 - `AgenteVendedorExterno`: anuncia productos externos al catalogo y recibe avisos de envio de los productos que gestiona.
-- `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados, solicita recogida y despues solicita reembolso.
+- `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados, simula recogida por mensajeria interna y solicita reembolso al financiero.
 - `assistant_demo.py`: cliente de prueba que actua como `AsistenteVirtual`.
 - `devolucion_demo.py`: cliente de prueba que compra un producto y solicita su devolucion.
 
@@ -51,7 +51,7 @@ PYTHONPATH=src python -m agents.agente_feedback --port 9007
 PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008
 PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --logistics-url http://127.0.0.1:9002/comm --financiero-url http://127.0.0.1:9005/comm --feedback-url http://127.0.0.1:9007/comm --vendedor-externo-url http://127.0.0.1:9008/comm
 PYTHONPATH=src python -m agents.agente_catalogo --port 9006
-PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --shop-url http://127.0.0.1:9001/comm --financiero-url http://127.0.0.1:9005/comm --transport-url http://127.0.0.1:9003/comm
+PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --shop-url http://127.0.0.1:9001/comm --financiero-url http://127.0.0.1:9005/comm
 PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
 PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 ```

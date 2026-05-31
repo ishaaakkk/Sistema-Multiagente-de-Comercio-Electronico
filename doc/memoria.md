@@ -917,6 +917,8 @@ Durante el desarrollo se hicieron ajustes para alinear PD, ontología y código:
   (0–199, 200–399, …), no por calle exacta. La prioridad del lote es la más
   urgente de sus pedidos. El despacho (`CiertaHoraDia`) espera una ventana de
   inactividad configurable (`LOT_DEBOUNCE_SECONDS`, más corta si prioridad 1).
+- La recogida en devoluciones usa **mensajería interna mock** dentro de
+  `AgenteDevolucion` (PDT `MensajeriaInternaConfirma`); no contacta transportistas.
 
 ## Capítulo 9. Resultados y límites de la solución
 
