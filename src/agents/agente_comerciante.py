@@ -301,12 +301,10 @@ def _plan_escoger_cl(
     ordered_urls = _sort_logistics_by_distance(logistics_urls, client_dist)
 
     logistics_graph = _build_partial_order_graph(order_graph, pedido, lines_for_logistics)
-    confirmaciones = _dispatch_to_logistics_ordered(
+    confirmaciones, unassigned_lines = _dispatch_to_logistics_ordered(
         agent_uri, logistics_graph, pedido, ordered_urls
     )
-    needs_async = any(_response_accepts_pending_lote(c) for c in confirmaciones) and not any(
-        list(c.subjects(RDF.type, ECSDI.ConfirmacionEnvio)) for c in confirmaciones
-    )
+    needs_async = any(_response_accepts_pending_lote(c) for c in confirmaciones)
     if needs_async and confirmation_buffers is not None and confirmation_lock is not None and pedido_id:
         waited = _wait_shipping_confirmations(
             pedido_id, confirmation_buffers, confirmation_lock, shipping_confirmation_timeout
@@ -318,6 +316,16 @@ def _plan_escoger_cl(
             receiver,
             action,
             "Ningún centro logístico pudo planificar el envío",
+        )
+    unconfirmed_lines = _unconfirmed_shipping_lines(confirmaciones, lines_for_logistics)
+    if unassigned_lines or unconfirmed_lines:
+        pending = list(dict.fromkeys([*unassigned_lines, *unconfirmed_lines]))
+        labels = ", ".join(_line_label(order_graph, line) for line in pending)
+        return build_failure(
+            agent_uri,
+            receiver,
+            action,
+            f"No se pudo confirmar el envío de todas las líneas del pedido: {labels}",
         )
     for shipping_response in confirmaciones:
         for triple in shipping_response:
@@ -445,6 +453,32 @@ def _response_accepts_pending_lote(response: Graph) -> bool:
         if estado == "pendiente_envio":
             return True
     return False
+
+
+def _unconfirmed_shipping_lines(responses: list[Graph], expected_lines: list[URIRef]) -> list[URIRef]:
+    confirmed: set[URIRef] = set()
+    for response in responses:
+        if not any(response.subjects(RDF.type, ECSDI.ConfirmacionEnvio)):
+            continue
+        for confirmation in response.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+            envio = next(response.objects(confirmation, ECSDI.confirmacionEnvio), None)
+            lote = next(response.objects(envio, ECSDI.envioTieneLote), None) if envio is not None else None
+            if lote is not None:
+                confirmed.update(response.objects(lote, ECSDI.loteTieneLinea))
+        for envio in response.subjects(RDF.type, ECSDI.EnvioInterno):
+            lote = next(response.objects(envio, ECSDI.envioTieneLote), None)
+            if lote is not None:
+                confirmed.update(response.objects(lote, ECSDI.loteTieneLinea))
+    return [line for line in expected_lines if line not in confirmed]
+
+
+def _line_label(graph: Graph, line: URIRef) -> str:
+    product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
+    if product is not None:
+        product_id = next(graph.objects(product, ECSDI.idProducto), None)
+        if product_id is not None:
+            return str(product_id)
+    return str(line).rsplit("/", 1)[-1]
 
 
 def _handle_async_shipping_confirmation(
@@ -588,7 +622,7 @@ def _dispatch_to_logistics_ordered(
     logistics_graph: Graph,
     pedido: URIRef,
     ordered_urls: list[str],
-) -> list[Graph]:
+) -> tuple[list[Graph], list[URIRef]]:
     """
     Asignación greedy:
     - se prueba CL más cercano primero
@@ -598,7 +632,7 @@ def _dispatch_to_logistics_ordered(
     log("comerciante", "ENTRANDO EN DISPATCH LOGISTICS ORDERED")
     remaining_lines = list(logistics_graph.objects(pedido, ECSDI.pedidoTieneLinea))
     if not remaining_lines:
-        return []
+        return [], []
 
     confirmations: list[Graph] = []
 
@@ -637,7 +671,9 @@ def _dispatch_to_logistics_ordered(
                         if line in remaining_lines:
                             remaining_lines.remove(line)
 
-    return confirmations
+    return confirmations, remaining_lines
+
+
 def _classify_lines(graph: Graph, lines: list) -> tuple[list, list, list]:
     """Clasifica lineas en (internas, externas-envio-tienda, externas-envio-propio)."""
     internal, ext_tienda, ext_propio = [], [], []

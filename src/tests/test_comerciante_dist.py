@@ -13,6 +13,7 @@ from rdflib.namespace import RDF, XSD
 
 from agents.agente_comerciante import (
     _dispatch_to_logistics_ordered,
+    _plan_escoger_cl,
     _plan_preguntar_datos_compra,
     _sort_logistics_by_distance,
 )
@@ -157,14 +158,59 @@ class DispatchOrderedTests(unittest.TestCase):
             [_confirmation_for_line(line_b)],
         ]
 
-        result = _dispatch_to_logistics_ordered(
+        result, remaining = _dispatch_to_logistics_ordered(
             AGENTS.AgenteComerciante,
             logistics_graph,
             pedido,
             ["http://cl-bcn/comm", "http://cl-mad/comm"],
         )
         self.assertEqual(len(result), 2)
+        self.assertEqual(remaining, [])
         self.assertEqual(mock_dispatch.call_count, 2)
+
+    @patch("agents.agente_comerciante._dispatch_to_logistics")
+    def test_reports_remaining_lines_when_no_cl_can_assign_all(self, mock_dispatch):
+        line_a = DATA["linea/A"]
+        line_b = DATA["linea/B"]
+        pedido = DATA["pedido/TEST-MULTI"]
+        logistics_graph = _minimal_order_graph([line_a, line_b])
+
+        mock_dispatch.side_effect = [
+            [_confirmation_for_line(line_a)],
+            [],
+        ]
+
+        result, remaining = _dispatch_to_logistics_ordered(
+            AGENTS.AgenteComerciante,
+            logistics_graph,
+            pedido,
+            ["http://cl-bcn/comm", "http://cl-mad/comm"],
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(remaining, [line_b])
+
+    @patch("agents.agente_comerciante._dispatch_to_logistics_ordered")
+    def test_plan_fails_before_billing_when_any_line_remains_unassigned(self, mock_dispatch):
+        line_a = DATA["linea/A"]
+        line_b = DATA["linea/B"]
+        pedido = DATA["pedido/TEST-MULTI"]
+        order_graph = _minimal_order_graph([line_a, line_b])
+        action = DATA["action/order/TEST-MULTI"]
+
+        mock_dispatch.return_value = ([_confirmation_for_line(line_a)], [line_b])
+
+        result = _plan_escoger_cl(
+            AGENTS.AgenteComerciante,
+            AGENTS.AsistenteVirtual,
+            action,
+            order_graph,
+            pedido,
+            [line_a, line_b],
+            ["http://cl-bcn/comm"],
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(get_message(result).performative, ACL.failure)
 
 
 if __name__ == "__main__":

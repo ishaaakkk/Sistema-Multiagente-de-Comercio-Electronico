@@ -1049,6 +1049,9 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con el catálogo: {exc}"}),
                 mimetype="application/json"
             )
+        failure = _acl_failure_payload(response, "Catálogo rechazó la búsqueda")
+        if failure is not None:
+            return app.response_class(json.dumps(failure), mimetype="application/json")
 
         from utilities.namespaces import ECSDI as _ECSDI
         products = []
@@ -1140,6 +1143,9 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con el comerciante: {exc}"}),
                 mimetype="application/json"
             )
+        failure = _acl_failure_payload(order_response, "Comerciante rechazó el pedido")
+        if failure is not None:
+            return app.response_class(json.dumps(failure), mimetype="application/json")
 
         from utilities.namespaces import ECSDI as _ECSDI
         pedido = next(order_response.subjects(RDF.type, _ECSDI.Pedido), None)
@@ -1205,11 +1211,10 @@ def create_app(
                 comentario=comentario,
             )
             response = post_graph(feedback_url, val_message)
-            msg = get_message(response)
-            if msg is not None and msg.performative == ACL.failure:
-                reason = str(next(response.objects(None, RDFS.comment), "")) or "Feedback rechazó la valoración"
+            failure = _acl_failure_payload(response, "Feedback rechazó la valoración")
+            if failure is not None:
                 return app.response_class(
-                    json.dumps({"error": reason}),
+                    json.dumps(failure),
                     mimetype="application/json"
                 )
         except Exception as exc:
@@ -1254,6 +1259,9 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con devolución: {exc}"}),
                 mimetype="application/json"
             )
+        failure = _acl_failure_payload(response, "Devolución rechazó la solicitud")
+        if failure is not None:
+            return app.response_class(json.dumps(failure), mimetype="application/json")
 
         devolucion_node = next(response.subjects(RDF.type, ECSDI.Devolucion), None)
         reembolso = next(response.objects(devolucion_node, ECSDI.devolucionTieneReembolso), None) if devolucion_node else None
@@ -1300,6 +1308,9 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con feedback: {exc}"}),
                 mimetype="application/json"
             )
+        failure = _acl_failure_payload(response, "Feedback rechazó la recomendación")
+        if failure is not None:
+            return app.response_class(json.dumps(failure), mimetype="application/json")
 
         items = []
         for rec in response.subjects(RDF.type, ECSDI.Recomendacion):
@@ -1379,6 +1390,14 @@ def _payment_label(method: str, card_number: str) -> str:
     if len(digits) >= 4:
         return f"tarjeta ****{digits[-4:]}"
     return method
+
+
+def _acl_failure_payload(response: Graph, default_reason: str) -> dict | None:
+    msg = get_message(response)
+    if msg is None or msg.performative != ACL.failure:
+        return None
+    reason = str(next(response.objects(None, RDFS.comment), "")) or default_reason
+    return {"error": reason}
 
 
 def main():
