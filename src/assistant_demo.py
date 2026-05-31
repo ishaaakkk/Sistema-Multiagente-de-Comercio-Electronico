@@ -9,7 +9,7 @@ from utilities.namespaces import AGENTS, ECSDI
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Demo de fase 2: busqueda y compra simple.")
+    parser = argparse.ArgumentParser(description="Demo de fase 3: busqueda, compra y envio simple.")
     parser.add_argument("--catalog-url", default="http://127.0.0.1:9006/comm")
     parser.add_argument("--shop-url", default="http://127.0.0.1:9001/comm")
     parser.add_argument("--search-name", default="iphone")
@@ -45,10 +45,12 @@ def main():
     product_id = str(next(search_response.objects(chosen, ECSDI.idProducto)))
     price = Decimal(str(next(search_response.objects(chosen, ECSDI.precioProducto), "0")))
 
-    # 3. Pedido → AgenteComerciante (TiendaAgent) con precio incluido en cada linea
+    # 3. Pedido → AgenteComerciante con precio y datos completos del producto
+    # Se pasa search_response como catalog_graph para que el comerciante
+    # pueda clasificar correctamente la linea (interno/externo, gestionEnvioExterno)
     order_message = build_order_message(
         sender=AGENTS.AsistenteVirtual,
-        receiver=AGENTS.TiendaAgent,
+        receiver=AGENTS.AgenteComerciante,
         product_quantities={product_id: 1},
         product_prices={product_id: price},
         city=args.city,
@@ -56,18 +58,39 @@ def main():
         postal_code=args.postal_code,
         country=args.country,
         priority=args.priority,
+        catalog_graph=search_response,
     )
     order_response = post_graph(args.shop_url, order_message)
 
     pedido = next(order_response.subjects(RDF.type, ECSDI.Pedido), None)
     factura = next(order_response.subjects(RDF.type, ECSDI.Factura), None)
-    confirmacion = next(order_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None)
+
     print("\nPedido creado:")
     print(f"Pedido: {next(order_response.objects(pedido, ECSDI.idPedido), pedido)}")
     print(f"Estado: {next(order_response.objects(pedido, ECSDI.estadoPedido), '')}")
     print(f"Factura: {next(order_response.objects(factura, ECSDI.idFactura), factura)}")
     print(f"Importe: {next(order_response.objects(factura, ECSDI.importeFactura), '')} EUR")
-    print(f"Confirmacion envio: {confirmacion}")
+
+    # Envio interno — ConfirmacionEnvio enlazada al pedido
+    confirmacion = next(order_response.objects(pedido, ECSDI.pedidoTieneConfirmacion), None)
+    if confirmacion:
+        envio = next(order_response.objects(confirmacion, ECSDI.confirmacionEnvio), None)
+        transportista = next(order_response.objects(envio, ECSDI.envioRealizadoPor), None) if envio else None
+        oferta = next(order_response.subjects(RDF.type, ECSDI.OfertaTransporte), None)
+        fecha = next(order_response.objects(oferta, ECSDI.fechaEntregaEstimada), None) if oferta else None
+        precio_envio = next(order_response.objects(oferta, ECSDI.precioOferta), None) if oferta else None
+        print(f"Envio interno: OK")
+        print(f"  Transportista: {transportista}")
+        print(f"  Fecha estimada: {fecha}")
+        print(f"  Coste envio:    {precio_envio} EUR")
+    else:
+        # Envio externo — EnvioExterno enlazado al pedido
+        envio_ext = next(order_response.objects(pedido, ECSDI.pedidoTieneEnvio), None)
+        if envio_ext:
+            vendedor = next(order_response.objects(envio_ext, ECSDI.envioExternoGestionadoPor), None)
+            print(f"Envio externo: el vendedor ({vendedor}) gestiona el envio directamente")
+        else:
+            print("Envio: no disponible")
 
 
 if __name__ == "__main__":

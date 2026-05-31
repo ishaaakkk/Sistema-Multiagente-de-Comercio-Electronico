@@ -14,7 +14,8 @@ comercio electronico.
   - `pdtool/defaultreport_2026-05-19/`: reporte HTML y diagramas generados desde PDT.
 - `src/`: implementacion Python del prototipo multiagente.
   - `assistant_demo.py`: cliente de prueba que actua como asistente virtual.
-  - `develop.sh`: script auxiliar para levantar parte del stack local.
+  - `devolucion_demo.py`: cliente de prueba para comprar y solicitar devolucion.
+  - `develop.sh`: script auxiliar para levantar el stack local de la demo.
   - `requirements.txt`: dependencias Python de la implementacion.
   - `agents/`: agentes ejecutables del sistema.
   - `utilities/`: utilidades compartidas para RDF, FIPA-ACL, HTTP, catalogo y runtime.
@@ -31,21 +32,28 @@ Agentes principales:
 
 - `agents.directory_service`: directorio de registro y descubrimiento de agentes.
 - `agents.agente_catalogo`: busqueda de productos en el catalogo RDF en memoria.
-- `agents.tienda_agent`: agente comerciante; recibe pedidos, genera factura y coordina logistica y cobro.
-- `agents.centro_logistico_agent`: crea lotes de envio y solicita ofertas de transporte.
+- `agents.agente_comerciante`: agente comerciante; recibe pedidos, genera factura y coordina logistica, cobro, feedback y vendedores externos.
+- `agents.centro_logistico_agent`: selecciona un centro con stock suficiente, crea lotes de envio y solicita ofertas de transporte.
 - `agents.transportista_agent`: devuelve ofertas de transporte para lotes.
 - `agents.agente_financiero`: simula el cobro del pedido.
 - `agents.proveedor_pagos_agent`: proveedor de pagos externo simplificado.
+- `agents.agente_feedback`: registra compras pendientes de valoracion y opiniones de productos.
+- `agents.agente_devolucion`: valida devoluciones de pedidos completados, solicita la recogida y despues solicita el reembolso al agente financiero.
 
 Flujo principal de la demo:
 
 1. `assistant_demo.py` solicita una busqueda a `AgenteCatalogo`.
 2. El catalogo devuelve productos que cumplen las restricciones.
-3. El asistente escoge el primer producto y envia un pedido a `TiendaAgent`.
+3. El asistente escoge el primer producto y envia un pedido a `AgenteComerciante`.
 4. La tienda genera factura y delega la preparacion del envio al centro logistico.
-5. El centro logistico solicita una oferta al transportista.
-6. La tienda notifica el cobro al agente financiero.
+5. El centro logistico comprueba stock declarado, reserva las unidades y solicita una oferta al transportista.
+6. La tienda notifica el cobro al agente financiero y la compra completada al agente feedback.
 7. La demo muestra el pedido, estado, factura, importe y confirmacion de envio.
+
+Tras una compra, `feedback_demo.py` puede enviar una valoracion para un producto del pedido.
+Tras una compra, `devolucion_demo.py` puede solicitar la devolucion de un producto del pedido
+contra `AgenteDevolucion`, que consulta el pedido completado en la tienda, coordina la recogida y despues coordina el reembolso.
+Las recomendaciones y la solicitud proactiva de opinion tienen una implementacion basica en memoria.
 
 ## Requisitos
 
@@ -101,7 +109,7 @@ Terminal 5 - Tienda:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.tienda_agent --port 9001 --dir http://127.0.0.1:9000
+PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
 ```
 
 Terminal 6 - Catalogo:
@@ -111,7 +119,28 @@ source .venv/bin/activate
 PYTHONPATH=src python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000
 ```
 
-Terminal 7 - Demo:
+Terminal 7 - Agente feedback:
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000
+```
+
+Terminal 8 - Agente vendedor externo:
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --announce-products
+```
+
+Terminal 9 - Agente devolucion:
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000
+```
+
+Terminal 10 - Demo compra:
 
 ```bash
 source .venv/bin/activate
@@ -132,6 +161,34 @@ PYTHONPATH=src python -m assistant_demo \
   --priority 1
 ```
 
+Demo feedback (valoracion; con `--simulate-notify` no hace falta compra previa):
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+```
+
+Tras `assistant_demo`, valorar el pedido devuelto:
+
+```bash
+PYTHONPATH=src python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --pedido-id PED-XXXXXXXX --product-id P-IPHONE19
+```
+
+Estado de opiniones pendientes: `http://127.0.0.1:9007/status`
+
+Demo devolucion completa (compra un producto y solicita su devolucion):
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
+```
+
+Para devolver un pedido ya completado que siga en memoria en la tienda:
+
+```bash
+PYTHONPATH=src python -m devolucion_demo --pedido-id PED-XXXXXXXX --product-id P-IPHONE19 --devolucion-url http://127.0.0.1:9009/comm
+```
+
 ## Ejecucion en Windows PowerShell
 
 ```powershell
@@ -147,14 +204,19 @@ $env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
 $env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.tienda_agent --port 9001 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000
 ```
 
 Demo:
 
 ```powershell
 $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
+$env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+$env:PYTHONPATH="src"; python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 ```
 
 ## Puertos usados
@@ -162,12 +224,15 @@ $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9
 | Puerto | Componente |
 | --- | --- |
 | 9000 | `DirectoryService` |
-| 9001 | `TiendaAgent` |
+| 9001 | `AgenteComerciante` |
 | 9002 | `CentroLogisticoAgent` |
 | 9003 | `TransportistaAgent` |
 | 9004 | `ProveedorPagosAgent` |
 | 9005 | `AgenteFinanciero` |
 | 9006 | `AgenteCatalogo` |
+| 9007 | `AgenteFeedback` |
+| 9008 | `AgenteVendedorExterno` |
+| 9009 | `AgenteDevolucion` |
 
 ## Script auxiliar
 
@@ -178,9 +243,9 @@ cd src
 bash develop.sh
 ```
 
-Este script levanta el directorio, el transportista, el centro logistico y la
-tienda. Para ejecutar la demo actual completa tambien deben estar activos el
-agente financiero y el agente catalogo.
+Este script levanta el directorio y los agentes principales de la demo actual:
+transportista, centro logistico, financiero, feedback, vendedor externo, tienda,
+catalogo y devolucion.
 
 Para una prueba distribuida, los agentes pueden arrancarse en maquinas distintas
 usando `--open --hostaddr <ip>` y registrandolos contra el directorio comun con

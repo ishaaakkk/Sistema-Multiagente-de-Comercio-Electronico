@@ -7,7 +7,7 @@ from flask import Flask
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from utilities.acl import build_failure, build_message, build_not_understood, get_message
+from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -43,25 +43,28 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteFinanciero, "Mensaje ACL no reconocido"))
+            def reply(response_graph: Graph):
+                return rdf_response(correlate_reply(response_graph, message))
             if message.performative != ACL.request:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
+                return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
             if (action, RDF.type, ECSDI.SolicitarOperacionPago) not in graph:
-                return rdf_response(build_not_understood(agent_uri, message.sender, "Accion de pago no soportada"))
+                return reply(build_not_understood(agent_uri, message.sender, "Accion de pago no soportada"))
 
             operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
             if operacion is None:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Falta la operacion de pago"))
+                return reply(build_failure(agent_uri, message.sender, action, "Falta la operacion de pago"))
 
             importe = Decimal(str(next(graph.objects(operacion, ECSDI.importeOperacion), "0")))
             if importe <= 0:
-                return rdf_response(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
+                return reply(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
 
             # Accion: Realizar Transaccion — simula el cobro y genera ConfirmacionTransaccion
-            response = _build_confirmacion(agent_uri, message.sender, action, operacion, importe)
-            log("pagos", f"Cobro confirmado: {importe} EUR para operacion {operacion}")
-            return rdf_response(response)
+            operation_type = _operation_type(graph, operacion)
+            response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe)
+            log("pagos", f"Operacion confirmada: {importe} EUR para operacion {operacion}")
+            return reply(response)
 
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AgenteFinanciero, None, str(exc)), status=500)
@@ -74,6 +77,7 @@ def _build_confirmacion(
     receiver: URIRef,
     action: URIRef,
     operacion: URIRef,
+    operation_type: URIRef,
     importe: Decimal,
 ) -> Graph:
     graph = Graph()
@@ -85,7 +89,7 @@ def _build_confirmacion(
     graph.add((confirmacion, ECSDI.respuestaDeAccion, action))
 
     # Actualizamos el estado de la operación en el grafo de respuesta
-    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
+    graph.add((operacion, RDF.type, operation_type))
     graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
@@ -93,6 +97,13 @@ def _build_confirmacion(
     graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
 
     return build_message(graph, confirmacion, ACL.inform, sender, receiver)
+
+
+def _operation_type(graph: Graph, operacion: URIRef) -> URIRef:
+    for operation_type in (ECSDI.CobroCliente, ECSDI.ReembolsoCliente, ECSDI.PagoVendedorExterno):
+        if (operacion, RDF.type, operation_type) in graph:
+            return operation_type
+    return ECSDI.CobroCliente
 
 
 def main():
@@ -109,7 +120,14 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("PROVEEDOR_PAGOS", advertised_host, args.port)
-    registered = register_service(args.dir, service_id, "PROVEEDOR_PAGOS", address, f"pagos-{args.port}")
+    registered = register_service(
+        args.dir,
+        service_id,
+        "PROVEEDOR_PAGOS",
+        address,
+        f"pagos-{args.port}",
+        capabilities=[ECSDI.SolicitarOperacionPago],
+    )
     try:
         log(f"pagos-{args.port}", f"listening on {bind_host}:{args.port}")
         create_app().run(host=bind_host, port=args.port, debug=False, use_reloader=False)

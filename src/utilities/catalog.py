@@ -18,12 +18,63 @@ def stock_uri(product_id: str, center_id: str) -> URIRef:
     return DATA[f"stock/{product_id}/{center_id}"]
 
 
+PRODUCT_SEARCH_SPARQL = """
+PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+PREFIX ecsdi: <http://www.semanticweb.org/ecsdi/comercio_electronico/>
+
+SELECT DISTINCT ?product WHERE {
+    {
+        ?product rdf:type ecsdi:ProductoInterno .
+    } UNION {
+        ?product rdf:type ecsdi:ProductoExterno .
+    }
+    ?product ecsdi:nombreProducto ?name ;
+             ecsdi:marcaProducto ?brand ;
+             ecsdi:precioProducto ?price ;
+             ecsdi:valoracionMedia ?rating .
+    OPTIONAL { ?product ecsdi:descripcionProducto ?description }
+    OPTIONAL { ?product ecsdi:idProducto ?pid }
+    FILTER (
+        (!BOUND(?name_filter)     || CONTAINS(LCASE(STR(?name)),       LCASE(STR(?name_filter)))) &&
+        (!BOUND(?brand_filter)    || CONTAINS(LCASE(STR(?brand)),      LCASE(STR(?brand_filter)))) &&
+        (!BOUND(?min_price)       || xsd:decimal(?price) >= xsd:decimal(?min_price)) &&
+        (!BOUND(?max_price)       || xsd:decimal(?price) <= xsd:decimal(?max_price)) &&
+        (!BOUND(?min_rating)      || xsd:decimal(?rating) >= xsd:decimal(?min_rating))
+    )
+}
+ORDER BY ?product
+"""
+
+
 def filter_products(graph: Graph, constraints: dict) -> list[URIRef]:
-    matches = []
-    for product in graph.subjects(RDF.type, ECSDI.ProductoInterno):
-        data = describe_product(graph, product)
-        if _matches(data, constraints):
-            matches.append(product)
+    """Filtra productos del catálogo aplicando las restricciones recibidas.
+
+    Implementado como SPARQL SELECT con FILTERs sobre nombre, marca, precio y
+    valoración (cap. 6 de los apuntes). Mantiene la misma firma que la versión
+    iterativa anterior para no romper a los llamantes.
+    """
+
+    init_bindings: dict = {}
+    if constraints.get("name"):
+        init_bindings["name_filter"] = Literal(str(constraints["name"]))
+    if constraints.get("brand"):
+        init_bindings["brand_filter"] = Literal(str(constraints["brand"]))
+    if constraints.get("min_price") is not None:
+        init_bindings["min_price"] = Literal(str(constraints["min_price"]), datatype=XSD.decimal)
+    if constraints.get("max_price") is not None:
+        init_bindings["max_price"] = Literal(str(constraints["max_price"]), datatype=XSD.decimal)
+    if constraints.get("min_rating") is not None:
+        init_bindings["min_rating"] = Literal(str(constraints["min_rating"]), datatype=XSD.decimal)
+
+    matches: list[URIRef] = []
+    seen: set = set()
+    for row in graph.query(PRODUCT_SEARCH_SPARQL, initBindings=init_bindings):
+        product = row.product
+        if product in seen:
+            continue
+        seen.add(product)
+        matches.append(product)
     return matches
 
 
@@ -119,21 +170,6 @@ def order_weight(graph: Graph, product_quantities: dict[str, int]) -> Decimal:
 
 def decimal_literal(value: Decimal | str | int | float) -> Literal:
     return Literal(str(value), datatype=XSD.decimal)
-
-
-def _matches(product: dict, constraints: dict) -> bool:
-    text = f"{product['name']} {product['description']} {product['id']}".casefold()
-    if constraints.get("name") and constraints["name"].casefold() not in text:
-        return False
-    if constraints.get("brand") and constraints["brand"].casefold() not in product["brand"].casefold():
-        return False
-    if constraints.get("min_price") is not None and product["price"] < constraints["min_price"]:
-        return False
-    if constraints.get("max_price") is not None and product["price"] > constraints["max_price"]:
-        return False
-    if constraints.get("min_rating") is not None and product["rating"] < constraints["min_rating"]:
-        return False
-    return True
 
 
 def _str_value(graph: Graph, subject: URIRef, predicate: URIRef) -> str | None:
