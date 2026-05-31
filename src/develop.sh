@@ -83,7 +83,7 @@ sleep 0.5
 # Feedback con scheduler proactivo y delay corto para la demo.
 start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --feedback-delay 60 --recommendation-period 120 --recommendation-warmup 30
 sleep 0.5
-start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --announce-products
+start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 start_agent "Tienda" "$PYTHON" -m agents.agente_comerciante --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
