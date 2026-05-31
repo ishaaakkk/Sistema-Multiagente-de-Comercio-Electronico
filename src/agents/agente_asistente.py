@@ -1,4 +1,5 @@
 import argparse
+import os
 from decimal import Decimal
 from uuid import uuid4
 
@@ -1137,7 +1138,8 @@ def create_app(
                 delivery_dist=delivery_dist,
                 catalog_graph=catalog_graph,
             )
-            order_response = post_graph(shop_url, order_message)
+            order_timeout = float(os.environ.get("ORDER_TIMEOUT", "45"))
+            order_response = post_graph(shop_url, order_message, timeout=order_timeout)
         except Exception as exc:
             return app.response_class(
                 json.dumps({"error": f"No se pudo contactar con el comerciante: {exc}"}),

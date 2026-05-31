@@ -41,7 +41,16 @@ from utilities.storage import load_graph_collection, save_graph_item, save_named
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
-DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = float(os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", "8"))
+_LOT_DISPATCH_INTERVAL = float(os.environ.get("LOT_DISPATCH_INTERVAL", "3"))
+_CL_TRANSPORT_TIMEOUT = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
+# Debe cubrir: ciclo de lote pendiente + CFP paralela a transportistas.
+_DEFAULT_SHIPPING_WAIT = _LOT_DISPATCH_INTERVAL + _CL_TRANSPORT_TIMEOUT * 2 + 4
+DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = float(
+    os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", str(max(15.0, _DEFAULT_SHIPPING_WAIT)))
+)
+DEFAULT_LOGISTICS_REQUEST_TIMEOUT = float(
+    os.environ.get("LOGISTICS_REQUEST_TIMEOUT", str(max(20.0, DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT)))
+)
 
 
 def create_app(
@@ -548,7 +557,7 @@ def _dispatch_to_logistics(
             message = build_logistics_request(
                 agent_uri, AGENTS.CentroLogistico, logistics_graph, pedido
             )
-            response = post_graph(url, message)
+            response = post_graph(url, message, timeout=DEFAULT_LOGISTICS_REQUEST_TIMEOUT)
             msg = get_message(response)
             if msg is None:
                 return None

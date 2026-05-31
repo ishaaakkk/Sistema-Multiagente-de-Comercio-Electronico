@@ -263,6 +263,9 @@ def create_app(
             )
             if lot_dispatch_interval <= 0:
                 _run_dispatch_cycle()
+            else:
+                # No esperar al scheduler: despachar en segundo plano tras agrupar el lote.
+                Thread(target=_run_dispatch_cycle, daemon=True).start()
             return reply(response)
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AsistenteVirtual, None, str(exc)), status=500)

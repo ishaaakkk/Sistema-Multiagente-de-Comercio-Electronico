@@ -20,7 +20,7 @@ Agentes:
 - `DirectoryService`: registro y descubrimiento de agentes para poder desplegarlos en procesos o maquinas distintas.
 - `AgenteComerciante`: atiende `RealizarPedido`, genera factura, coordina logistica, cobro, feedback y vendedores externos.
 - `CentroLogisticoAgent`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
-- `TransportistaAgent`: responde a `SolicitarPresupuestoTransporte` con una `OfertaTransporte`.
+- `TransportistaAgent`: responde a `DemanarOfertaTransport` con una `OfertaTransport`.
 - `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
 - `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
 - `AgenteFeedback`: registra compras completadas y valoraciones.

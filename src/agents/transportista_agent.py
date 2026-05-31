@@ -9,7 +9,7 @@ from rdflib.namespace import RDF, XSD
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_transport_offer
 from utilities.http import graph_from_request, rdf_response
-from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, ECOM, bind_namespaces
+from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 from utilities.transport_proto import find_transport_offer, set_offer_accepted
 from utilities.runtime import (
     agent_address,
@@ -48,8 +48,8 @@ def create_app(
     @app.post("/comm")
     def comm():
         # Plan: ProponerEnvioTransportistas → SeleccionOfertaIniciales (AgenteLogistico / NegociarConTransportistas)
-        # Accion: DemanarOfertaTransport (ecom) — CFP con comandaId/producteId/ciutatDesti
-        # o accionSobreLote; responde OfertaTransport (1 ronda, sin contraoferta).
+        # Accion: DemanarOfertaTransport — CFP con comandaId/producteId/ciutatDesti
+        # y accionSobreLote; responde OfertaTransport (1 ronda, sin contraoferta).
         try:
             graph = graph_from_request()
             message = get_message(graph)
@@ -76,9 +76,7 @@ def create_app(
             if (action, RDF.type, ECSDI.SolicitarRecogidaDevolucion) in graph:
                 return reply(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
 
-            is_demanar = (action, RDF.type, ECOM.DemanarOfertaTransport) in graph
-            is_legacy = (action, RDF.type, ECSDI.SolicitarPresupuestoTransporte) in graph
-            if not is_demanar and not is_legacy:
+            if (action, RDF.type, ECSDI.DemanarOfertaTransport) not in graph:
                 return reply(build_not_understood(agent_uri, message.sender, "Accion de transporte no soportada"))
 
             lote = next(graph.objects(action, ECSDI.accionSobreLote), None)
@@ -182,7 +180,7 @@ def main():
         address,
         f"transportista-{args.port}",
         capabilities=[
-            ECSDI.SolicitarPresupuestoTransporte,
+            ECSDI.DemanarOfertaTransport,
             ECSDI.SolicitarRecogidaDevolucion,
         ],
     )
