@@ -11,6 +11,7 @@ from utilities.acl import build_failure, build_message, build_not_understood, co
 from utilities.catalog import decimal_literal
 from utilities.http import graph_from_request, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
+from utilities.payment import mask_card, normalize_card_digits, payment_method_label, validate_card_payment
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -30,21 +31,19 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
 
     @app.get("/")
     def index():
-        return "ProveedorPagosAgent listo"
+        return "ProveedorPagosAgent listo (cobro con tarjeta / paypal / transferencia)"
 
     @app.post("/comm")
     def comm():
-        # Plan: CobrarAlUsuario / ReembolsoAlUsuario / PagarProdsExternos (AgenteFinanciero)
-        # Percepción: ConfirmacionTransaccionProveedorPagos
-        # El ProveedorPagos es externo al sistema multiagente; simula el cobro real
-        # y devuelve ConfirmacionTransaccion al AgenteFinanciero.
         try:
             graph = graph_from_request()
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteFinanciero, "Mensaje ACL no reconocido"))
+
             def reply(response_graph: Graph):
                 return rdf_response(correlate_reply(response_graph, message))
+
             if message.performative != ACL.request:
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
@@ -60,19 +59,61 @@ def create_app(agent_uri=DEFAULT_AGENT_URI):
             if importe <= 0:
                 return reply(build_failure(agent_uri, message.sender, action, "Importe de pago invalido"))
 
-            # Accion: Realizar Transaccion — simula el cobro y genera ConfirmacionTransaccion
             operation_type = _operation_type(graph, operacion)
-            metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
-            if metodo_pago is None:
-                metodo_pago = next(graph.objects(operacion, ECSDI.metodoPago), None)
-            response = _build_confirmacion(agent_uri, message.sender, action, operacion, operation_type, importe, metodo_pago)
-            log("pagos", f"Operacion confirmada: {importe} EUR para operacion {operacion}")
+            metodo_pago = _read_metodo_pago(graph, action, operacion)
+            tarjeta = _read_tarjeta(graph, action, operacion)
+
+            error = _validate_payment(metodo_pago, tarjeta)
+            if error:
+                log("pagos", f"Operacion rechazada: {error} ({payment_method_label(metodo_pago, tarjeta)})")
+                return reply(build_failure(agent_uri, message.sender, action, error))
+
+            response = _build_confirmacion(
+                agent_uri,
+                message.sender,
+                action,
+                operacion,
+                operation_type,
+                importe,
+                metodo_pago,
+                tarjeta,
+            )
+            log(
+                "pagos",
+                f"Operacion confirmada: {importe} EUR — {payment_method_label(metodo_pago, tarjeta)} ref operacion {operacion}",
+            )
             return reply(response)
 
         except Exception as exc:
             return rdf_response(build_failure(agent_uri, AGENTS.AgenteFinanciero, None, str(exc)), status=500)
 
     return app
+
+
+def _read_metodo_pago(graph: Graph, action: URIRef, operacion: URIRef) -> str:
+    for subject in (action, operacion):
+        value = next(graph.objects(subject, ECSDI.metodoPago), None)
+        if value is not None:
+            return str(value).strip().lower()
+    return "tarjeta"
+
+
+def _read_tarjeta(graph: Graph, action: URIRef, operacion: URIRef) -> str:
+    for subject in (action, operacion):
+        value = next(graph.objects(subject, ECSDI.tarjeta), None)
+        if value is not None:
+            return normalize_card_digits(str(value))
+    return ""
+
+
+def _validate_payment(metodo_pago: str, tarjeta: str) -> str | None:
+    method = (metodo_pago or "tarjeta").strip().lower()
+    if method == "tarjeta":
+        ok, message = validate_card_payment(tarjeta)
+        return None if ok else message
+    if method in ("paypal", "transferencia"):
+        return None
+    return f"Metodo de pago no soportado: {metodo_pago}"
 
 
 def _build_confirmacion(
@@ -82,7 +123,8 @@ def _build_confirmacion(
     operacion: URIRef,
     operation_type: URIRef,
     importe: Decimal,
-    metodo_pago=None,
+    metodo_pago: str,
+    tarjeta: str = "",
 ) -> Graph:
     graph = Graph()
     bind_namespaces(graph)
@@ -92,15 +134,15 @@ def _build_confirmacion(
     graph.add((confirmacion, ECSDI.confirmacionDeOperacion, operacion))
     graph.add((confirmacion, ECSDI.respuestaDeAccion, action))
 
-    # Actualizamos el estado de la operación en el grafo de respuesta
     graph.add((operacion, RDF.type, operation_type))
     graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
     graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
     graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
-    if metodo_pago is not None:
-        graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
+    graph.add((operacion, ECSDI.metodoPago, Literal(metodo_pago)))
+    if tarjeta:
+        graph.add((operacion, ECSDI.tarjeta, Literal(mask_card(tarjeta))))
 
     return build_message(graph, confirmacion, ACL.inform, sender, receiver)
 

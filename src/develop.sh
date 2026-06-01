@@ -84,7 +84,7 @@ start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --po
 sleep 0.5
 start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos_agent --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
-start_agent "AgenteFinanciero" "$PYTHON" -m agents.agente_financiero --port 9005 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+start_agent "AgenteFinanciero" "$PYTHON" -m agents.agente_financiero --port 9005 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --provider-url "http://${HOSTADDR}:9004"
 sleep 0.5
 # Feedback con scheduler proactivo y delay corto para la demo.
 start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --feedback-delay 60 --recommendation-period 120 --recommendation-warmup 30

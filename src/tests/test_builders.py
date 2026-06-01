@@ -22,6 +22,25 @@ from utilities.namespaces import AGENTS, DATA, ECSDI
 
 
 class BuildOrderMessageTests(unittest.TestCase):
+    def test_includes_tarjeta_when_card_payment(self):
+        graph = build_order_message(
+            sender=AGENTS.AsistenteVirtual,
+            receiver=AGENTS.AgenteComerciante,
+            product_quantities={"P-IPHONE19": 1},
+            product_prices={"P-IPHONE19": Decimal("100.00")},
+            city="Barcelona",
+            street="Carrer Test 1",
+            postal_code="08013",
+            country="Espana",
+            priority=2,
+            payment_method="tarjeta",
+            payment_card="4111111111111111",
+        )
+        action = next(graph.subjects(RDF.type, ECSDI.RealizarPedido))
+        pedido = next(graph.objects(action, ECSDI.accionSobrePedido))
+        self.assertEqual(str(next(graph.objects(pedido, ECSDI.metodoPago))), "tarjeta")
+        self.assertEqual(str(next(graph.objects(pedido, ECSDI.tarjeta))), "4111111111111111")
+
     def test_includes_metodo_pago_and_delivery_dist(self):
         graph = build_order_message(
             sender=AGENTS.AsistenteVirtual,
@@ -55,11 +74,13 @@ class BuildCobroRequestTests(unittest.TestCase):
             pedido,
             Decimal("50.00"),
             metodo_pago="tarjeta",
+            tarjeta="4111111111111111",
         )
         action = next(graph.subjects(RDF.type, ECSDI.SolicitarCobro))
         operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago))
         self.assertEqual(str(next(graph.objects(action, ECSDI.metodoPago))), "tarjeta")
         self.assertEqual(str(next(graph.objects(operacion, ECSDI.metodoPago))), "tarjeta")
+        self.assertEqual(str(next(graph.objects(action, ECSDI.tarjeta))), "4111111111111111")
 
 
 class BuildProviderPaymentRequestTests(unittest.TestCase):
@@ -73,11 +94,13 @@ class BuildProviderPaymentRequestTests(unittest.TestCase):
             operacion,
             ECSDI.CobroCliente,
             Decimal("50.00"),
-            metodo_pago="tarjeta ****1111",
+            metodo_pago="tarjeta",
+            tarjeta="4111111111111111",
         )
         action = next(graph.subjects(RDF.type, ECSDI.SolicitarOperacionPago))
-        self.assertEqual(str(next(graph.objects(action, ECSDI.metodoPago))), "tarjeta ****1111")
-        self.assertEqual(str(next(graph.objects(operacion, ECSDI.metodoPago))), "tarjeta ****1111")
+        self.assertEqual(str(next(graph.objects(action, ECSDI.metodoPago))), "tarjeta")
+        self.assertEqual(str(next(graph.objects(operacion, ECSDI.metodoPago))), "tarjeta")
+        self.assertEqual(str(next(graph.objects(action, ECSDI.tarjeta))), "4111111111111111")
 
 
 class BuildBusquedaRealizadaNotificationTests(unittest.TestCase):

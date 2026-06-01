@@ -7,6 +7,7 @@ from rdflib.namespace import RDF, XSD
 
 from .acl import build_message
 from .catalog import decimal_literal, product_uri
+from .payment import normalize_card_digits
 from .namespaces import ACL, DATA, ECSDI, bind_namespaces
 
 
@@ -49,6 +50,7 @@ def build_order_message(
     country: str,
     priority: int,
     payment_method: str = "tarjeta",
+    payment_card: str | None = None,
     delivery_dist: int = 130,
     catalog_graph: Graph | None = None,
 ) -> Graph:
@@ -74,7 +76,12 @@ def build_order_message(
     graph.add((pedido, ECSDI.pedidoSolicitadoPor, sender))
     graph.add((pedido, ECSDI.pedidoEnviadoA, address))
     graph.add((pedido, ECSDI.prioridadEntrega, Literal(priority, datatype=XSD.integer)))
-    graph.add((pedido, ECSDI.metodoPago, Literal(payment_method)))
+    method = (payment_method or "tarjeta").strip().lower()
+    graph.add((pedido, ECSDI.metodoPago, Literal(method)))
+    if method == "tarjeta":
+        card_digits = normalize_card_digits(payment_card)
+        if card_digits:
+            graph.add((pedido, ECSDI.tarjeta, Literal(card_digits)))
     graph.add((pedido, ECSDI.estadoPedido, Literal("solicitado")))
     graph.add((pedido, ECSDI.fechaPedido, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
 
@@ -303,6 +310,7 @@ def build_cobro_request(
     pedido: URIRef,
     importe: Decimal,
     metodo_pago: str | None = None,
+    tarjeta: str | None = None,
 ) -> Graph:
     """Comerciante → AgenteFinanciero: SolicitarCobro (fire-and-forget)."""
     graph = Graph()
@@ -319,6 +327,9 @@ def build_cobro_request(
     if metodo_pago is not None:
         graph.add((action, ECSDI.metodoPago, Literal(str(metodo_pago))))
         graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
+    if tarjeta:
+        graph.add((action, ECSDI.tarjeta, Literal(str(tarjeta))))
+        graph.add((operacion, ECSDI.tarjeta, Literal(str(tarjeta))))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 
@@ -330,6 +341,7 @@ def build_provider_payment_request(
     operation_type: URIRef,
     importe: Decimal,
     metodo_pago: str | None = None,
+    tarjeta: str | None = None,
 ) -> Graph:
     """AgenteFinanciero -> ProveedorPagos: SolicitarOperacionPago."""
     graph = Graph()
@@ -344,6 +356,9 @@ def build_provider_payment_request(
     if metodo_pago is not None:
         graph.add((action, ECSDI.metodoPago, Literal(str(metodo_pago))))
         graph.add((operacion, ECSDI.metodoPago, Literal(str(metodo_pago))))
+    if tarjeta:
+        graph.add((action, ECSDI.tarjeta, Literal(str(tarjeta))))
+        graph.add((operacion, ECSDI.tarjeta, Literal(str(tarjeta))))
     return build_message(graph, action, ACL.request, sender, receiver)
 
 

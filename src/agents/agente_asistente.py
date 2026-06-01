@@ -1137,7 +1137,8 @@ def create_app(
         postal_code= data.get("postal_code", "")
         country    = data.get("country", "")
         priority   = int(data.get("priority", 3))
-        payment_method = _payment_label(data.get("payment_method", "tarjeta"), data.get("payment_card", ""))
+        payment_method = (data.get("payment_method") or "tarjeta").strip().lower()
+        payment_card = data.get("payment_card", "")
         delivery_dist = int(data.get("delivery_dist", 130))
         if not product_quantities:
             return app.response_class(
@@ -1159,6 +1160,7 @@ def create_app(
                 country=country,
                 priority=priority,
                 payment_method=payment_method,
+                payment_card=payment_card,
                 delivery_dist=delivery_dist,
                 catalog_graph=catalog_graph,
             )

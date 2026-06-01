@@ -73,7 +73,8 @@ def main() -> int:
 
     product_quantities = {item["id"]: args.quantity for item in selected}
     product_prices = {item["id"]: Decimal(str(item["price"])) for item in selected}
-    payment_method = _payment_label(args.payment_method, args.payment_card)
+    payment_method = (args.payment_method or "tarjeta").strip().lower()
+    payment_card = args.payment_card
 
     order_message = build_order_message(
         sender=AGENTS.AsistenteVirtual,
@@ -86,6 +87,7 @@ def main() -> int:
         country=args.country,
         priority=args.priority,
         payment_method=payment_method,
+        payment_card=payment_card,
         delivery_dist=args.delivery_dist,
         catalog_graph=catalog_graph,
     )
@@ -106,7 +108,9 @@ def main() -> int:
     print(f"Estado: {summary.get('estado_label') or summary.get('estado', '')}")
     print(f"Factura: {summary.get('factura_id', '')}")
     print(f"Importe: {summary.get('importe', '')} EUR")
-    print(f"Pago: {payment_method}")
+    from utilities.payment import payment_method_label
+
+    print(f"Pago: {payment_method_label(payment_method, payment_card)}")
     _print_shipping_summary(summary)
 
     first_product_id = selected[0]["id"]
@@ -284,16 +288,6 @@ def _show_recommendations(feedback_url: str) -> None:
         product_id = str(next(response.objects(product, ECSDI.idProducto), "")) if product else ""
         reason = str(next(response.objects(rec, ECSDI.motivoRecomendacion), ""))
         print(f"  {idx}. {name} [{product_id}] - {reason}")
-
-
-def _payment_label(method: str, card_number: str) -> str:
-    method = (method or "tarjeta").strip()
-    if method != "tarjeta":
-        return method
-    digits = "".join(ch for ch in str(card_number) if ch.isdigit())
-    if len(digits) >= 4:
-        return f"tarjeta ****{digits[-4:]}"
-    return method
 
 
 def _failure_reason(graph: Graph, default_reason: str) -> str | None:

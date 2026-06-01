@@ -1,12 +1,11 @@
 import argparse
 from datetime import datetime
 from decimal import Decimal
-from threading import Thread
 from uuid import uuid4
 
 from flask import Flask
 from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import RDF, XSD
+from rdflib.namespace import RDF, RDFS, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_provider_payment_request
@@ -14,6 +13,7 @@ from utilities.catalog import decimal_literal
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
+from utilities.payment import normalize_card_digits
 from utilities.runtime import (
     agent_address,
     agent_id,
@@ -27,6 +27,7 @@ from utilities.runtime import (
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteFinanciero
+DEFAULT_PROVIDER_TIMEOUT = 15.0
 
 
 def create_app(agent_uri=DEFAULT_AGENT_URI, provider_url: str | None = None):
@@ -34,7 +35,7 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, provider_url: str | None = None):
 
     @app.get("/")
     def index():
-        return "AgenteFinanciero listo"
+        return f"AgenteFinanciero listo — proveedor={provider_url or 'no configurado'}"
 
     @app.post("/comm")
     def comm():
@@ -43,27 +44,29 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, provider_url: str | None = None):
             message = get_message(graph)
             if message is None or message.content is None:
                 return rdf_response(build_not_understood(agent_uri, AGENTS.AgenteComerciante, "Mensaje ACL no reconocido"))
+
             def reply(response_graph: Graph):
                 return rdf_response(correlate_reply(response_graph, message))
+
             if message.performative != ACL.request:
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
 
-            # Capacidad CobrarAlUsuario — Plan: RealizarCobro
-            # Msg entrante: SolicitarCobro (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarCobro) in graph:
                 return reply(_handle_cobro(graph, agent_uri, message.sender, action, provider_url))
 
-            # Capacidad ReembolsoAlUsuario — Plan: ReembolsoAlUsuario
-            # Msg entrante: SolicitarReembolso (AgenteDevolucion → AgenteFinanciero)
             if (action, RDF.type, ECSDI.SolicitarReembolso) in graph:
-                return reply(_handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.ReembolsoCliente, "reembolso", provider_url))
+                return reply(
+                    _handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.ReembolsoCliente, "reembolso", provider_url)
+                )
 
-            # Capacidad PagarProdsExternos — Plan: PagarProdsExternos
-            # Msg entrante: PagarProductoExterno (AgenteComerciante → AgenteFinanciero)
             if (action, RDF.type, ECSDI.PagarProductoExterno) in graph:
-                return reply(_handle_operacion_pago(graph, agent_uri, message.sender, action, ECSDI.PagoVendedorExterno, "pago_externo", provider_url))
+                return reply(
+                    _handle_operacion_pago(
+                        graph, agent_uri, message.sender, action, ECSDI.PagoVendedorExterno, "pago_externo", provider_url
+                    )
+                )
 
             return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteFinanciero"))
 
@@ -73,47 +76,53 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, provider_url: str | None = None):
     return app
 
 
-def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
-    """Plan: RealizarCobro (AgenteComerciante / FinalizarCompra).
+def _payment_fields(graph: Graph, action: URIRef, operacion: URIRef | None) -> tuple[str, str]:
+    metodo = str(next(graph.objects(action, ECSDI.metodoPago), "tarjeta")).strip().lower()
+    tarjeta = ""
+    if operacion is not None:
+        tarjeta = normalize_card_digits(str(next(graph.objects(operacion, ECSDI.tarjeta), "")))
+    if not tarjeta:
+        tarjeta = normalize_card_digits(str(next(graph.objects(action, ECSDI.tarjeta), "")))
+    return metodo, tarjeta
 
-    Recibe SolicitarCobro del Comerciante una vez el pedido ya esta en envio.
-    Fire-and-forget: ACK inmediato; la transaccion con el proveedor externo
-    se simula en hilo separado. Se asume que siempre va bien (diseno).
-    """
+
+def _handle_cobro(graph, agent_uri, sender, action, provider_url: str | None):
+    """Cobro sincrono contra ProveedorPagos cuando esta configurado."""
+
     pedido = next(graph.objects(action, ECSDI.accionSobrePedido), None)
     importe = next(graph.objects(action, ECSDI.importeCobro), None)
     operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
-    metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
 
     if pedido is None or importe is None:
         return build_failure(agent_uri, sender, action, "Faltan pedido o importe en SolicitarCobro")
 
-    # Accion: Realizar Transaccion — se lanza en hilo para no bloquear la respuesta
     amount = Decimal(str(importe))
-    if provider_url and operacion is not None:
-        Thread(
-            target=_realizar_transaccion_proveedor,
-            args=(provider_url, agent_uri, action, operacion, ECSDI.CobroCliente, amount, pedido, metodo_pago),
-            daemon=True,
-        ).start()
-    else:
-        Thread(
-            target=_realizar_transaccion,
-            args=(pedido, amount),
-            daemon=True,
-        ).start()
+    metodo_pago, tarjeta = _payment_fields(graph, action, operacion)
 
-    if metodo_pago is not None:
-        log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}, metodo {metodo_pago}")
-    else:
-        log("financiero", f"Cobro iniciado para pedido {pedido}, importe {importe}")
+    if not provider_url:
+        return build_failure(agent_uri, sender, action, "Proveedor de pagos no configurado")
 
-    # ACK inmediato — NotificarCobroFinalizado interno hacia FinalizarPedido
-    return build_message(graph, action, ACL.inform, agent_uri, sender)
+    if operacion is None:
+        return build_failure(agent_uri, sender, action, "Falta operacion de pago para el proveedor")
+
+    provider_response = _request_provider_payment(
+        provider_url, agent_uri, sender, action, operacion, ECSDI.CobroCliente, amount, metodo_pago, tarjeta
+    )
+    if provider_response is None:
+        return build_failure(agent_uri, sender, action, "No se pudo contactar con el proveedor de pagos")
+
+    msg = get_message(provider_response)
+    if msg is None:
+        return build_failure(agent_uri, sender, action, "Respuesta invalida del proveedor de pagos")
+    if msg.performative == ACL.failure:
+        reason = str(next(provider_response.objects(None, RDFS.comment), "")) or "Cobro rechazado por el proveedor"
+        return build_failure(agent_uri, sender, action, reason)
+
+    log("financiero", f"Cobro confirmado pedido={pedido} importe={amount} metodo={metodo_pago}")
+    return provider_response
 
 
 def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag, provider_url: str | None):
-    """Confirma reembolsos y pagos a vendedores externos de forma simulada."""
     operacion = next(graph.objects(action, ECSDI.accionTieneOperacionPago), None)
     importe = None
     if operacion is not None:
@@ -130,29 +139,22 @@ def _handle_operacion_pago(graph, agent_uri, sender, action, operation_type, tag
     if operacion is None:
         operacion = DATA[f"pago/{tag}/{uuid4()}"]
 
+    metodo_pago, tarjeta = _payment_fields(graph, action, operacion)
+
     if provider_url:
-        metodo_pago = next(graph.objects(action, ECSDI.metodoPago), None)
-        provider_response = _request_provider_payment(provider_url, agent_uri, sender, action, operacion, operation_type, amount, metodo_pago)
+        provider_response = _request_provider_payment(
+            provider_url, agent_uri, sender, action, operacion, operation_type, amount, metodo_pago, tarjeta
+        )
         if provider_response is not None:
+            msg = get_message(provider_response)
+            if msg and msg.performative == ACL.failure:
+                reason = str(next(provider_response.objects(None, RDFS.comment), "")) or f"{tag} rechazado"
+                return build_failure(agent_uri, sender, action, reason)
             log("financiero", f"{tag} confirmado por proveedor: importe={amount}")
             return provider_response
-        log("financiero", f"Proveedor no disponible para {tag}; usando simulacion local")
+        return build_failure(agent_uri, sender, action, "Proveedor de pagos no disponible")
 
-    response_graph = Graph()
-    bind_namespaces(response_graph)
-    confirmation = DATA[f"response/pago/{uuid4()}"]
-    response_graph.add((confirmation, RDF.type, ECSDI.ConfirmacionTransaccion))
-    response_graph.add((confirmation, ECSDI.confirmacionDeOperacion, operacion))
-    response_graph.add((confirmation, ECSDI.respuestaDeAccion, action))
-    response_graph.add((operacion, RDF.type, operation_type))
-    response_graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
-    response_graph.add((operacion, ECSDI.importeOperacion, decimal_literal(amount)))
-    response_graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
-    response_graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
-    response_graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
-
-    log("financiero", f"{tag} confirmado: importe={amount} ref={next(response_graph.objects(operacion, ECSDI.referenciaPago))}")
-    return build_message(response_graph, confirmation, ACL.inform, agent_uri, sender)
+    return build_failure(agent_uri, sender, action, "Proveedor de pagos no configurado")
 
 
 def _request_provider_payment(
@@ -163,13 +165,25 @@ def _request_provider_payment(
     operacion: URIRef,
     operation_type: URIRef,
     amount: Decimal,
-    metodo_pago=None,
+    metodo_pago: str,
+    tarjeta: str = "",
 ) -> Graph | None:
     try:
-        request = build_provider_payment_request(agent_uri, AGENTS.ProveedorPagos, action, operacion, operation_type, amount, metodo_pago)
-        provider_response = post_graph(provider_url, request)
+        request = build_provider_payment_request(
+            agent_uri,
+            AGENTS.ProveedorPagos,
+            action,
+            operacion,
+            operation_type,
+            amount,
+            metodo_pago,
+            tarjeta or None,
+        )
+        provider_response = post_graph(provider_url, request, timeout=DEFAULT_PROVIDER_TIMEOUT)
         msg = get_message(provider_response)
-        if not msg or msg.performative != ACL.inform:
+        if not msg:
+            return None
+        if msg.performative not in (ACL.inform, ACL.failure):
             return None
 
         response_graph = Graph()
@@ -181,6 +195,10 @@ def _request_provider_payment(
             if (s, RDF.type, ACL.FipaAclMessage) in provider_response:
                 continue
             response_graph.add(triple)
+
+        if msg.performative == ACL.failure:
+            return build_message(response_graph, msg.content or action, ACL.failure, agent_uri, receiver)
+
         confirmation = next(response_graph.subjects(RDF.type, ECSDI.ConfirmacionTransaccion), DATA[f"response/pago/{uuid4()}"])
         response_graph.add((confirmation, ECSDI.respuestaDeAccion, action))
         response_graph.add((operacion, RDF.type, operation_type))
@@ -188,44 +206,6 @@ def _request_provider_payment(
     except Exception as exc:
         log("financiero", f"Error con ProveedorPagos ({provider_url}): {exc}")
         return None
-
-
-def _realizar_transaccion_proveedor(
-    provider_url: str,
-    agent_uri: URIRef,
-    action: URIRef,
-    operacion: URIRef,
-    operation_type: URIRef,
-    importe: Decimal,
-    pedido: URIRef,
-    metodo_pago=None,
-) -> None:
-    response = _request_provider_payment(provider_url, agent_uri, AGENTS.AgenteComerciante, action, operacion, operation_type, importe, metodo_pago)
-    if response is None:
-        _realizar_transaccion(pedido, importe)
-        return
-    ref = next(response.objects(operacion, ECSDI.referenciaPago), "")
-    log("financiero", f"Transaccion proveedor completada: pedido={pedido} importe={importe} ref={ref}")
-
-
-def _realizar_transaccion(pedido: URIRef, importe: Decimal) -> None:
-    """Accion: Realizar Transaccion — Percepcion: ConfirmacionTransaccionProveedorPagos.
-
-    Simula el cobro con el proveedor de pagos externo. En produccion aqui
-    iria la llamada real a la pasarela de pago. Se asume exito siempre.
-    """
-    operacion = DATA[f"pago/cobro/{uuid4()}"]
-    graph = Graph()
-    bind_namespaces(graph)
-    graph.add((operacion, RDF.type, ECSDI.CobroCliente))
-    graph.add((operacion, ECSDI.idOperacionPago, Literal(f"OP-{uuid4().hex[:8].upper()}")))
-    graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
-    graph.add((operacion, ECSDI.estadoOperacion, Literal("confirmada")))
-    graph.add((operacion, ECSDI.referenciaPago, Literal(f"PAY-{uuid4().hex[:10].upper()}")))
-    graph.add((operacion, ECSDI.fechaOperacion, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
-
-    ref = next(graph.objects(operacion, ECSDI.referenciaPago))
-    log("financiero", f"Transaccion completada: pedido={pedido} importe={importe} ref={ref}")
 
 
 def main():
@@ -243,8 +223,8 @@ def main():
     bind_host, advertised_host = binding_from_args(args.open, args.host, args.hostaddr)
     address = agent_address(advertised_host, args.port)
     service_id = agent_id("AGENTE_FINANCIERO", advertised_host, args.port)
-    provider_base = args.provider_url or search_service(args.dir, "PROVEEDOR_PAGOS", service_id)
-    provider_url = _comm_url(provider_base) if provider_base else None
+    provider_base = args.provider_url or search_service(args.dir, "PROVEEDOR_PAGOS", service_id) or "http://127.0.0.1:9004"
+    provider_url = _comm_url(provider_base)
     registered = register_service(
         args.dir,
         service_id,
@@ -258,7 +238,7 @@ def main():
         ],
     )
     try:
-        log(f"financiero-{args.port}", f"listening on {bind_host}:{args.port}, provider={provider_url or 'simulado'}")
+        log(f"financiero-{args.port}", f"listening on {bind_host}:{args.port}, provider={provider_url}")
         create_app(provider_url=provider_url).run(host=bind_host, port=args.port, debug=False, use_reloader=False)
     finally:
         if registered:
