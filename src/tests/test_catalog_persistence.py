@@ -9,7 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph, Literal
 from rdflib.namespace import RDF, XSD
 
-from agents.agente_catalogo import build_catalog_graph, load_catalog_graph
+from agents.agente_catalogo import load_catalog_graph
+from tests.fixtures.catalog_fixtures import build_catalog_graph
 from utilities.catalog import (
     build_stock_graph,
     decrement_catalog_stock,
@@ -33,17 +34,17 @@ class CatalogPersistenceTests(unittest.TestCase):
             if "graph/catalog" in text or "graph/stock/" in text:
                 dataset.unlink()
 
-    def test_load_catalog_graph_creates_catalog_ttl(self):
-        catalog = load_catalog_graph()
-        self.assertGreater(len(catalog), 0)
-        self.assertTrue(self.catalog_path.exists())
-        self.assertGreater(len(load_named_graph("catalog")), 0)
+    def test_load_catalog_graph_raises_when_missing(self):
+        with self.assertRaises(FileNotFoundError):
+            load_catalog_graph()
 
-    def test_load_catalog_graph_reuses_existing_file(self):
+    def test_load_catalog_graph_loads_persisted_catalog(self):
         seed = build_catalog_graph()
         persist_catalog(seed)
         loaded = load_catalog_graph()
         self.assertEqual(len(loaded), len(seed))
+        self.assertTrue(self.catalog_path.exists())
+        self.assertGreater(len(load_named_graph("catalog")), 0)
 
     def test_decrement_catalog_stock_updates_productos_db(self):
         persist_catalog(build_catalog_graph())

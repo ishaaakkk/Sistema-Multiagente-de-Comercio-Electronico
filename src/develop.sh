@@ -57,8 +57,10 @@ shutdown_all() {
 
 trap shutdown_all EXIT INT TERM
 
-# Lotes: agrupar al AvisarCL y despachar en el ciclo CiertaHoraDia (segundos en demo).
-export LOT_DISPATCH_INTERVAL="${LOT_DISPATCH_INTERVAL:-3}"
+# Lotes: agrupar al AvisarCL; sondeo CiertaHoraDia + ventana de inactividad antes de despachar.
+export LOT_DISPATCH_INTERVAL="${LOT_DISPATCH_INTERVAL:-10}"
+export LOT_DEBOUNCE_SECONDS="${LOT_DEBOUNCE_SECONDS:-30}"
+export LOT_URGENT_DEBOUNCE="${LOT_URGENT_DEBOUNCE:-5}"
 export LOT_MAX_LINES="${LOT_MAX_LINES:-8}"
 export SHIPPING_CONFIRMATION_TIMEOUT="${SHIPPING_CONFIRMATION_TIMEOUT:-10}"
 
@@ -83,7 +85,7 @@ sleep 0.5
 # Feedback con scheduler proactivo y delay corto para la demo.
 start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --feedback-delay 60 --recommendation-period 120 --recommendation-warmup 30
 sleep 0.5
-start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --announce-products
+start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 start_agent "Tienda" "$PYTHON" -m agents.agente_comerciante --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5

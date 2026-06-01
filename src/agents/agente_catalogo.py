@@ -10,14 +10,11 @@ from rdflib.namespace import RDF, XSD
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_busqueda_realizada_notification, build_search_response
 from utilities.catalog import (
-    center_uri,
     decimal_literal,
     describe_product,
     extract_search_constraints,
     filter_products,
     persist_catalog,
-    product_uri,
-    stock_uri,
 )
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
@@ -32,177 +29,24 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
-from utilities.storage import load_graph, load_json
+from utilities.storage import DATA_DIR, load_graph, load_json
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteCatalogo
-
-# --- Datos del catalogo (ProductosDB en catalog.ttl + grafo nombrado catalog) ---
-
-CATALOG_PRODUCTS = [
-    {
-        "id": "P-IPHONE19",
-        "name": "iPhone 19",
-        "brand": "Apple",
-        "description": "Smartphone interno de gama alta con 256 GB",
-        "price": Decimal("1199.00"),
-        "rating": Decimal("4.75"),
-        "weight": Decimal("0.45"),
-        "center": "CL-BCN",
-        "stock": 25,
-    },
-    {
-        "id": "P-EBOOK-AURORA",
-        "name": "Ebook Reader Aurora",
-        "brand": "Readly",
-        "description": "Lector de libros electronicos con pantalla mate",
-        "price": Decimal("149.90"),
-        "rating": Decimal("4.40"),
-        "weight": Decimal("0.30"),
-        "center": "CL-BCN",
-        "stock": 18,
-    },
-    {
-        "id": "P-BATIDORA-MINI",
-        "name": "Batidora Mini",
-        "brand": "HomeUp",
-        "description": "Pequeno electrodomestico interno para cocina",
-        "price": Decimal("44.50"),
-        "rating": Decimal("4.10"),
-        "weight": Decimal("1.20"),
-        "center": "CL-MAD",
-        "stock": 11,
-    },
-    {
-        "id": "P-LIBRO-RUST",
-        "name": "Programacion en Rust",
-        "brand": "ManningES",
-        "description": "Libro tecnico sobre desarrollo Rust de sistemas distribuidos",
-        "price": Decimal("39.00"),
-        "rating": Decimal("4.65"),
-        "weight": Decimal("0.70"),
-        "center": "CL-MAD",
-        "stock": 22,
-    },
-]
-
-EXTERNAL_VENDORS = [
-    {
-        "id": "VEND-TECHWORLD",
-        "name": "TechWorld SL",
-        "uri": "VEND-TECHWORLD",
-    },
-    {
-        "id": "VEND-HOMEGADGETS",
-        "name": "HomeGadgets Europe",
-        "uri": "VEND-HOMEGADGETS",
-    },
-]
-
-# Productos externos de demo:
-#   - P-SMARTWATCH-X: vendedor gestiona el envio (gestionEnvioExterno=true)
-#   - P-AURICULARES-BT: la tienda gestiona el envio (gestionEnvioExterno=false)
-EXTERNAL_PRODUCTS = [
-    {
-        "id": "P-SMARTWATCH-X",
-        "name": "SmartWatch X Pro",
-        "brand": "TechWorld",
-        "description": "Reloj inteligente externo con GPS y monitor cardiaco",
-        "price": Decimal("299.00"),
-        "rating": Decimal("4.50"),
-        "weight": Decimal("0.15"),
-        "vendor": "VEND-TECHWORLD",
-        "shipping_external": True,   # El vendedor gestiona el envio
-    },
-    {
-        "id": "P-AURICULARES-BT",
-        "name": "Auriculares BT Pro",
-        "brand": "HomeGadgets",
-        "description": "Auriculares inalambricos externos con cancelacion de ruido",
-        "price": Decimal("89.90"),
-        "rating": Decimal("4.20"),
-        "weight": Decimal("0.25"),
-        "vendor": "VEND-HOMEGADGETS",
-        "shipping_external": False,  # La tienda gestiona el envio
-    },
-]
-
-LOGISTIC_CENTERS = [
-    {
-        "id": "CL-BCN",
-        "name": "Centro Logistico Barcelona",
-        "city": "Barcelona",
-    },
-    {
-        "id": "CL-MAD",
-        "name": "Centro Logistico Madrid",
-        "city": "Madrid",
-    },
-]
-
-
-def build_catalog_graph() -> Graph:
-    """Construye el grafo RDF inicial con productos y centros logisticos (seed de demo)."""
-    graph = Graph()
-    bind_namespaces(graph)
-
-    for center in LOGISTIC_CENTERS:
-        node = center_uri(center["id"])
-        graph.add((node, RDF.type, ECSDI.CentroLogistico))
-        graph.add((node, ECSDI.idCentroLogistico, Literal(center["id"])))
-        graph.add((node, ECSDI.nombreCentroLogistico, Literal(center["name"])))
-        graph.add((node, ECSDI.ciudadCentroLogistico, Literal(center["city"])))
-
-    for product in CATALOG_PRODUCTS:
-        pnode = product_uri(product["id"])
-        graph.add((pnode, RDF.type, ECSDI.ProductoInterno))
-        graph.add((pnode, RDF.type, ECSDI.Producto))
-        graph.add((pnode, ECSDI.idProducto, Literal(product["id"])))
-        graph.add((pnode, ECSDI.nombreProducto, Literal(product["name"])))
-        graph.add((pnode, ECSDI.marcaProducto, Literal(product["brand"])))
-        graph.add((pnode, ECSDI.descripcionProducto, Literal(product["description"])))
-        graph.add((pnode, ECSDI.precioProducto, decimal_literal(product["price"])))
-        graph.add((pnode, ECSDI.valoracionMedia, decimal_literal(product["rating"])))
-        graph.add((pnode, ECSDI.pesoProducto, decimal_literal(product["weight"])))
-
-        snode = stock_uri(product["id"], product["center"])
-        graph.add((snode, RDF.type, ECSDI.StockProducto))
-        graph.add((snode, ECSDI.stockDeProducto, pnode))
-        graph.add((snode, ECSDI.stockEnCentro, center_uri(product["center"])))
-        graph.add((snode, ECSDI.cantidadDisponible, Literal(product["stock"], datatype=XSD.integer)))
-
-    for vendor in EXTERNAL_VENDORS:
-        vnode = AGENTS[vendor["uri"]]
-        graph.add((vnode, RDF.type, ECSDI.VendedorExterno))
-        graph.add((vnode, ECSDI.idVendedor, Literal(vendor["id"])))
-        graph.add((vnode, ECSDI.nombreVendedor, Literal(vendor["name"])))
-
-    for product in EXTERNAL_PRODUCTS:
-        pnode = product_uri(product["id"])
-        vendor_node = AGENTS[product["vendor"]]
-        graph.add((pnode, RDF.type, ECSDI.ProductoExterno))
-        graph.add((pnode, RDF.type, ECSDI.Producto))
-        graph.add((pnode, ECSDI.idProducto, Literal(product["id"])))
-        graph.add((pnode, ECSDI.nombreProducto, Literal(product["name"])))
-        graph.add((pnode, ECSDI.marcaProducto, Literal(product["brand"])))
-        graph.add((pnode, ECSDI.descripcionProducto, Literal(product["description"])))
-        graph.add((pnode, ECSDI.precioProducto, decimal_literal(product["price"])))
-        graph.add((pnode, ECSDI.valoracionMedia, decimal_literal(product["rating"])))
-        graph.add((pnode, ECSDI.pesoProducto, decimal_literal(product["weight"])))
-        graph.add((pnode, ECSDI.gestionEnvioExterno, Literal(product["shipping_external"])))
-        graph.add((pnode, ECSDI.productoOfrecidoPor, vendor_node))
-
-    return graph
+CATALOG_PATH = DATA_DIR / "catalog.ttl"
 
 
 def load_catalog_graph() -> Graph:
-    """ProductosDB: carga desde disco o inicializa el seed de demo y lo persiste."""
+    """ProductosDB: carga exclusivamente desde catalog.ttl."""
 
+    if not CATALOG_PATH.exists():
+        raise FileNotFoundError(
+            f"No existe ProductosDB en {CATALOG_PATH}. "
+            "Copia o versiona data/catalog.ttl antes de arrancar el agente."
+        )
     catalog = load_graph("catalog.ttl")
-    if len(catalog) > 0:
-        return catalog
-    catalog = build_catalog_graph()
-    persist_catalog(catalog)
+    if len(catalog) == 0:
+        raise ValueError(f"{CATALOG_PATH} está vacío o no contiene tripletas válidas.")
     return catalog
 
 

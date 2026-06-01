@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from agents.agente_catalogo import build_catalog_graph
+from tests.fixtures.catalog_fixtures import build_catalog_graph
 from utilities.builders import (
     build_busqueda_realizada_notification,
     build_cobro_request,
