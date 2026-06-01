@@ -254,6 +254,8 @@ def build_shipping_confirmation(
     graph.add((confirmation, ECSDI.confirmacionEnvio, envio))
     graph.add((confirmation, ECSDI.respuestaDeAccion, action))
     graph.add((confirmation, ECSDI.respuestaSobreOferta, offer))
+    graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmation))
+    graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
     return build_message(graph, confirmation, ACL.inform, sender, receiver)
 
 

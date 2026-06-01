@@ -95,17 +95,19 @@ def main() -> int:
         print(f"Pedido rechazado: {failure}")
         return 1
 
-    pedido = next(order_response.subjects(RDF.type, ECSDI.Pedido), None)
-    factura = next(order_response.subjects(RDF.type, ECSDI.Factura), None)
-    pedido_id = str(next(order_response.objects(pedido, ECSDI.idPedido), ""))
+    from utilities.order_response import extract_order_summary, resolve_pedido
+
+    summary = extract_order_summary(order_response)
+    pedido_id = summary.get("pedido_id", "")
+    pedido = resolve_pedido(order_response)
 
     print("\nPedido creado:")
     print(f"Pedido: {pedido_id or pedido}")
-    print(f"Estado: {next(order_response.objects(pedido, ECSDI.estadoPedido), '')}")
-    print(f"Factura: {next(order_response.objects(factura, ECSDI.idFactura), factura)}")
-    print(f"Importe: {next(order_response.objects(factura, ECSDI.importeFactura), '')} EUR")
+    print(f"Estado: {summary.get('estado_label') or summary.get('estado', '')}")
+    print(f"Factura: {summary.get('factura_id', '')}")
+    print(f"Importe: {summary.get('importe', '')} EUR")
     print(f"Pago: {payment_method}")
-    _print_shipping(order_response, pedido)
+    _print_shipping_summary(summary)
 
     first_product_id = selected[0]["id"]
     if args.rate is not None:
@@ -186,28 +188,26 @@ def _print_products(products: list[dict]) -> None:
         )
 
 
-def _print_shipping(order_response: Graph, pedido) -> None:
-    confirmations = list(order_response.objects(pedido, ECSDI.pedidoTieneConfirmacion))
-    if confirmations:
+def _print_shipping_summary(summary: dict) -> None:
+    envios = summary.get("envios_internos") or []
+    if envios:
         print("Envio interno:")
-        for idx, confirmacion in enumerate(confirmations, start=1):
-            envio = next(order_response.objects(confirmacion, ECSDI.confirmacionEnvio), None)
-            transportista = next(order_response.objects(envio, ECSDI.envioRealizadoPor), None) if envio else None
-            lote = next(order_response.objects(envio, ECSDI.envioTieneLote), None) if envio else None
-            oferta = next(order_response.subjects(ECSDI.ofertaParaLote, lote), None) if lote else None
-            fecha = next(order_response.objects(oferta, ECSDI.dataPrevista), None) if oferta else None
-            precio_envio = next(order_response.objects(oferta, ECSDI.preuTransport), None) if oferta else None
-            print(f"  {idx}. Transportista: {transportista}")
-            print(f"     Fecha estimada: {fecha}")
-            print(f"     Coste envio:    {precio_envio} EUR")
+        for idx, env in enumerate(envios, start=1):
+            print(f"  {idx}. Centro: {env.get('centro_id', '—')} · Lote: {env.get('lote_id', '—')}")
+            print(f"     Transportista: {env.get('transportista', '—')}")
+            print(f"     Fecha estimada: {env.get('fecha_entrega', '—')}")
+            print(f"     Coste envio:    {env.get('coste_envio', '—')} EUR")
         return
 
-    envio_ext = next(order_response.objects(pedido, ECSDI.pedidoTieneEnvio), None)
-    if envio_ext:
-        vendedor = next(order_response.objects(envio_ext, ECSDI.envioExternoGestionadoPor), None)
-        print(f"Envio externo: el vendedor ({vendedor}) gestiona el envio directamente")
+    det = summary.get("envio_externo_detalle")
+    if det:
+        print(f"Envio externo: {det.get('mensaje', '')} ({det.get('vendedor', '')})")
+        return
+
+    if summary.get("estado") == "aceptado_sin_pago":
+        print("Envio: pendiente de confirmacion logistica")
     else:
-        print("Envio: no disponible")
+        print("Envio: no disponible en la respuesta")
 
 
 def _send_rating(args, pedido_id: str, product_id: str) -> None:

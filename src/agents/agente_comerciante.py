@@ -79,7 +79,12 @@ def create_app(
 
             if message.performative == ACL.inform:
                 async_ack = _handle_async_shipping_confirmation(
-                    graph, message, agent_uri, confirmation_buffers, confirmation_lock
+                    graph,
+                    message,
+                    agent_uri,
+                    confirmation_buffers,
+                    confirmation_lock,
+                    completed_orders,
                 )
                 if async_ack is not None:
                     return reply(async_ack)
@@ -196,6 +201,7 @@ def _handle_order(
     _plan_finalizar_pedido(
         agent_uri, order_graph, pedido, feedback_url, completed_orders
     )
+    order_graph.set((pedido, ECSDI.estadoPedido, Literal("completado")))
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
@@ -485,12 +491,35 @@ def _line_label(graph: Graph, line: URIRef) -> str:
     return str(line).rsplit("/", 1)[-1]
 
 
+def _merge_async_shipping_into_completed(
+    pedido_id: str,
+    shipping_graph: Graph,
+    completed_orders: dict[str, Graph],
+) -> None:
+    stored = completed_orders.get(pedido_id)
+    if stored is None:
+        return
+    pedido = next(stored.subjects(ECSDI.idPedido, Literal(pedido_id)), None)
+    if pedido is None:
+        pedido = next(stored.subjects(RDF.type, ECSDI.Pedido), None)
+    if pedido is None:
+        return
+    for triple in shipping_graph:
+        stored.add(triple)
+    for confirmacion in shipping_graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        stored.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+    stored.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
+    save_graph_item("completed_orders", pedido_id, stored)
+    save_named_graph(f"completed_orders/{pedido_id}", stored)
+
+
 def _handle_async_shipping_confirmation(
     graph: Graph,
     message,
     agent_uri: URIRef,
     confirmation_buffers: dict[str, dict],
     confirmation_lock: ThreadLock,
+    completed_orders: dict[str, Graph],
 ) -> Graph | None:
     """RecibirDatosEnvio: ConfirmacionEnvio asíncrona del centro logístico."""
 
@@ -511,6 +540,7 @@ def _handle_async_shipping_confirmation(
         buf = confirmation_buffers.setdefault(pedido_id, {"event": Event(), "graphs": []})
         buf["graphs"].append(graph)
         buf["event"].set()
+    _merge_async_shipping_into_completed(pedido_id, graph, completed_orders)
     log("comerciante", f"ConfirmacionEnvio recibida para pedido {pedido_id}")
     ack = DATA[f"ack/shipping/{uuid4()}"]
     ack_graph = Graph()
