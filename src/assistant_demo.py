@@ -16,6 +16,7 @@ from utilities.builders import (
     build_valoracion_request,
 )
 from utilities.http import post_graph
+from utilities.runtime import default_order_timeout
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
 
 
@@ -28,7 +29,7 @@ def main() -> int:
     parser.add_argument(
         "--order-timeout",
         type=float,
-        default=float(os.environ.get("ORDER_TIMEOUT", "45")),
+        default=None,
         help="Segundos de espera al comerciante (lotes pendientes + transporte).",
     )
     parser.add_argument("--feedback-url", default="http://127.0.0.1:9007/comm")
@@ -57,6 +58,7 @@ def main() -> int:
     parser.add_argument("--return-reason", default="Producto defectuoso")
     parser.add_argument("--show-recommendations", action="store_true")
     args = parser.parse_args()
+    order_timeout = args.order_timeout if args.order_timeout is not None else default_order_timeout()
 
     products, catalog_graph = _search_products(args)
     if not products:
@@ -87,7 +89,7 @@ def main() -> int:
         delivery_dist=args.delivery_dist,
         catalog_graph=catalog_graph,
     )
-    order_response = post_graph(args.shop_url, order_message, timeout=args.order_timeout)
+    order_response = post_graph(args.shop_url, order_message, timeout=order_timeout)
     failure = _failure_reason(order_response, "El comerciante rechazo el pedido")
     if failure:
         print(f"Pedido rechazado: {failure}")

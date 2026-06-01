@@ -31,6 +31,7 @@ from utilities.runtime import (
     agent_id,
     binding_from_args,
     configure_flask_logging,
+    default_shipping_confirmation_timeout,
     log,
     register_service,
     search_all_services,
@@ -41,13 +42,7 @@ from utilities.storage import load_graph_collection, save_graph_item, save_named
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteComerciante
-_LOT_DISPATCH_INTERVAL = float(os.environ.get("LOT_DISPATCH_INTERVAL", "3"))
-_CL_TRANSPORT_TIMEOUT = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
-# Debe cubrir: ciclo de lote pendiente + CFP paralela a transportistas.
-_DEFAULT_SHIPPING_WAIT = _LOT_DISPATCH_INTERVAL + _CL_TRANSPORT_TIMEOUT * 2 + 4
-DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = float(
-    os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", str(max(15.0, _DEFAULT_SHIPPING_WAIT)))
-)
+DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT = default_shipping_confirmation_timeout()
 DEFAULT_LOGISTICS_REQUEST_TIMEOUT = float(
     os.environ.get("LOGISTICS_REQUEST_TIMEOUT", str(max(20.0, DEFAULT_SHIPPING_CONFIRMATION_TIMEOUT)))
 )

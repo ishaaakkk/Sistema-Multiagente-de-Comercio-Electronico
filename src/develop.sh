@@ -62,8 +62,11 @@ export LOT_DISPATCH_INTERVAL="${LOT_DISPATCH_INTERVAL:-10}"
 export LOT_DEBOUNCE_SECONDS="${LOT_DEBOUNCE_SECONDS:-30}"
 export LOT_URGENT_DEBOUNCE="${LOT_URGENT_DEBOUNCE:-5}"
 export LOT_MAX_LINES="${LOT_MAX_LINES:-8}"
-export SHIPPING_CONFIRMATION_TIMEOUT="${SHIPPING_CONFIRMATION_TIMEOUT:-20}"
-export ORDER_TIMEOUT="${ORDER_TIMEOUT:-45}"
+# El comerciante debe esperar al menos: debounce + intervalo de sondeo + margen CFP transportistas.
+: "${SHIPPING_CONFIRMATION_TIMEOUT:=$((LOT_DEBOUNCE_SECONDS + LOT_DISPATCH_INTERVAL + 15))}"
+export SHIPPING_CONFIRMATION_TIMEOUT
+: "${ORDER_TIMEOUT:=$((SHIPPING_CONFIRMATION_TIMEOUT + 25))}"
+export ORDER_TIMEOUT
 
 start_agent "DirectoryService" "$PYTHON" -m agents.directory_service --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
 sleep 1

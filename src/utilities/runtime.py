@@ -1,4 +1,5 @@
 import logging
+import os
 import socket
 import time
 
@@ -227,3 +228,21 @@ def _requester_uri(requester: str | URIRef | None) -> URIRef:
         return requester
     from utilities.namespaces import AGENTS
     return AGENTS[requester]
+
+
+def default_shipping_confirmation_timeout() -> float:
+    """Espera máxima del comerciante por ConfirmacionEnvio tras un lote pendiente."""
+
+    lot_debounce = float(os.environ.get("LOT_DEBOUNCE_SECONDS", "90"))
+    lot_dispatch = float(os.environ.get("LOT_DISPATCH_INTERVAL", "3"))
+    cl_transport = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
+    computed = lot_debounce + lot_dispatch + cl_transport * 2 + 4
+    return float(os.environ.get("SHIPPING_CONFIRMATION_TIMEOUT", str(max(15.0, computed))))
+
+
+def default_order_timeout() -> float:
+    """Timeout HTTP del asistente al comerciante (debe superar la confirmación de envío)."""
+
+    if "ORDER_TIMEOUT" in os.environ:
+        return float(os.environ["ORDER_TIMEOUT"])
+    return default_shipping_confirmation_timeout() + 25
