@@ -197,7 +197,10 @@ def _handle_order(
 
     order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
 
-    _plan_realizar_cobro(agent_uri, order_graph, pedido, financiero_url)
+    cobro_error = _plan_realizar_cobro(agent_uri, receiver, action, order_graph, pedido, financiero_url)
+    if cobro_error is not None:
+        return cobro_error
+
     _plan_finalizar_pedido(
         agent_uri, order_graph, pedido, feedback_url, completed_orders
     )
@@ -376,20 +379,47 @@ def _plan_gestionar_vendedores_externos(
 
 def _plan_realizar_cobro(
     agent_uri: URIRef,
+    receiver: URIRef,
+    action: URIRef,
     order_graph: Graph,
     pedido: URIRef,
     financiero_url: str,
-) -> None:
-    """Plan RealizarCobro: dispara SolicitarCobro al Agente Financiero,
-    propagando el método de pago elegido por el cliente."""
+) -> Graph | None:
+    """Plan RealizarCobro: cobro sincrono via AgenteFinanciero → ProveedorPagos."""
 
     total = Decimal(str(next(order_graph.objects(pedido, ECSDI.importeTotalPedido), "0")))
-    metodo_pago = next(order_graph.objects(pedido, ECSDI.metodoPago), None)
-    _post_safe(
-        financiero_url,
-        build_cobro_request(agent_uri, AGENTS.AgenteFinanciero, pedido, total, metodo_pago),
-        "cobro",
-    )
+    metodo_pago = str(next(order_graph.objects(pedido, ECSDI.metodoPago), "tarjeta"))
+    tarjeta = str(next(order_graph.objects(pedido, ECSDI.tarjeta), ""))
+
+    try:
+        response = post_graph(
+            financiero_url,
+            build_cobro_request(
+                agent_uri,
+                AGENTS.AgenteFinanciero,
+                pedido,
+                total,
+                metodo_pago,
+                tarjeta or None,
+            ),
+        )
+    except Exception as exc:
+        return build_failure(agent_uri, receiver, action, f"No se pudo contactar con el agente financiero: {exc}")
+
+    msg = get_message(response)
+    if msg is None:
+        return build_failure(agent_uri, receiver, action, "Respuesta invalida del agente financiero")
+    if msg.performative == ACL.failure:
+        reason = str(next(response.objects(None, RDFS.comment), "")) or "Cobro rechazado"
+        return build_failure(agent_uri, receiver, action, reason)
+
+    operacion = next(response.subjects(RDF.type, ECSDI.CobroCliente), None)
+    if operacion is not None:
+        order_graph.add((pedido, ECSDI.pedidoTieneOperacionPago, operacion))
+        for triple in response.triples((operacion, None, None)):
+            order_graph.add(triple)
+    log("comerciante", f"Cobro confirmado: {total} EUR ({metodo_pago})")
+    return None
 
 
 def _plan_finalizar_pedido(

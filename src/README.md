@@ -88,8 +88,14 @@ Update, en windows:
 Agentes:
 $env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
 $env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --tarifa-base 2.00 --tarifa-kg 2.50 --tarifa-dia 0.20 --verbose
-$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9004 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
-!!!! $env:PYTHONPATH="src"; python agents\AgentTransportista.py --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9011 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
+$env:PYTHONPATH="src"; python -m agents.proveedor_pagos_agent --port 9004 --dir http://127.0.0.1:9000 --verbose
+
+!!!! 
+$env:PYTHONPATH = "." 
+python agents\AgentTransportista.py --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
+!!!
+
 $env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose

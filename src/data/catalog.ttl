@@ -49,7 +49,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 25 ;
+    ecsdi:cantidadDisponible 22 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
@@ -95,7 +95,7 @@ agents:VEND-HOMEGADGETS a ecsdi:VendedorExterno ;
     ecsdi:nombreProducto "iPhone 19" ;
     ecsdi:pesoProducto 0.45 ;
     ecsdi:precioProducto 1199.00 ;
-    ecsdi:valoracionMedia 3.50 .
+    ecsdi:valoracionMedia 4.43 .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> a ecsdi:Producto,
         ecsdi:ProductoInterno ;
