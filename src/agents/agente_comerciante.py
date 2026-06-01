@@ -79,7 +79,12 @@ def create_app(
 
             if message.performative == ACL.inform:
                 async_ack = _handle_async_shipping_confirmation(
-                    graph, message, agent_uri, confirmation_buffers, confirmation_lock
+                    graph,
+                    message,
+                    agent_uri,
+                    confirmation_buffers,
+                    confirmation_lock,
+                    completed_orders,
                 )
                 if async_ack is not None:
                     return reply(async_ack)
@@ -196,6 +201,7 @@ def _handle_order(
     _plan_finalizar_pedido(
         agent_uri, order_graph, pedido, feedback_url, completed_orders
     )
+    order_graph.set((pedido, ECSDI.estadoPedido, Literal("completado")))
 
     return build_message(order_graph, pedido, ACL.inform, agent_uri, receiver)
 
@@ -334,11 +340,9 @@ def _plan_escoger_cl(
     for shipping_response in confirmaciones:
         for triple in shipping_response:
             order_graph.add(triple)
-        confirmacion = next(
-            shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None
-        )
-        if confirmacion is not None:
+        for confirmacion in shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
             order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+        _ensure_envio_centro_on_graph(order_graph, pedido)
     log(
         "comerciante",
         f"Envío planificado por {len(confirmaciones)} centro(s) para {len(lines_for_logistics)} línea(s)",
@@ -451,6 +455,29 @@ def _discover_logistics_centers(
     return [_comm_url(u) for u in fallback if u]
 
 
+def _ensure_envio_centro_on_graph(order_graph: Graph, pedido: URIRef) -> None:
+    """Copia idCentroLogistico desde el lote si el envío aún no lo tiene."""
+
+    for confirmacion in order_graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        envio = next(order_graph.objects(confirmacion, ECSDI.confirmacionEnvio), None)
+        if envio is None or (envio, ECSDI.envioDePedido, pedido) not in order_graph:
+            continue
+        if next(order_graph.objects(envio, ECSDI.idCentroLogistico), None) is not None:
+            continue
+        lote = next(order_graph.objects(envio, ECSDI.envioTieneLote), None)
+        if lote is None:
+            continue
+        center = next(order_graph.objects(lote, ECSDI.loteOrigenCentro), None)
+        if center is not None:
+            order_graph.add((envio, ECSDI.envioDesdeCentro, center))
+            center_id = next(order_graph.objects(center, ECSDI.idCentroLogistico), None)
+            if center_id is not None:
+                order_graph.add((envio, ECSDI.idCentroLogistico, center_id))
+        city = next(order_graph.objects(lote, ECSDI.ciudadCentroLogistico), None)
+        if city is not None:
+            order_graph.add((envio, ECSDI.ciudadCentroLogistico, city))
+
+
 def _response_accepts_pending_lote(response: Graph) -> bool:
     for lote in response.subjects(RDF.type, ECSDI.LoteEnvio):
         estado = str(next(response.objects(lote, ECSDI.estadoLote), ""))
@@ -485,12 +512,35 @@ def _line_label(graph: Graph, line: URIRef) -> str:
     return str(line).rsplit("/", 1)[-1]
 
 
+def _merge_async_shipping_into_completed(
+    pedido_id: str,
+    shipping_graph: Graph,
+    completed_orders: dict[str, Graph],
+) -> None:
+    stored = completed_orders.get(pedido_id)
+    if stored is None:
+        return
+    pedido = next(stored.subjects(ECSDI.idPedido, Literal(pedido_id)), None)
+    if pedido is None:
+        pedido = next(stored.subjects(RDF.type, ECSDI.Pedido), None)
+    if pedido is None:
+        return
+    for triple in shipping_graph:
+        stored.add(triple)
+    for confirmacion in shipping_graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        stored.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+    stored.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
+    save_graph_item("completed_orders", pedido_id, stored)
+    save_named_graph(f"completed_orders/{pedido_id}", stored)
+
+
 def _handle_async_shipping_confirmation(
     graph: Graph,
     message,
     agent_uri: URIRef,
     confirmation_buffers: dict[str, dict],
     confirmation_lock: ThreadLock,
+    completed_orders: dict[str, Graph],
 ) -> Graph | None:
     """RecibirDatosEnvio: ConfirmacionEnvio asíncrona del centro logístico."""
 
@@ -511,6 +561,7 @@ def _handle_async_shipping_confirmation(
         buf = confirmation_buffers.setdefault(pedido_id, {"event": Event(), "graphs": []})
         buf["graphs"].append(graph)
         buf["event"].set()
+    _merge_async_shipping_into_completed(pedido_id, graph, completed_orders)
     log("comerciante", f"ConfirmacionEnvio recibida para pedido {pedido_id}")
     ack = DATA[f"ack/shipping/{uuid4()}"]
     ack_graph = Graph()

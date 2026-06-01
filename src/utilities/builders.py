@@ -237,6 +237,9 @@ def build_shipping_confirmation(
     offer_graph: Graph,
     offer: URIRef,
     transportista: URIRef,
+    center_id: str | None = None,
+    center_city: str | None = None,
+    center: URIRef | None = None,
 ) -> Graph:
     graph = Graph()
     bind_namespaces(graph)
@@ -250,10 +253,25 @@ def build_shipping_confirmation(
     graph.add((envio, ECSDI.envioTieneLote, lote))
     graph.add((envio, ECSDI.envioRealizadoPor, transportista))
 
+    if center is None:
+        center = next(graph.objects(lote, ECSDI.loteOrigenCentro), None)
+    if center is not None:
+        graph.add((envio, ECSDI.envioDesdeCentro, center))
+        if center_id is None:
+            center_id = str(next(graph.objects(center, ECSDI.idCentroLogistico), "") or "")
+    if center_id:
+        graph.add((envio, ECSDI.idCentroLogistico, Literal(center_id)))
+    if center_city is None:
+        center_city = str(next(graph.objects(lote, ECSDI.ciudadCentroLogistico), "") or "")
+    if center_city:
+        graph.add((envio, ECSDI.ciudadCentroLogistico, Literal(center_city)))
+
     graph.add((confirmation, RDF.type, ECSDI.ConfirmacionEnvio))
     graph.add((confirmation, ECSDI.confirmacionEnvio, envio))
     graph.add((confirmation, ECSDI.respuestaDeAccion, action))
     graph.add((confirmation, ECSDI.respuestaSobreOferta, offer))
+    graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmation))
+    graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
     return build_message(graph, confirmation, ACL.inform, sender, receiver)
 
 

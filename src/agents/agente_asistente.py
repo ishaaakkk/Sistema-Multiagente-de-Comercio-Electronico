@@ -777,19 +777,42 @@ IFACE_HTML = """<!DOCTYPE html>
       `<div class="confirm-row"><span class="confirm-key">${k}</span><span class="confirm-val${accent?' accent':''}">${v}</span></div>`;
 
     let html = row('Pedido', data.pedido_id || '—')
-      + row('Estado', data.estado || '—')
+      + row('Estado', data.estado_label || data.estado || '—')
       + row('Factura', data.factura_id || '—')
       + row('Importe', (data.importe ? parseFloat(data.importe).toFixed(2) + ' €' : '—'), true);
     if (data.items && data.items.length) {
       html += row('Líneas', data.items.map(i => `${i.product_id} ×${i.quantity}`).join(', '));
     }
 
-    if (data.envio_interno) {
-      html += row('Envío', 'Interno — ' + (data.transportista || '').split('/').pop())
-            + row('Entrega estimada', data.fecha_entrega || '—')
-            + row('Coste envío', data.coste_envio ? parseFloat(data.coste_envio).toFixed(2) + ' €' : '—');
-    } else if (data.envio_externo) {
-      html += row('Envío', 'Externo — gestionado por el vendedor');
+    let envios = Array.isArray(data.envios_internos) ? data.envios_internos : [];
+    if (!envios.length && data.envio_interno) {
+      envios = [{
+        centro_id: data.centro_id,
+        ciudad_centro: data.ciudad_centro,
+        lote_id: data.lote_id,
+        transportista: data.transportista,
+        fecha_entrega: data.fecha_entrega,
+        coste_envio: data.coste_envio,
+      }];
+    }
+    if (envios.length) {
+      envios.forEach((env, idx) => {
+        const clLabel = [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ') || '—';
+        const prefix = envios.length > 1 ? ` (${idx + 1})` : '';
+        html += row('Centro logístico' + prefix, clLabel)
+          + row('Lote', env.lote_id || '—')
+          + row('Transportista', env.transportista || '—')
+          + row('Entrega estimada', env.fecha_entrega || '—')
+          + row('Coste envío', env.coste_envio ? parseFloat(env.coste_envio).toFixed(2) + ' €' : '—');
+      });
+    } else if (data.envio_externo || data.envio_externo_detalle) {
+      const det = data.envio_externo_detalle || {};
+      html += row('Envío', 'Externo — ' + (det.vendedor || 'vendedor externo'))
+            + row('Gestión', det.mensaje || 'El vendedor gestiona el envío');
+    } else if (data.estado === 'aceptado_sin_pago') {
+      html += row('Envío', 'Pendiente de confirmación logística');
+    } else {
+      html += row('Envío', 'Sin datos de envío en la respuesta');
     }
 
     // Pre-rellenar pestaña valoración
@@ -1150,42 +1173,16 @@ def create_app(
         if failure is not None:
             return app.response_class(json.dumps(failure), mimetype="application/json")
 
-        from utilities.namespaces import ECSDI as _ECSDI
-        pedido = next(order_response.subjects(RDF.type, _ECSDI.Pedido), None)
-        factura = next(order_response.subjects(RDF.type, _ECSDI.Factura), None)
+        from utilities.order_response import extract_order_summary
 
-        result = {
-            "pedido_id":  str(next(order_response.objects(pedido, _ECSDI.idPedido), "")),
-            "estado":     str(next(order_response.objects(pedido, _ECSDI.estadoPedido), "")),
-            "factura_id": str(next(order_response.objects(factura, _ECSDI.idFactura), "")),
-            "importe":    str(next(order_response.objects(factura, _ECSDI.importeFactura), "0")),
-            "envio_interno": False,
-            "envio_externo": False,
-            "items": [
+        result = extract_order_summary(order_response)
+        if result.get("error"):
+            return app.response_class(json.dumps(result), mimetype="application/json")
+        if not result.get("items"):
+            result["items"] = [
                 {"product_id": pid, "quantity": qty}
                 for pid, qty in product_quantities.items()
-            ],
-        }
-
-        confirmacion = next(order_response.objects(pedido, _ECSDI.pedidoTieneConfirmacion), None)
-        if confirmacion:
-            envio = next(order_response.objects(confirmacion, _ECSDI.confirmacionEnvio), None)
-            transportista = next(order_response.objects(envio, _ECSDI.envioRealizadoPor), None) if envio else None
-            from utilities.transport_proto import find_transport_offer, offer_delivery_datetime, offer_price
-
-            oferta = find_transport_offer(order_response)
-            fecha = offer_delivery_datetime(order_response, oferta) if oferta else None
-            precio_envio = str(offer_price(order_response, oferta)) if oferta else None
-            result.update({
-                "envio_interno": True,
-                "transportista": str(transportista) if transportista else "",
-                "fecha_entrega": str(fecha) if fecha else "",
-                "coste_envio":   str(precio_envio) if precio_envio else "",
-            })
-        else:
-            envio_ext = next(order_response.objects(pedido, _ECSDI.pedidoTieneEnvio), None)
-            if envio_ext:
-                result["envio_externo"] = True
+            ]
 
         return app.response_class(json.dumps(result), mimetype="application/json")
 
