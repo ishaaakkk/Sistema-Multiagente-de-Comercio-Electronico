@@ -22,6 +22,7 @@ from utilities.runtime import (
     agent_id,
     binding_from_args,
     configure_flask_logging,
+    default_order_timeout,
     log,
     register_service,
     search_service,
@@ -1138,7 +1139,7 @@ def create_app(
                 delivery_dist=delivery_dist,
                 catalog_graph=catalog_graph,
             )
-            order_timeout = float(os.environ.get("ORDER_TIMEOUT", "45"))
+            order_timeout = default_order_timeout()
             order_response = post_graph(shop_url, order_message, timeout=order_timeout)
         except Exception as exc:
             return app.response_class(
