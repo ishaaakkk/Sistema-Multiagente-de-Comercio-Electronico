@@ -20,7 +20,7 @@ Agentes:
 - `DirectoryService`: registro y descubrimiento de agentes para poder desplegarlos en procesos o maquinas distintas.
 - `AgenteComerciante`: atiende `RealizarPedido`, genera factura, coordina logistica, cobro, feedback y vendedores externos.
 - `CentroLogisticoAgent`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
-- `TransportistaAgent`: responde a `SolicitarPresupuestoTransporte` con una `OfertaTransporte`.
+- `TransportistaAgent`: responde a `DemanarOfertaTransport` con una `OfertaTransport`.
 - `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
 - `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
 - `AgenteFeedback`: registra compras completadas y valoraciones.
@@ -89,10 +89,10 @@ Agentes:
 $env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
 $env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --tarifa-base 2.00 --tarifa-kg 2.50 --tarifa-dia 0.20 --verbose
 $env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9004 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
-$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --dist 130 --verbose
-$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --dist 700 --verbose
+!!!! $env:PYTHONPATH="src"; python agents\AgentTransportista.py --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000  --verbose 
+$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --verbose

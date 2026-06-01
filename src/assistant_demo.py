@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 from decimal import Decimal
@@ -24,6 +25,12 @@ def main() -> int:
     )
     parser.add_argument("--catalog-url", default="http://127.0.0.1:9006/comm")
     parser.add_argument("--shop-url", default="http://127.0.0.1:9001/comm")
+    parser.add_argument(
+        "--order-timeout",
+        type=float,
+        default=float(os.environ.get("ORDER_TIMEOUT", "45")),
+        help="Segundos de espera al comerciante (lotes pendientes + transporte).",
+    )
     parser.add_argument("--feedback-url", default="http://127.0.0.1:9007/comm")
     parser.add_argument("--devolucion-url", default="http://127.0.0.1:9009/comm")
     parser.add_argument("--search-name", default="iphone")
@@ -80,7 +87,7 @@ def main() -> int:
         delivery_dist=args.delivery_dist,
         catalog_graph=catalog_graph,
     )
-    order_response = post_graph(args.shop_url, order_message)
+    order_response = post_graph(args.shop_url, order_message, timeout=args.order_timeout)
     failure = _failure_reason(order_response, "El comerciante rechazo el pedido")
     if failure:
         print(f"Pedido rechazado: {failure}")
@@ -186,8 +193,8 @@ def _print_shipping(order_response: Graph, pedido) -> None:
             transportista = next(order_response.objects(envio, ECSDI.envioRealizadoPor), None) if envio else None
             lote = next(order_response.objects(envio, ECSDI.envioTieneLote), None) if envio else None
             oferta = next(order_response.subjects(ECSDI.ofertaParaLote, lote), None) if lote else None
-            fecha = next(order_response.objects(oferta, ECSDI.fechaEntregaEstimada), None) if oferta else None
-            precio_envio = next(order_response.objects(oferta, ECSDI.precioOferta), None) if oferta else None
+            fecha = next(order_response.objects(oferta, ECSDI.dataPrevista), None) if oferta else None
+            precio_envio = next(order_response.objects(oferta, ECSDI.preuTransport), None) if oferta else None
             print(f"  {idx}. Transportista: {transportista}")
             print(f"     Fecha estimada: {fecha}")
             print(f"     Coste envio:    {precio_envio} EUR")

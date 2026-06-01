@@ -21,13 +21,13 @@ class DirectorySearchTests(unittest.TestCase):
         agent = AGENTS["transportista-test"]
         dsgraph.add((agent, RDF.type, DSO.AgenteDirectorio))
         dsgraph.add((agent, DSO.Address, Literal("http://127.0.0.1:9103")))
-        dsgraph.add((agent, DSO.Capability, ECSDI.SolicitarPresupuestoTransporte))
+        dsgraph.add((agent, DSO.Capability, ECSDI.DemanarOfertaTransport))
 
         request = Graph()
         bind_namespaces(request)
         action = DATA["directory/search/test"]
         request.add((action, RDF.type, DSO.BuscarAgente))
-        request.add((action, DSO.Capability, ECSDI.SolicitarPresupuestoTransporte))
+        request.add((action, DSO.Capability, ECSDI.DemanarOfertaTransport))
 
         response = _handle_search(
             dsgraph,
@@ -46,7 +46,7 @@ class DirectorySearchTests(unittest.TestCase):
         self.assertEqual(next(response.objects(result, DSO.Uri)), agent)
         self.assertEqual(
             next(response.objects(result, DSO.Capability)),
-            ECSDI.SolicitarPresupuestoTransporte,
+            ECSDI.DemanarOfertaTransport,
         )
         self.assertEqual(list(response.objects(result, DSO.AgentType)), [])
 
