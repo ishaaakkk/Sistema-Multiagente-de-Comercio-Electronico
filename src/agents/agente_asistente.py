@@ -784,23 +784,27 @@ IFACE_HTML = """<!DOCTYPE html>
       html += row('Líneas', data.items.map(i => `${i.product_id} ×${i.quantity}`).join(', '));
     }
 
-    const envios = data.envios_internos || [];
+    let envios = Array.isArray(data.envios_internos) ? data.envios_internos : [];
+    if (!envios.length && data.envio_interno) {
+      envios = [{
+        centro_id: data.centro_id,
+        ciudad_centro: data.ciudad_centro,
+        lote_id: data.lote_id,
+        transportista: data.transportista,
+        fecha_entrega: data.fecha_entrega,
+        coste_envio: data.coste_envio,
+      }];
+    }
     if (envios.length) {
       envios.forEach((env, idx) => {
-        const label = envios.length > 1 ? `Envío interno ${idx + 1}` : 'Envío';
-        html += row(label, 'Interno (centro logístico)')
-          + row('Centro', env.centro_id || '—')
+        const clLabel = [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ') || '—';
+        const prefix = envios.length > 1 ? ` (${idx + 1})` : '';
+        html += row('Centro logístico' + prefix, clLabel)
           + row('Lote', env.lote_id || '—')
           + row('Transportista', env.transportista || '—')
           + row('Entrega estimada', env.fecha_entrega || '—')
           + row('Coste envío', env.coste_envio ? parseFloat(env.coste_envio).toFixed(2) + ' €' : '—');
       });
-    } else if (data.envio_interno) {
-      html += row('Envío', 'Interno — ' + (data.transportista || '—'))
-            + row('Centro', data.centro_id || '—')
-            + row('Lote', data.lote_id || '—')
-            + row('Entrega estimada', data.fecha_entrega || '—')
-            + row('Coste envío', data.coste_envio ? parseFloat(data.coste_envio).toFixed(2) + ' €' : '—');
     } else if (data.envio_externo || data.envio_externo_detalle) {
       const det = data.envio_externo_detalle || {};
       html += row('Envío', 'Externo — ' + (det.vendedor || 'vendedor externo'))

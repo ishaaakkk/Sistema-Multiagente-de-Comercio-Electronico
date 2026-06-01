@@ -44,8 +44,13 @@ class OrderResponseTests(unittest.TestCase):
         order_graph.set((pedido, ECSDI.estadoPedido, Literal("aceptado_envio_planificado")))
 
         lote = DATA["lote/TEST-LOT"]
+        center = next(catalog_graph.subjects(ECSDI.idCentroLogistico, Literal("CL-BCN")))
         offer_graph = Graph()
         bind_namespaces(offer_graph)
+        offer_graph.add((lote, RDF.type, ECSDI.LoteEnvio))
+        offer_graph.add((lote, ECSDI.idLote, Literal("LOT-TEST01")))
+        offer_graph.add((lote, ECSDI.loteOrigenCentro, center))
+        offer_graph.add((lote, ECSDI.ciudadCentroLogistico, Literal("Barcelona")))
         oferta = DATA["oferta/TEST"]
         offer_graph.add((oferta, RDF.type, ECSDI.OfertaTransport))
         offer_graph.add((oferta, ECSDI.ofertaParaLote, lote))
@@ -81,8 +86,54 @@ class OrderResponseTests(unittest.TestCase):
         self.assertTrue(summary["envio_interno"])
         self.assertEqual(len(summary["envios_internos"]), 1)
         self.assertEqual(summary["coste_envio"], "12.50")
+        self.assertEqual(summary["centro_id"], "CL-BCN")
         self.assertEqual(resolve_pedido(response), pedido)
         self.assertEqual(pick_estado_pedido(response, pedido), "aceptado_envio_planificado")
+
+    def test_centro_from_lote_when_missing_on_envio(self):
+        catalog_graph = build_catalog_graph()
+        request = build_order_message(
+            sender=AGENTS.AsistenteVirtual,
+            receiver=AGENTS.AgenteComerciante,
+            product_quantities={"P-IPHONE19": 1},
+            product_prices={"P-IPHONE19": Decimal("100")},
+            city="Barcelona",
+            street="Carrer Test",
+            postal_code="08013",
+            country="Espana",
+            priority=1,
+            catalog_graph=catalog_graph,
+        )
+        action = next(request.subjects(RDF.type, ECSDI.RealizarPedido))
+        pedido = next(request.objects(action, ECSDI.accionSobrePedido))
+        center = next(catalog_graph.subjects(ECSDI.idCentroLogistico, Literal("CL-BCN")))
+
+        lote = DATA["lote/TEST-LOT2"]
+        offer_graph = Graph()
+        bind_namespaces(offer_graph)
+        offer_graph.add((lote, RDF.type, ECSDI.LoteEnvio))
+        offer_graph.add((lote, ECSDI.idLote, Literal("LOT-TEST99")))
+        offer_graph.add((lote, ECSDI.loteOrigenCentro, center))
+        offer_graph.add((lote, ECSDI.ciudadCentroLogistico, Literal("Barcelona")))
+        oferta = DATA["oferta/TEST2"]
+        offer_graph.add((oferta, RDF.type, ECSDI.OfertaTransport))
+        offer_graph.add((oferta, ECSDI.ofertaParaLote, lote))
+
+        shipping = build_shipping_confirmation(
+            AGENTS.CentroLogisticoBCN,
+            AGENTS.AgenteComerciante,
+            action,
+            pedido,
+            lote,
+            offer_graph,
+            oferta,
+            AGENTS.TransportistaEco,
+        )
+        for triple in request:
+            shipping.add(triple)
+        summary = extract_order_summary(shipping)
+        self.assertEqual(summary["centro_id"], "CL-BCN")
+        self.assertEqual(summary["ciudad_centro"], "Barcelona")
 
 
 if __name__ == "__main__":

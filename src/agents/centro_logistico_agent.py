@@ -437,12 +437,12 @@ def _notify_comerciantes_dispatch(
                 offer_graph=offer_graph,
                 offer=best_offer,
                 transportista=best_transportista,
+                center_id=center_id_literal,
+                center_city=center_city,
+                center=center,
             )
             envio_in_resp = next(response.subjects(RDF.type, ECSDI.EnvioInterno), None)
             if envio_in_resp is not None:
-                response.add((envio_in_resp, ECSDI.envioDesdeCentro, center))
-                response.add((envio_in_resp, ECSDI.idCentroLogistico, Literal(center_id_literal)))
-                response.add((envio_in_resp, ECSDI.ciudadCentroLogistico, Literal(center_city)))
                 response.add((envio_in_resp, ECSDI.distanciaCentroLogistico, Literal(dist)))
             post_graph(shop_url, response)
             log(

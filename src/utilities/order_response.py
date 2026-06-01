@@ -24,6 +24,11 @@ _ESTADO_LABELS: dict[str, str] = {
     "solicitado": "Solicitado",
 }
 
+_TRANSPORTISTA_LABELS: dict[str, str] = {
+    "transportista-127-0-0-1-9003": "TransportistaExpress",
+    "transportista-127-0-0-1-9011": "TransportistaEco",
+}
+
 
 def resolve_pedido(graph: Graph) -> URIRef | None:
     """Identifica el pedido de la respuesta (contenido ACL o único Pedido con idPedido)."""
@@ -48,7 +53,16 @@ def resolve_pedido(graph: Graph) -> URIRef | None:
         linked = next(graph.objects(factura, ECSDI.facturaDePedido), None)
         if linked in candidates:
             return linked
-    return candidates[0]
+
+    for confirmacion in graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        envio = next(graph.objects(confirmacion, ECSDI.confirmacionEnvio), None)
+        if envio is None:
+            continue
+        linked = next(graph.objects(envio, ECSDI.envioDePedido), None)
+        if linked is not None:
+            return linked
+
+    return candidates[0] if candidates else None
 
 
 def pick_estado_pedido(graph: Graph, pedido: URIRef) -> str:
@@ -69,10 +83,30 @@ def _uri_tail(uri: URIRef | None) -> str:
     return text.rsplit("/", 1)[-1]
 
 
-def extract_envios_internos(graph: Graph, pedido: URIRef) -> list[dict]:
-    """Confirmaciones de envío interno enlazadas al pedido."""
+def _friendly_transportista(uri: URIRef | None) -> str:
+    tail = _uri_tail(uri)
+    return _TRANSPORTISTA_LABELS.get(tail, tail)
 
-    envios: list[dict] = []
+
+def _centro_from_lote(graph: Graph, lote: URIRef | None) -> tuple[str, str]:
+    if lote is None:
+        return "", ""
+    centro_id = str(next(graph.objects(lote, ECSDI.idCentroLogistico), "") or "")
+    ciudad = str(next(graph.objects(lote, ECSDI.ciudadCentroLogistico), "") or "")
+    if centro_id and ciudad:
+        return centro_id, ciudad
+    center = next(graph.objects(lote, ECSDI.loteOrigenCentro), None)
+    if center is not None:
+        if not centro_id:
+            centro_id = str(next(graph.objects(center, ECSDI.idCentroLogistico), "") or "")
+        if not ciudad:
+            ciudad = str(next(graph.objects(center, ECSDI.ciudadCentroLogistico), "") or "")
+    return centro_id, ciudad
+
+
+def _iter_confirmaciones_pedido(graph: Graph, pedido: URIRef):
+    """Confirmaciones enlazadas por pedidoTieneConfirmacion o por envioDePedido."""
+
     seen: set[str] = set()
     for confirmacion in graph.objects(pedido, ECSDI.pedidoTieneConfirmacion):
         if (confirmacion, RDF.type, ECSDI.ConfirmacionEnvio) not in graph:
@@ -81,28 +115,55 @@ def extract_envios_internos(graph: Graph, pedido: URIRef) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
+        yield confirmacion
+
+    for confirmacion in graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        key = str(confirmacion)
+        if key in seen:
+            continue
         envio = next(graph.objects(confirmacion, ECSDI.confirmacionEnvio), None)
-        transportista = next(graph.objects(envio, ECSDI.envioRealizadoPor), None) if envio else None
-        lote = next(graph.objects(envio, ECSDI.envioTieneLote), None) if envio else None
-        lote_id = str(next(graph.objects(lote, ECSDI.idLote), "")) if lote else ""
-        centro_id = str(next(graph.objects(envio, ECSDI.idCentroLogistico), "")) if envio else ""
-        ciudad_cl = str(next(graph.objects(envio, ECSDI.ciudadCentroLogistico), "")) if envio else ""
-        oferta = next(graph.subjects(ECSDI.ofertaParaLote, lote), None) if lote is not None else None
-        if oferta is None:
-            oferta = find_transport_offer(graph)
-        fecha = offer_delivery_datetime(graph, oferta) if oferta else None
-        precio = str(offer_price(graph, oferta)) if oferta else ""
-        envios.append(
-            {
-                "tipo": "interno",
-                "transportista": _uri_tail(transportista),
-                "lote_id": lote_id,
-                "centro_id": centro_id,
-                "ciudad_centro": ciudad_cl,
-                "fecha_entrega": str(fecha) if fecha else "",
-                "coste_envio": precio,
-            }
-        )
+        if envio is None:
+            continue
+        if (envio, ECSDI.envioDePedido, pedido) in graph:
+            seen.add(key)
+            yield confirmacion
+
+
+def _envio_record_from_confirmacion(graph: Graph, confirmacion: URIRef) -> dict:
+    envio = next(graph.objects(confirmacion, ECSDI.confirmacionEnvio), None)
+    transportista = next(graph.objects(envio, ECSDI.envioRealizadoPor), None) if envio else None
+    lote = next(graph.objects(envio, ECSDI.envioTieneLote), None) if envio else None
+    lote_id = str(next(graph.objects(lote, ECSDI.idLote), "")) if lote else ""
+    centro_id = str(next(graph.objects(envio, ECSDI.idCentroLogistico), "")) if envio else ""
+    ciudad_cl = str(next(graph.objects(envio, ECSDI.ciudadCentroLogistico), "")) if envio else ""
+    if not centro_id or not ciudad_cl:
+        fallback_id, fallback_city = _centro_from_lote(graph, lote)
+        centro_id = centro_id or fallback_id
+        ciudad_cl = ciudad_cl or fallback_city
+
+    oferta = next(graph.subjects(ECSDI.ofertaParaLote, lote), None) if lote is not None else None
+    if oferta is None:
+        oferta = find_transport_offer(graph)
+    fecha = offer_delivery_datetime(graph, oferta) if oferta else None
+    precio = str(offer_price(graph, oferta)) if oferta else ""
+
+    return {
+        "tipo": "interno",
+        "transportista": _friendly_transportista(transportista),
+        "lote_id": lote_id,
+        "centro_id": centro_id,
+        "ciudad_centro": ciudad_cl,
+        "fecha_entrega": str(fecha) if fecha else "",
+        "coste_envio": precio,
+    }
+
+
+def extract_envios_internos(graph: Graph, pedido: URIRef) -> list[dict]:
+    """Confirmaciones de envío interno enlazadas al pedido."""
+
+    envios: list[dict] = []
+    for confirmacion in _iter_confirmaciones_pedido(graph, pedido):
+        envios.append(_envio_record_from_confirmacion(graph, confirmacion))
     return envios
 
 
@@ -144,7 +205,6 @@ def extract_order_summary(graph: Graph) -> dict:
         "items": [],
     }
 
-    # Compatibilidad con campos planos usados por la UI actual.
     if envios_internos:
         first = envios_internos[0]
         result.update(
@@ -154,6 +214,7 @@ def extract_order_summary(graph: Graph) -> dict:
                 "coste_envio": first.get("coste_envio", ""),
                 "lote_id": first.get("lote_id", ""),
                 "centro_id": first.get("centro_id", ""),
+                "ciudad_centro": first.get("ciudad_centro", ""),
             }
         )
     elif envio_externo:

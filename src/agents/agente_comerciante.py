@@ -340,11 +340,9 @@ def _plan_escoger_cl(
     for shipping_response in confirmaciones:
         for triple in shipping_response:
             order_graph.add(triple)
-        confirmacion = next(
-            shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio), None
-        )
-        if confirmacion is not None:
+        for confirmacion in shipping_response.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
             order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+        _ensure_envio_centro_on_graph(order_graph, pedido)
     log(
         "comerciante",
         f"Envío planificado por {len(confirmaciones)} centro(s) para {len(lines_for_logistics)} línea(s)",
@@ -455,6 +453,29 @@ def _discover_logistics_centers(
             return comm_urls
         log("comerciante", "No se encontraron centros logísticos en el directorio, usando fallback")
     return [_comm_url(u) for u in fallback if u]
+
+
+def _ensure_envio_centro_on_graph(order_graph: Graph, pedido: URIRef) -> None:
+    """Copia idCentroLogistico desde el lote si el envío aún no lo tiene."""
+
+    for confirmacion in order_graph.subjects(RDF.type, ECSDI.ConfirmacionEnvio):
+        envio = next(order_graph.objects(confirmacion, ECSDI.confirmacionEnvio), None)
+        if envio is None or (envio, ECSDI.envioDePedido, pedido) not in order_graph:
+            continue
+        if next(order_graph.objects(envio, ECSDI.idCentroLogistico), None) is not None:
+            continue
+        lote = next(order_graph.objects(envio, ECSDI.envioTieneLote), None)
+        if lote is None:
+            continue
+        center = next(order_graph.objects(lote, ECSDI.loteOrigenCentro), None)
+        if center is not None:
+            order_graph.add((envio, ECSDI.envioDesdeCentro, center))
+            center_id = next(order_graph.objects(center, ECSDI.idCentroLogistico), None)
+            if center_id is not None:
+                order_graph.add((envio, ECSDI.idCentroLogistico, center_id))
+        city = next(order_graph.objects(lote, ECSDI.ciudadCentroLogistico), None)
+        if city is not None:
+            order_graph.add((envio, ECSDI.ciudadCentroLogistico, city))
 
 
 def _response_accepts_pending_lote(response: Graph) -> bool:
