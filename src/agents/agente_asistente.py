@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -28,6 +29,7 @@ from utilities.runtime import (
     search_service,
     unregister_service,
 )
+from utilities.storage import load_json, save_json
 
 
 DEFAULT_AGENT_URI = AGENTS.AsistenteVirtual
@@ -373,6 +375,53 @@ IFACE_HTML = """<!DOCTYPE html>
     max-width: 860px;
   }
 
+  .orders-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 860px;
+  }
+
+  .order-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+  }
+
+  .order-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+
+  .order-card-id {
+    color: var(--accent);
+    font-size: 12px;
+  }
+
+  .order-card-meta {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .order-card-items {
+    margin-top: 8px;
+    color: var(--text);
+    font-size: 12px;
+  }
+
   .rec-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -455,6 +504,7 @@ IFACE_HTML = """<!DOCTYPE html>
     04 / Recomendaciones<span id="rec-badge" class="nav-badge" style="display:none">0</span>
   </button>
   <button onclick="showTab('devoluciones', this)">05 / Devoluciones</button>
+  <button onclick="showTab('pedidos', this)">06 / Pedidos</button>
 </nav>
 
 <!-- TAB: BUSCAR -->
@@ -647,6 +697,19 @@ IFACE_HTML = """<!DOCTYPE html>
   <div id="return-result" class="return-summary" style="display:none"></div>
 </div>
 
+<!-- TAB: PEDIDOS -->
+<div class="tab" id="tab-pedidos">
+  <p class="section-title">Histórico de pedidos</p>
+  <div class="orders-toolbar">
+    <button class="btn secondary" onclick="cargarPedidos()">Actualizar histórico</button>
+    <span class="rec-hint">Consulta pedido, factura, importe y líneas compradas.</span>
+  </div>
+  <div id="orders-list" class="orders-list">
+    <p class="empty-state">Aún no hay pedidos confirmados en este asistente.</p>
+  </div>
+  <div id="orders-confirm-box" style="display:none;margin-top:14px"></div>
+</div>
+
 <div id="status-bar">
   <div id="status-dot"></div>
   <span id="status-msg">Listo</span>
@@ -661,6 +724,7 @@ IFACE_HTML = """<!DOCTYPE html>
   let recPollTimer = null;
   let lastInboxCount = 0;
   let lastFeedbackCount = 0;
+  let orderHistory = [];
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -746,6 +810,7 @@ IFACE_HTML = """<!DOCTYPE html>
       recPollTimer = setInterval(cargarRecomendacionesInbox, 15000);
     }
     if (name === 'valoracion') cargarFeedbackPendiente();
+    if (name === 'pedidos') cargarPedidos();
   }
 
   function refreshOrderPanel() {
@@ -847,13 +912,19 @@ IFACE_HTML = """<!DOCTYPE html>
       lastPedidoId = data.pedido_id || '';
       cart = [];
       renderCart();
+      await cargarPedidos();
     } catch (e) {
       setStatus('Error al realizar el pedido', 'error');
     }
   }
 
   function renderConfirmation(data) {
-    const box = document.getElementById('confirm-box');
+    renderConfirmationInBox(data, 'confirm-box');
+  }
+
+  function renderConfirmationInBox(data, boxId) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
     box.style.display = 'block';
 
     const row = (k, v, accent=false) =>
@@ -1158,10 +1229,68 @@ IFACE_HTML = """<!DOCTYPE html>
     setStatus(`Formulario preparado para ${productId || 'producto'}`, 'ok');
   }
 
+  // ── Histórico de pedidos ─────────────────────────────────
+  function renderPedidos(items) {
+    const el = document.getElementById('orders-list');
+    if (!el) return;
+    if (!items || !items.length) {
+      el.innerHTML = '<p class="empty-state">Aún no hay pedidos confirmados en este asistente.</p>';
+      const detail = document.getElementById('orders-confirm-box');
+      if (detail) detail.style.display = 'none';
+      return;
+    }
+    el.innerHTML = items.map((order, idx) => {
+      const importe = order.importe ? `${parseFloat(order.importe).toFixed(2)} €` : '—';
+      const fecha = order.fecha || 'fecha no disponible';
+      const factura = order.factura_id || '—';
+      const estado = order.estado_label || order.estado || '—';
+      const itemsText = (order.items || [])
+        .map((i) => `${i.product_id || '—'} ×${i.quantity || 1}`)
+        .join(', ') || 'Sin líneas';
+      return `<div class="order-card">
+        <div class="order-card-head">
+          <div>
+            <div class="order-card-id">Pedido ${order.pedido_id || '—'}</div>
+            <div class="order-card-meta">Factura ${factura} · Estado ${estado}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="order-card-id">${importe}</div>
+            <div class="order-card-meta">${fecha}</div>
+          </div>
+        </div>
+        <div class="order-card-items">${itemsText}</div>
+        <div class="rec-actions" style="margin-top:10px">
+          <button class="btn secondary" onclick="verDetallePedido(${idx})">Ver detalle completo</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function verDetallePedido(index) {
+    const order = orderHistory[index];
+    if (!order) { setStatus('No se encontró el pedido seleccionado', 'error'); return; }
+    renderConfirmationInBox(order.confirmation || order, 'orders-confirm-box');
+    setStatus(`Detalle cargado para ${order.pedido_id || 'pedido'}`, 'ok');
+  }
+
+  async function cargarPedidos() {
+    try {
+      const res = await fetch('/orders-history');
+      const data = await res.json();
+      orderHistory = data.orders || [];
+      renderPedidos(orderHistory);
+    } catch (e) {
+      if (document.getElementById('tab-pedidos').classList.contains('active')) {
+        document.getElementById('orders-list').innerHTML = '<p class="empty-state">No se pudo cargar el histórico de pedidos.</p>';
+      }
+    }
+  }
+
   // ── Init ─────────────────────────────────────────────────
   setStatus('Listo', 'ok');
   onMotivoChange();
   cargarRecomendacionesInbox();
+  cargarPedidos();
   setInterval(cargarFeedbackPendiente, 15000);
 </script>
 </body>
@@ -1179,6 +1308,7 @@ def create_app(
     app = Flask(__name__)
     app._feedback_requests = []
     app._recommendations_inbox: list[dict] = []
+    app._orders_history: list[dict] = load_json("orders_history.json", [])
 
     # ── /iface ────────────────────────────────────────────────────────────────
 
@@ -1335,6 +1465,19 @@ def create_app(
                 {"product_id": pid, "quantity": qty}
                 for pid, qty in product_quantities.items()
             ]
+        _append_order_history(
+            app,
+            result,
+            {
+                "city": city,
+                "street": street,
+                "postal_code": postal_code,
+                "country": country,
+                "priority": priority,
+                "payment_method": payment_method,
+                "payment_label": _payment_label(payment_method, payment_card),
+            },
+        )
 
         return app.response_class(json.dumps(result), mimetype="application/json")
 
@@ -1465,6 +1608,14 @@ def create_app(
             mimetype="application/json"
         )
 
+    @app.get("/orders-history")
+    def orders_history():
+        import json
+        return app.response_class(
+            json.dumps({"orders": getattr(app, "_orders_history", [])}),
+            mimetype="application/json",
+        )
+
     @app.get("/recommendations-inbox")
     def recommendations_inbox():
         """Buzón de recomendaciones recibidas como ACL.inform desde el AgenteFeedback."""
@@ -1573,6 +1724,35 @@ def _payment_label(method: str, card_number: str) -> str:
     if len(digits) >= 4:
         return f"tarjeta ****{digits[-4:]}"
     return method
+
+
+def _append_order_history(app: Flask, result: dict, context: dict) -> None:
+    history = list(getattr(app, "_orders_history", []))
+    pedido_id = result.get("pedido_id")
+    if not pedido_id:
+        return
+    entry = {
+        "pedido_id": pedido_id,
+        "factura_id": result.get("factura_id", ""),
+        "importe": result.get("importe", ""),
+        "estado": result.get("estado", ""),
+        "estado_label": result.get("estado_label", ""),
+        "items": result.get("items", []),
+        "fecha": datetime.now().isoformat(timespec="seconds"),
+        "direccion": {
+            "city": context.get("city", ""),
+            "street": context.get("street", ""),
+            "postal_code": context.get("postal_code", ""),
+            "country": context.get("country", ""),
+        },
+        "priority": context.get("priority"),
+        "payment_method": context.get("payment_method", ""),
+        "payment_label": context.get("payment_label", ""),
+        "confirmation": result,
+    }
+    history = [entry] + [o for o in history if o.get("pedido_id") != pedido_id]
+    app._orders_history = history[:200]
+    save_json("orders_history.json", app._orders_history)
 
 
 def _acl_failure_payload(response: Graph, default_reason: str) -> dict | None:
