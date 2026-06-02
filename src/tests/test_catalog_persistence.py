@@ -12,6 +12,7 @@ from rdflib.namespace import RDF, XSD
 from agents.agente_catalogo import load_catalog_graph
 from tests.fixtures.catalog_fixtures import build_catalog_graph
 from utilities.catalog import (
+    average_rating_from_opinions,
     build_stock_graph,
     decrement_catalog_stock,
     load_persisted_catalog,
@@ -68,6 +69,17 @@ class CatalogPersistenceTests(unittest.TestCase):
         catalog = load_persisted_catalog()
         product = next(catalog.subjects(ECSDI.idProducto, Literal("P-IPHONE19")))
         self.assertEqual(str(next(catalog.objects(product, ECSDI.valoracionMedia))), "3.50")
+
+    def test_average_rating_from_opinions(self):
+        opinions = [
+            {"product_id": "P-IPHONE19", "puntuacion": 5},
+            {"product_id": "P-IPHONE19", "puntuacion": 3},
+            {"product_id": "P-EBOOK-AURORA", "puntuacion": 4},
+            {"product_id": "P-IPHONE19", "puntuacion": None},
+        ]
+        self.assertAlmostEqual(average_rating_from_opinions(opinions, "P-IPHONE19"), 4.0)
+        self.assertAlmostEqual(average_rating_from_opinions(opinions, "P-EBOOK-AURORA"), 4.0)
+        self.assertIsNone(average_rating_from_opinions(opinions, "P-UNKNOWN"))
 
 
 class StockGraphTests(unittest.TestCase):

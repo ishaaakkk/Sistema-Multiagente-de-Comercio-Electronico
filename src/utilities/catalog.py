@@ -222,6 +222,19 @@ def decrement_catalog_stock(center_id: str, product_quantities: dict[str, int]) 
     persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
 
 
+def average_rating_from_opinions(opinions_db: list[dict], product_id: str) -> float | None:
+    """Media aritmética de las puntuaciones registradas para un producto."""
+
+    ratings = [
+        int(record["puntuacion"])
+        for record in opinions_db
+        if record.get("product_id") == product_id and record.get("puntuacion") is not None
+    ]
+    if not ratings:
+        return None
+    return sum(ratings) / len(ratings)
+
+
 def update_product_average_rating(product_id: str, rating: Decimal | str | int | float) -> bool:
     """Actualiza `valoracionMedia` de un producto en ProductosDB."""
 

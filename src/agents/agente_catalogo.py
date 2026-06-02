@@ -14,6 +14,7 @@ from utilities.catalog import (
     describe_product,
     extract_search_constraints,
     filter_products,
+    load_persisted_catalog,
     persist_catalog,
 )
 from utilities.comm import comm_url as _comm_url
@@ -52,8 +53,8 @@ def load_catalog_graph() -> Graph:
 
 def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
     app = Flask(__name__)
-    catalog = load_catalog_graph()
-    log("catalogo", f"ProductosDB lista ({len(catalog)} tripletas)")
+    initial_catalog = load_catalog_graph()
+    log("catalogo", f"ProductosDB lista ({len(initial_catalog)} tripletas)")
 
     # Historial de búsquedas local del Catálogo (útil para depurar).
     # Para persistencia del sistema de recomendación se usa el protocolo hacia AgenteFeedback,
@@ -87,13 +88,13 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
             # historial de búsquedas usado por la recomendación periódica.
             if (action, RDF.type, ECSDI.BuscarProductos) in graph:
                 return reply(
-                    _handle_search(catalog, search_history, agent_uri, message.sender, action, graph, feedback_url)
+                    _handle_search(search_history, agent_uri, message.sender, action, graph, feedback_url)
                 )
 
             # Capacidad AñadirProductoExt — Plan: ActualizarCatalogo
             # Msg entrante: DarAltaProductoExterno (VendedorExterno → AgenteCatalogo)
             if (action, RDF.type, ECSDI.DarAltaProductoExterno) in graph:
-                return reply(_handle_external_product_registration(catalog, agent_uri, message.sender, action, graph))
+                return reply(_handle_external_product_registration(agent_uri, message.sender, action, graph))
 
             return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteCatalogo"))
 
@@ -104,7 +105,6 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
 
 
 def _handle_search(
-    catalog: Graph,
     search_history: list[dict],
     agent_uri: URIRef,
     receiver: URIRef,
@@ -123,6 +123,7 @@ def _handle_search(
     (ACL.inform) al AgenteFeedback para que la búsqueda alimente el algoritmo
     de recomendación. Si el agente feedback no está disponible, se ignora.
     """
+    catalog = _load_live_catalog()
     constraints = extract_search_constraints(graph, action)
 
     products = filter_products(catalog, constraints)
@@ -153,14 +154,23 @@ def _handle_search(
     return build_search_response(agent_uri, receiver, action, products, catalog)
 
 
+def _load_live_catalog() -> Graph:
+    """ProductosDB en disco (recarga en cada petición para ver valoracionMedia actualizada)."""
+
+    catalog = load_persisted_catalog()
+    if len(catalog) > 0:
+        return catalog
+    return load_catalog_graph()
+
+
 def _handle_external_product_registration(
-    catalog: Graph,
     agent_uri: URIRef,
     sender: URIRef,
     action: URIRef,
     graph: Graph,
 ) -> Graph:
     """Plan: ActualizarCatalogo — integra productos externos anunciados."""
+    catalog = _load_live_catalog()
     products = list(graph.objects(action, ECSDI.accionSobreProducto))
     for product in graph.subjects(RDF.type, ECSDI.ProductoExterno):
         if product not in products:

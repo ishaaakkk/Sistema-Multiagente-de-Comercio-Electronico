@@ -1651,8 +1651,16 @@ def create_app(
             )
         ]
 
+        from utilities.catalog import load_persisted_catalog, product_uri as catalog_product_uri
+
+        new_rating = ""
+        catalog = load_persisted_catalog()
+        if len(catalog) > 0:
+            product_node = catalog_product_uri(str(product_id))
+            new_rating = str(next(catalog.objects(product_node, ECSDI.valoracionMedia), ""))
+
         return app.response_class(
-            json.dumps({"ok": True}),
+            json.dumps({"ok": True, "valoracion_media": new_rating}),
             mimetype="application/json"
         )
 
