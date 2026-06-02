@@ -496,7 +496,7 @@ IFACE_HTML = """<!DOCTYPE html>
 
 <nav>
   <button class="active" onclick="showTab('buscar', this)">01 / Buscar</button>
-  <button onclick="showTab('pedido', this)">02 / Pedido</button>
+  <button onclick="showTab('pedido', this)">02 / Pedido<span id="order-cart-badge" class="nav-badge" style="display:none">0</span></button>
   <button onclick="showTab('valoracion', this)">
     03 / Valoración<span id="val-badge" class="nav-badge" style="display:none">0</span>
   </button>
@@ -539,7 +539,7 @@ IFACE_HTML = """<!DOCTYPE html>
 
 <!-- TAB: PEDIDO -->
 <div class="tab" id="tab-pedido">
-  <p class="section-title">Realizar pedido</p>
+  <p class="section-title">Realizar pedido <span id="order-cart-count" style="color:var(--accent);font-size:13px"></span></p>
 
   <div id="order-panel">
     <div id="selected-product-banner" style="display:none" class="selected-product-info">
@@ -726,6 +726,7 @@ IFACE_HTML = """<!DOCTYPE html>
   let lastFeedbackCount = 0;
   let orderHistory = [];
   let pendingOrderIds = new Set();
+  let expandedOrderIndex = -1;
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -881,6 +882,7 @@ IFACE_HTML = """<!DOCTYPE html>
   function renderCart() {
     const box = document.getElementById('cart-box');
     if (!box) return;
+    updateOrderCartCounters();
     if (!cart.length) {
       box.innerHTML = '<div class="empty-state" style="padding:8px 0">Carrito vacío.</div>';
       return;
@@ -893,6 +895,23 @@ IFACE_HTML = """<!DOCTYPE html>
         <button class="btn secondary" style="margin:0;padding:7px 10px" onclick="removeCartItem(${i})">Quitar</button>
       </div>`
     ).join('') + '</div>';
+  }
+
+  function updateOrderCartCounters() {
+    const totalUnits = cart.reduce((acc, item) => acc + (parseInt(item.quantity) || 0), 0);
+    const orderCount = document.getElementById('order-cart-count');
+    if (orderCount) {
+      orderCount.textContent = totalUnits > 0 ? `(${totalUnits} producto(s) en carrito)` : '';
+    }
+    const badge = document.getElementById('order-cart-badge');
+    if (badge) {
+      if (totalUnits > 0) {
+        badge.textContent = String(totalUnits);
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
   }
 
   function toggleCardField() {
@@ -958,11 +977,8 @@ IFACE_HTML = """<!DOCTYPE html>
     renderConfirmationInBox(data, 'confirm-box', { showFeedbackHint: true });
   }
 
-  function renderConfirmationInBox(data, boxId, options = {}) {
+  function buildConfirmationHtml(data, options = {}) {
     const showFeedbackHint = options.showFeedbackHint === true;
-    const box = document.getElementById(boxId);
-    if (!box) return;
-    box.style.display = 'block';
 
     const row = (k, v, accent=false) =>
       `<div class="confirm-row"><span class="confirm-key">${k}</span><span class="confirm-val${accent?' accent':''}">${v}</span></div>`;
@@ -1014,7 +1030,14 @@ IFACE_HTML = """<!DOCTYPE html>
            </div>
          </div>`;
     }
-    box.innerHTML = html;
+    return html;
+  }
+
+  function renderConfirmationInBox(data, boxId, options = {}) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    box.style.display = 'block';
+    box.innerHTML = buildConfirmationHtml(data, options);
   }
 
   // ── Valoración ────────────────────────────────────────────
@@ -1288,11 +1311,15 @@ IFACE_HTML = """<!DOCTYPE html>
         .join(', ') || 'Sin líneas';
       const isPending = order._pending === true;
       const isFailed = order._failed === true;
+      const showDetail = expandedOrderIndex === idx && !isPending && !isFailed;
       const actionButton = isPending
         ? `<button class="btn secondary" disabled>En procesamiento…</button>`
         : isFailed
           ? `<button class="btn secondary" disabled>Sin detalle</button>`
-          : `<button class="btn secondary" onclick="verDetallePedido(${idx})">Ver detalle completo</button>`;
+          : `<button class="btn secondary" onclick="verDetallePedido(${idx})">${showDetail ? 'Ocultar detalle' : 'Ver detalle completo'}</button>`;
+      const detailHtml = showDetail
+        ? `<div id="order-detail-${idx}" style="margin-top:12px">${buildConfirmationHtml(order.confirmation || order, { showFeedbackHint: false })}</div>`
+        : '';
       return `<div class="order-card">
         <div class="order-card-head">
           <div>
@@ -1309,6 +1336,7 @@ IFACE_HTML = """<!DOCTYPE html>
         <div class="rec-actions" style="margin-top:10px">
           ${actionButton}
         </div>
+        ${detailHtml}
       </div>`;
     }).join('');
   }
@@ -1316,7 +1344,8 @@ IFACE_HTML = """<!DOCTYPE html>
   function verDetallePedido(index) {
     const order = orderHistory[index];
     if (!order) { setStatus('No se encontró el pedido seleccionado', 'error'); return; }
-    renderConfirmationInBox(order.confirmation || order, 'orders-confirm-box', { showFeedbackHint: false });
+    expandedOrderIndex = expandedOrderIndex === index ? -1 : index;
+    renderPedidos(orderHistory);
     setStatus(`Detalle cargado para ${order.pedido_id || 'pedido'}`, 'ok');
   }
 
@@ -1382,6 +1411,7 @@ IFACE_HTML = """<!DOCTYPE html>
   onMotivoChange();
   cargarRecomendacionesInbox();
   cargarPedidos();
+  updateOrderCartCounters();
   setInterval(cargarFeedbackPendiente, 15000);
 </script>
 </body>
