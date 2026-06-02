@@ -742,19 +742,10 @@ def _send_feedback_request_delayed(
 def _delivery_target(record: dict, delay_seconds: int) -> datetime:
     """Calcula el instante objetivo para enviar PedirFeedback.
 
-    Si hay fecha de entrega conocida, target = fecha_entrega + delay; si no,
-    target = ahora + delay.
+    Siempre usa delay desde el momento actual (ahora + delay).
     """
 
-    base = None
-    if record.get("fecha_entrega"):
-        try:
-            base = datetime.fromisoformat(record["fecha_entrega"])
-        except ValueError:
-            base = None
-    if base is None:
-        base = datetime.now()
-    return base + timedelta(seconds=delay_seconds)
+    return datetime.now() + timedelta(seconds=delay_seconds)
 
 
 def _recommendation_scheduler(

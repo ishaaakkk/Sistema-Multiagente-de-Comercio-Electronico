@@ -817,9 +817,9 @@ IFACE_HTML = """<!DOCTYPE html>
 
     box.innerHTML = html
       + `<div class="selected-product-info" style="margin-top:12px;border-color:var(--accent2)">
-           <div style="font-size:12px;color:var(--accent2)">Valoración diferida</div>
+           <div style="font-size:12px;color:var(--accent2)">Valoración pendiente de solicitud</div>
            <div style="margin-top:6px">
-             La valoración se solicitará cuando llegue la notificación de feedback.
+             Te pediremos valorar este producto automáticamente tras el retardo configurado.
            </div>
          </div>`;
   }
