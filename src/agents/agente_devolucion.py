@@ -126,7 +126,8 @@ def _handle_devolucion(
         )
 
     delivery_date = _extract_delivery_date(order_graph) or _extract_datetime(order_graph, pedido, ECSDI.fechaPedido)
-    if not _return_allowed(motivo, delivery_date):
+    fallback_reception = _extract_reception_hint(motivo)
+    if not _return_allowed(motivo, delivery_date or fallback_reception):
         return _build_resolution(
             agent_uri,
             receiver,
@@ -273,6 +274,7 @@ def _simulate_mensajeria_interna(
     graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
     graph.add((envio, ECSDI.envioDePedido, pedido))
     graph.add((envio, ECSDI.envioRealizadoPor, AGENTS.MensajeriaInterna))
+    graph.add((envio, RDFS.comment, Literal(f"TRACK-DEV-{uuid4().hex[:10].upper()}")))
     return graph
 
 
@@ -387,9 +389,26 @@ def _return_allowed(motivo: str, delivery_date: datetime | None) -> bool:
     immediate_reasons = ("defect", "defectuos", "equivoc", "incorrect", "roto", "dany", "dañ")
     if any(reason in normalized for reason in immediate_reasons):
         return True
+    expectation_reasons = ("no satisface", "expectativa", "expectation", "no cumple")
+    if any(reason in normalized for reason in expectation_reasons):
+        if delivery_date is None:
+            return False
+        return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
     if delivery_date is None:
         return True
     return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
+
+
+def _extract_reception_hint(motivo: str) -> datetime | None:
+    marker = "recepcion="
+    idx = motivo.find(marker)
+    if idx < 0:
+        return None
+    raw = motivo[idx + len(marker):].split(")", 1)[0].strip()
+    if not raw:
+        return None
+    # Acepta fechas en formato YYYY-MM-DD desde la interfaz.
+    return _parse_datetime(f"{raw}T00:00:00")
 
 
 def _extract_delivery_date(graph: Graph) -> datetime | None:
