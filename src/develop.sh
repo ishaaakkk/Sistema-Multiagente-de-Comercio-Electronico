@@ -78,9 +78,9 @@ start_agent "TransportistaEco" "$PYTHON" -m agents.transportista_agent --port 90
 sleep 0.5
 # Dos centros logísticos — extensión #3: el comerciante contacta CLs en orden
 # por proximidad |dist_CL - dist_entrega| (fan-out secuencial greedy).
-start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130 --stock-products "P-IPHONE19,P-EBOOK-AURORA,P-AURICULARES-BT"
+start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130 --stock-products "P-IPHONE19,P-MACBOOK-AIR,P-EBOOK-AURORA,P-BATIDORA-MINI,P-LIBRO-RUST"
 sleep 0.5
-start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500 --stock-products "P-BATIDORA-MINI,P-LIBRO-RUST"
+start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500 --stock-products "P-IPHONE19,P-MACBOOK-AIR,P-EBOOK-AURORA,P-BATIDORA-MINI,P-LIBRO-RUST"
 sleep 0.5
 start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos_agent --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
