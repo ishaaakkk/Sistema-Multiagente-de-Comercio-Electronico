@@ -28,6 +28,7 @@ from utilities.runtime import (
     unregister_service,
 )
 from utilities.storage import load_json, save_json, save_named_graph
+from utilities.payment import normalize_card_digits
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteDevolucion
@@ -126,7 +127,8 @@ def _handle_devolucion(
         )
 
     delivery_date = _extract_delivery_date(order_graph) or _extract_datetime(order_graph, pedido, ECSDI.fechaPedido)
-    if not _return_allowed(motivo, delivery_date):
+    fallback_reception = _extract_reception_hint(motivo)
+    if not _return_allowed(motivo, delivery_date or fallback_reception):
         return _build_resolution(
             agent_uri,
             receiver,
@@ -148,7 +150,17 @@ def _handle_devolucion(
     )
 
     importe = _line_amount(order_graph, line, product)
-    reembolso_graph = _request_reembolso(agent_uri, financiero_url, devolucion, pedido, product, importe)
+    payment_method, payment_card = _extract_refund_payment_data(order_graph, pedido)
+    reembolso_graph = _request_reembolso(
+        agent_uri,
+        financiero_url,
+        devolucion,
+        pedido,
+        product,
+        importe,
+        payment_method,
+        payment_card,
+    )
     if reembolso_graph is None:
         return _build_resolution(
             agent_uri,
@@ -236,9 +248,20 @@ def _request_reembolso(
     pedido: URIRef,
     product: URIRef,
     importe: Decimal,
+    payment_method: str,
+    payment_card: str | None = None,
 ) -> Graph | None:
     try:
-        message = build_reembolso_request(agent_uri, AGENTS.AgenteFinanciero, devolucion, pedido, product, importe)
+        message = build_reembolso_request(
+            agent_uri,
+            AGENTS.AgenteFinanciero,
+            devolucion,
+            pedido,
+            product,
+            importe,
+            payment_method=payment_method,
+            payment_card=payment_card,
+        )
         response = post_graph(financiero_url, message)
         msg = get_message(response)
         if msg and msg.performative == ACL.inform:
@@ -273,6 +296,7 @@ def _simulate_mensajeria_interna(
     graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
     graph.add((envio, ECSDI.envioDePedido, pedido))
     graph.add((envio, ECSDI.envioRealizadoPor, AGENTS.MensajeriaInterna))
+    graph.add((envio, RDFS.comment, Literal(f"TRACK-DEV-{uuid4().hex[:10].upper()}")))
     return graph
 
 
@@ -382,14 +406,46 @@ def _line_amount(graph: Graph, line: URIRef, product: URIRef) -> Decimal:
     return Decimal(str(price)) * quantity
 
 
+def _extract_refund_payment_data(order_graph: Graph, pedido: URIRef) -> tuple[str, str | None]:
+    """Usa el mismo método de pago original; si falta, aplica fallback seguro."""
+
+    method = str(next(order_graph.objects(pedido, ECSDI.metodoPago), "transferencia")).strip().lower()
+    if method in ("paypal", "transferencia"):
+        return method, None
+    if method == "tarjeta":
+        card = normalize_card_digits(str(next(order_graph.objects(pedido, ECSDI.tarjeta), "")))
+        if card:
+            return "tarjeta", card
+        # Si el pedido no conserva PAN, evitamos bloquear devoluciones.
+        return "transferencia", None
+    return "transferencia", None
+
+
 def _return_allowed(motivo: str, delivery_date: datetime | None) -> bool:
     normalized = motivo.casefold()
     immediate_reasons = ("defect", "defectuos", "equivoc", "incorrect", "roto", "dany", "dañ")
     if any(reason in normalized for reason in immediate_reasons):
         return True
+    expectation_reasons = ("no satisface", "expectativa", "expectation", "no cumple")
+    if any(reason in normalized for reason in expectation_reasons):
+        if delivery_date is None:
+            return False
+        return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
     if delivery_date is None:
         return True
     return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
+
+
+def _extract_reception_hint(motivo: str) -> datetime | None:
+    marker = "recepcion="
+    idx = motivo.find(marker)
+    if idx < 0:
+        return None
+    raw = motivo[idx + len(marker):].split(")", 1)[0].strip()
+    if not raw:
+        return None
+    # Acepta fechas en formato YYYY-MM-DD desde la interfaz.
+    return _parse_datetime(f"{raw}T00:00:00")
 
 
 def _extract_delivery_date(graph: Graph) -> datetime | None:

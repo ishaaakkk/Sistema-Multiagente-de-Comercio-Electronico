@@ -149,6 +149,22 @@ IFACE_HTML = """<!DOCTYPE html>
 
   input:focus, select:focus { border-color: var(--accent); }
 
+  textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color 0.15s;
+    resize: vertical;
+    min-height: 84px;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+
   .btn {
     background: var(--accent);
     color: #0e0e0e;
@@ -306,6 +322,17 @@ IFACE_HTML = """<!DOCTYPE html>
     font-size: 12px;
   }
 
+  .return-summary {
+    margin-top: 16px;
+    max-width: 860px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 14px 18px;
+    line-height: 1.5;
+    font-size: 12px;
+  }
+
   .rec-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -409,6 +436,7 @@ IFACE_HTML = """<!DOCTYPE html>
   <button onclick="showTab('recomendaciones', this)">
     04 / Recomendaciones<span id="rec-badge" class="nav-badge" style="display:none">0</span>
   </button>
+  <button onclick="showTab('devoluciones', this)">05 / Devoluciones</button>
 </nav>
 
 <!-- TAB: BUSCAR -->
@@ -545,9 +573,7 @@ IFACE_HTML = """<!DOCTYPE html>
     </div>
   </div>
   <button class="btn" onclick="enviarValoracion()">Enviar valoración →</button>
-  <button class="btn secondary" onclick="solicitarDevolucion()">Solicitar devolución</button>
   <div id="val-result" style="margin-top:16px;font-size:12px;color:var(--muted)"></div>
-  <div id="return-result" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
   <div id="feedback-pending" style="margin-top:24px"></div>
 </div>
 
@@ -565,6 +591,39 @@ IFACE_HTML = """<!DOCTYPE html>
   <div id="rec-list" class="rec-list">
     <p class="empty-state">Pulsa «Actualizar buzón» o espera recomendaciones proactivas.</p>
   </div>
+</div>
+
+<!-- TAB: DEVOLUCIONES -->
+<div class="tab" id="tab-devoluciones">
+  <p class="section-title">Solicitar devolución</p>
+  <div class="form-grid">
+    <div class="field">
+      <label>ID Pedido</label>
+      <input id="d-pedido" type="text" placeholder="PED-XXXXXXXX">
+    </div>
+    <div class="field">
+      <label>ID Producto</label>
+      <input id="d-product" type="text" placeholder="P-IPHONE19">
+    </div>
+    <div class="field">
+      <label>Motivo</label>
+      <select id="d-motivo" onchange="onMotivoChange()">
+        <option value="Producto defectuoso">Producto defectuoso</option>
+        <option value="Producto equivocado">Producto equivocado</option>
+        <option value="No satisface expectativas">No satisface expectativas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Fecha recepción (si aplica)</label>
+      <input id="d-recepcion" type="date">
+    </div>
+    <div class="field full">
+      <label>Detalle adicional</label>
+      <textarea id="d-detalle" placeholder="Describe brevemente la incidencia"></textarea>
+    </div>
+  </div>
+  <button class="btn" onclick="solicitarDevolucion()">Solicitar devolución →</button>
+  <div id="return-result" class="return-summary" style="display:none"></div>
 </div>
 
 <div id="status-bar">
@@ -861,29 +920,63 @@ IFACE_HTML = """<!DOCTYPE html>
   }
 
   async function solicitarDevolucion() {
-    const pedido_id = document.getElementById('v-pedido').value.trim();
-    const product_id = document.getElementById('v-product').value.trim();
-    const motivo = document.getElementById('v-comment').value.trim() || 'Producto defectuoso';
+    const pedido_id = document.getElementById('d-pedido').value.trim();
+    const product_id = document.getElementById('d-product').value.trim();
+    const motivo = document.getElementById('d-motivo').value.trim();
+    const detalle = document.getElementById('d-detalle').value.trim();
+    const fecha_recepcion = document.getElementById('d-recepcion').value;
     const box = document.getElementById('return-result');
 
     if (!pedido_id || !product_id) { setStatus('Rellena ID de pedido y producto', 'error'); return; }
+    if (motivo === 'No satisface expectativas' && !fecha_recepcion) {
+      setStatus('La fecha de recepción es obligatoria para ese motivo', 'error');
+      return;
+    }
 
     setStatus('Solicitando devolución…', 'loading');
+    box.style.display = 'none';
     try {
       const res = await fetch('/devolucion', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ pedido_id, product_id, motivo })
+        body: JSON.stringify({ pedido_id, product_id, motivo, detalle, fecha_recepcion })
       });
       const data = await res.json();
-      if (data.error) { setStatus(data.error, 'error'); box.textContent = data.error; return; }
+      if (data.error) {
+        setStatus(data.error, 'error');
+        box.style.display = 'block';
+        box.innerHTML = `<strong>Solicitud denegada</strong><br>${data.error}`;
+        return;
+      }
       setStatus(data.accepted ? 'Devolución aceptada' : 'Devolución denegada', data.accepted ? 'ok' : 'error');
-      box.textContent = data.accepted
-        ? `✓ Recogida: ${data.pickup || 'pendiente'} · Reembolso: ${data.refund_ref || 'sin referencia'}`
-        : `Denegada: ${data.instructions || 'sin motivo'}`;
+      box.style.display = 'block';
+      if (data.accepted) {
+        const importe = data.refund_amount ? `${parseFloat(data.refund_amount).toFixed(2)} €` : 'No disponible';
+        const mensajeria = data.courier_name || 'Mensajería de la tienda (mock)';
+        const tracking = data.courier_tracking || 'Pendiente';
+        const etiqueta = data.courier_label || 'Se enviará por email';
+        box.innerHTML = `<strong>✓ Devolución aceptada</strong><br>
+          Reembolso: ${importe} · Ref: ${data.refund_ref || 'sin referencia'}<br>
+          Recogida: ${data.pickup || 'pendiente'}<br>
+          Mensajería: ${mensajeria} · Tracking: ${tracking}<br>
+          Etiqueta: ${etiqueta}<br>
+          Instrucciones: ${data.instructions || 'Reempaqueta el producto y entrégalo al mensajero.'}`;
+      } else {
+        box.innerHTML = `<strong>Solicitud denegada</strong><br>${data.instructions || 'sin motivo'}`;
+      }
     } catch (e) {
       setStatus('Error al solicitar devolución', 'error');
+      box.style.display = 'block';
+      box.innerHTML = '<strong>Error</strong><br>No se pudo tramitar la devolución.';
     }
+  }
+
+  function onMotivoChange() {
+    const motivo = document.getElementById('d-motivo').value;
+    const recepcion = document.getElementById('d-recepcion');
+    const needsDate = motivo === 'No satisface expectativas';
+    recepcion.required = needsDate;
+    recepcion.style.borderColor = needsDate ? 'var(--accent2)' : 'var(--border)';
   }
 
   // ── Recomendaciones ───────────────────────────────────────
@@ -1028,6 +1121,7 @@ IFACE_HTML = """<!DOCTYPE html>
 
   // ── Init ─────────────────────────────────────────────────
   setStatus('Listo', 'ok');
+  onMotivoChange();
   cargarRecomendacionesInbox();
   setInterval(cargarFeedbackPendiente, 15000);
 </script>
@@ -1267,12 +1361,25 @@ def create_app(
         pedido_id = data.get("pedido_id", "")
         product_id = data.get("product_id", "")
         motivo = data.get("motivo", "Producto defectuoso")
+        detalle = data.get("detalle", "")
+        fecha_recepcion = data.get("fecha_recepcion", "")
 
         if not pedido_id or not product_id:
             return app.response_class(
                 json.dumps({"error": "Rellena ID de pedido y producto"}),
                 mimetype="application/json"
             )
+        if motivo == "No satisface expectativas" and not fecha_recepcion:
+            return app.response_class(
+                json.dumps({"error": "Para ese motivo debes indicar la fecha de recepción"}),
+                mimetype="application/json"
+            )
+
+        motivo_final = motivo
+        if detalle:
+            motivo_final = f"{motivo} - {detalle}"
+        if fecha_recepcion:
+            motivo_final = f"{motivo_final} (recepcion={fecha_recepcion})"
 
         try:
             response = post_graph(
@@ -1282,7 +1389,7 @@ def create_app(
                     receiver=AGENTS.AgenteDevolucion,
                     pedido_id=pedido_id,
                     product_id=product_id,
-                    motivo=motivo,
+                    motivo=motivo_final,
                 ),
             )
         except Exception as exc:
@@ -1297,11 +1404,17 @@ def create_app(
         devolucion_node = next(response.subjects(RDF.type, ECSDI.Devolucion), None)
         reembolso = next(response.objects(devolucion_node, ECSDI.devolucionTieneReembolso), None) if devolucion_node else None
         accepted_raw = str(next(response.objects(devolucion_node, ECSDI.devolucionAceptada), "false")).lower() if devolucion_node else "false"
+        envio_node = next(response.subjects(RDF.type, ECSDI.EnvioDevolucion), None)
+        refund_amount = str(next(response.objects(reembolso, ECSDI.importeOperacion), "")) if reembolso else ""
         result = {
             "accepted": accepted_raw in ("true", "1"),
             "instructions": str(next(response.objects(devolucion_node, ECSDI.instruccionesDevolucion), "")) if devolucion_node else "",
             "pickup": str(next(response.objects(devolucion_node, ECSDI.fechaRecogidaDevolucion), "")) if devolucion_node else "",
             "refund_ref": str(next(response.objects(reembolso, ECSDI.referenciaPago), "")) if reembolso else "",
+            "refund_amount": refund_amount,
+            "courier_name": str(next(response.objects(envio_node, ECSDI.envioRealizadoPor), "")) if envio_node else "",
+            "courier_tracking": str(next(response.objects(envio_node, RDFS.comment), "")) if envio_node else "",
+            "courier_label": "Usa la etiqueta de devolución enviada por la tienda" if envio_node else "",
         }
         return app.response_class(json.dumps(result), mimetype="application/json")
 

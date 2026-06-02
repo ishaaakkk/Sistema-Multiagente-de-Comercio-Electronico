@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rdflib.namespace import RDF
 
-from agents.agente_devolucion import _simulate_mensajeria_interna
+from agents.agente_devolucion import _return_allowed, _simulate_mensajeria_interna
 from utilities.namespaces import AGENTS, DATA, ECSDI
 
 
@@ -30,6 +30,17 @@ class DevolucionMensajeriaTests(unittest.TestCase):
         envio = next(graph.subjects(RDF.type, ECSDI.EnvioDevolucion), None)
         self.assertIsNotNone(envio)
         self.assertEqual(next(graph.objects(envio, ECSDI.envioRealizadoPor)), AGENTS.MensajeriaInterna)
+
+    def test_reason_expectations_requires_delivery_date(self):
+        self.assertFalse(_return_allowed("No satisface expectativas", None))
+
+    def test_reason_expectations_within_fifteen_days(self):
+        in_window = datetime.now() - timedelta(days=10)
+        self.assertTrue(_return_allowed("No satisface expectativas", in_window))
+
+    def test_reason_expectations_outside_fifteen_days(self):
+        out_of_window = datetime.now() - timedelta(days=20)
+        self.assertFalse(_return_allowed("No satisface expectativas", out_of_window))
 
 
 if __name__ == "__main__":
