@@ -19,6 +19,7 @@ digraph ComercioElectronico {
     "ConfirmacionTransaccion";
     "DarAltaProductoExterno";
     "DecisionContratoTransporte";
+    "DemanarOfertaTransport";
     "Devolucion";
     "Direccion";
     "EliminarAgente";
@@ -30,10 +31,12 @@ digraph ComercioElectronico {
     "Factura";
     "LineaPedido";
     "LoteEnvio";
+    "MetodoDePago";
     "Notificacion";
     "NotificarBusquedaRealizada";
     "NotificarCompraCompletada";
-    "OfertaTransporte";
+    "OfertaTransport";
+    "OfertaTransportResposta";
     "OperacionPago";
     "PagarProductoExterno";
     "PagoVendedorExterno";
@@ -53,6 +56,7 @@ digraph ComercioElectronico {
     "Respuesta";
     "RespuestaBusqueda";
     "RespuestaBusquedaMultiple";
+    "RespuestaDatosEnvio";
     "RespuestaDirectorio";
     "RespuestaFeedback";
     "RespuestaInfoPedidoCompletado";
@@ -64,8 +68,8 @@ digraph ComercioElectronico {
     "ResultadoBusqueda";
     "SolicitarCobro";
     "SolicitarDevolucion";
+    "SolicitarOfertaTransport";
     "SolicitarOperacionPago";
-    "SolicitarPresupuestoTransporte";
     "SolicitarRecogidaDevolucion";
     "SolicitarReembolso";
     "StockProducto";
@@ -85,6 +89,7 @@ digraph ComercioElectronico {
     "ConfirmacionTransaccion" -> "Respuesta" [label="isA", color="#2f5597"];
     "DarAltaProductoExterno" -> "Accion" [label="isA", color="#2f5597"];
     "DecisionContratoTransporte" -> "Respuesta" [label="isA", color="#2f5597"];
+    "DemanarOfertaTransport" -> "Accion" [label="isA", color="#2f5597"];
     "EliminarAgente" -> "Accion" [label="isA", color="#2f5597"];
     "EnviarOpinion" -> "Notificacion" [label="isA", color="#2f5597"];
     "EnvioDevolucion" -> "Envio" [label="isA", color="#2f5597"];
@@ -92,6 +97,7 @@ digraph ComercioElectronico {
     "EnvioInterno" -> "Envio" [label="isA", color="#2f5597"];
     "NotificarBusquedaRealizada" -> "Notificacion" [label="isA", color="#2f5597"];
     "NotificarCompraCompletada" -> "Notificacion" [label="isA", color="#2f5597"];
+    "OfertaTransportResposta" -> "Respuesta" [label="isA", color="#2f5597"];
     "PagarProductoExterno" -> "SolicitarOperacionPago" [label="isA", color="#2f5597"];
     "PagoVendedorExterno" -> "OperacionPago" [label="isA", color="#2f5597"];
     "PedirFeedback" -> "Accion" [label="isA", color="#2f5597"];
@@ -106,6 +112,7 @@ digraph ComercioElectronico {
     "ResolucionDevolucion" -> "Respuesta" [label="isA", color="#2f5597"];
     "RespuestaBusqueda" -> "RespuestaDirectorio" [label="isA", color="#2f5597"];
     "RespuestaBusquedaMultiple" -> "RespuestaDirectorio" [label="isA", color="#2f5597"];
+    "RespuestaDatosEnvio" -> "Respuesta" [label="isA", color="#2f5597"];
     "RespuestaDirectorio" -> "Respuesta" [label="isA", color="#2f5597"];
     "RespuestaFeedback" -> "Respuesta" [label="isA", color="#2f5597"];
     "RespuestaInfoPedidoCompletado" -> "Respuesta" [label="isA", color="#2f5597"];
@@ -116,8 +123,8 @@ digraph ComercioElectronico {
     "ResultadoBusqueda" -> "Respuesta" [label="isA", color="#2f5597"];
     "SolicitarCobro" -> "SolicitarOperacionPago" [label="isA", color="#2f5597"];
     "SolicitarDevolucion" -> "Accion" [label="isA", color="#2f5597"];
+    "SolicitarOfertaTransport" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarOperacionPago" -> "Accion" [label="isA", color="#2f5597"];
-    "SolicitarPresupuestoTransporte" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarRecogidaDevolucion" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarReembolso" -> "SolicitarOperacionPago" [label="isA", color="#2f5597"];
     "Transportista" -> "Actor" [label="isA", color="#2f5597"];
@@ -132,9 +139,10 @@ digraph ComercioElectronico {
     "Accion" -> "Actor" [label="accionSolicitadaPor", color="#4d4d4d"];
     "Accion" -> "Direccion" [label="envioDestinoDir", color="#4d4d4d"];
     "Accion" -> "LoteEnvio" [label="accionSobreLote", color="#4d4d4d"];
-    "Accion" -> "OfertaTransporte" [label="accionSobreOferta", color="#4d4d4d"];
+    "Accion" -> "OfertaTransport" [label="accionSobreOferta", color="#4d4d4d"];
     "Accion" -> "Pedido" [label="accionSobrePedido", color="#4d4d4d"];
     "Accion" -> "Producto" [label="accionSobreProducto", color="#4d4d4d"];
+    "AsistenteVirtual" -> "MetodoDePago" [label="metodoPagoDeAsistente", color="#4d4d4d"];
     "BuscarProductos" -> "RestriccionBusqueda" [label="accionTieneRestriccion", color="#4d4d4d"];
     "ConfirmacionEnvio" -> "Envio" [label="confirmacionEnvio", color="#4d4d4d"];
     "ConfirmacionTransaccion" -> "OperacionPago" [label="confirmacionDeOperacion", color="#4d4d4d"];
@@ -156,8 +164,8 @@ digraph ComercioElectronico {
     "Notificacion" -> "Producto" [label="notificacionSobreProducto", color="#4d4d4d"];
     "Notificacion" -> "Valoracion" [label="accionTieneValoracion", color="#4d4d4d"];
     "Notificacion" -> "Valoracion" [label="notificacionTieneValoracion", color="#4d4d4d"];
-    "OfertaTransporte" -> "LoteEnvio" [label="ofertaParaLote", color="#4d4d4d"];
-    "OfertaTransporte" -> "Transportista" [label="ofertaRealizadaPor", color="#4d4d4d"];
+    "OfertaTransport" -> "LoteEnvio" [label="ofertaParaLote", color="#4d4d4d"];
+    "OfertaTransport" -> "Transportista" [label="ofertaDeTransportista", color="#4d4d4d"];
     "PagarProductoExterno" -> "VendedorExterno" [label="vendedorDestinatario", color="#4d4d4d"];
     "Pedido" -> "AsistenteVirtual" [label="pedidoDeUsuario", color="#4d4d4d"];
     "Pedido" -> "AsistenteVirtual" [label="pedidoSolicitadoPor", color="#4d4d4d"];
@@ -172,7 +180,7 @@ digraph ComercioElectronico {
     "Recomendacion" -> "Producto" [label="recomendacionDeProducto", color="#4d4d4d"];
     "ResolucionDevolucion" -> "Devolucion" [label="resolucionDeDevolucion", color="#4d4d4d"];
     "Respuesta" -> "Accion" [label="respuestaDeAccion", color="#4d4d4d"];
-    "Respuesta" -> "OfertaTransporte" [label="respuestaSobreOferta", color="#4d4d4d"];
+    "Respuesta" -> "OfertaTransport" [label="respuestaSobreOferta", color="#4d4d4d"];
     "Respuesta" -> "Pedido" [label="respuestaSobrePedido", color="#4d4d4d"];
     "RespuestaBusquedaMultiple" -> "RespuestaBusqueda" [label="resultadoContiene", color="#4d4d4d"];
     "RespuestaDirectorio" -> "Accion" [label="respuestaDeAccion", color="#4d4d4d"];
