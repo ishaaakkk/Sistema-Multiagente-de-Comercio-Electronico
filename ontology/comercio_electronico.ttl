@@ -65,14 +65,6 @@ xsd:date rdf:type rdfs:Datatype .
                    rdfs:comment "Relación que indica el pedido sobre el que se aplica una acción" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/acceptada
-:acceptada rdf:type owl:DatatypeProperty ;
-          rdfs:subPropertyOf owl:topDataProperty ;
-          rdfs:domain :OfertaTransport ;
-          rdfs:range xsd:boolean ;
-          rdfs:comment "Indica si la oferta de transporte ha sido aceptada en el cierre del Contract Net (1 ronda)" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/accionSobreProducto
 :accionSobreProducto rdf:type owl:ObjectProperty ;
                      rdfs:domain :Accion ;
@@ -262,12 +254,11 @@ xsd:date rdf:type rdfs:Datatype .
                              rdfs:comment "Relación que vincula una notificación informativa con una valoración emitida" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaId
-:ofertaId rdf:type owl:DatatypeProperty ;
-        rdfs:subPropertyOf owl:topDataProperty ;
-        rdfs:domain :OfertaTransport ;
-        rdfs:range xsd:string ;
-        rdfs:comment "Identificador de la oferta en mensajes OfertaTransport" .
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaDeTransportista
+:ofertaDeTransportista rdf:type owl:ObjectProperty ;
+                       rdfs:domain :OfertaTransport ;
+                       rdfs:range :Transportista ;
+                       rdfs:comment "Relación que indica el transportista que realiza una oferta de transporte" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaParaLote
@@ -275,13 +266,6 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:domain :OfertaTransport ;
                 rdfs:range :LoteEnvio ;
                 rdfs:comment "Relación que indica el lote de envío para el que se realiza una oferta de transporte" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaRealizadaPor
-:ofertaDeTransportista rdf:type owl:ObjectProperty ;
-                    rdfs:domain :OfertaTransport ;
-                    rdfs:range :Transportista ;
-                    rdfs:comment "Relación que indica el transportista que realiza una oferta de transporte" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pedidoDeUsuario
@@ -461,6 +445,14 @@ xsd:date rdf:type rdfs:Datatype .
 #    Data properties
 #################################################################
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/acceptada
+:acceptada rdf:type owl:DatatypeProperty ;
+           rdfs:subPropertyOf owl:topDataProperty ;
+           rdfs:domain :OfertaTransport ;
+           rdfs:range xsd:boolean ;
+           rdfs:comment "Indica si la oferta de transporte ha sido aceptada en el cierre del Contract Net (1 ronda)" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/calle
 :calle rdf:type owl:DatatypeProperty ;
        rdfs:subPropertyOf owl:topDataProperty ;
@@ -503,16 +495,9 @@ xsd:date rdf:type rdfs:Datatype .
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ciutatDesti
 :ciutatDesti rdf:type owl:DatatypeProperty ;
-            rdfs:subPropertyOf owl:topDataProperty ;
-            rdfs:range xsd:string ;
-            rdfs:comment "Ciudad de destino en una peticion u oferta de transporte (protocolo interoperable)" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/comandaId
-:comandaId rdf:type owl:DatatypeProperty ;
-          rdfs:subPropertyOf owl:topDataProperty ;
-          rdfs:range xsd:string ;
-          rdfs:comment "Identificador de comanda o lote en mensajes DemanarOfertaTransport / OfertaTransport" .
+             rdfs:subPropertyOf owl:topDataProperty ;
+             rdfs:range xsd:string ;
+             rdfs:comment "Ciudad de destino en una peticion u oferta de transporte (protocolo interoperable)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/codigoPostal
@@ -523,12 +508,35 @@ xsd:date rdf:type rdfs:Datatype .
               rdfs:comment "Código postal asociado a una dirección" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/comandaId
+:comandaId rdf:type owl:DatatypeProperty ;
+           rdfs:subPropertyOf owl:topDataProperty ;
+           rdfs:range xsd:string ;
+           rdfs:comment "Identificador de comanda o lote en mensajes DemanarOfertaTransport / OfertaTransport" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/comentario
 :comentario rdf:type owl:DatatypeProperty ;
             rdfs:subPropertyOf owl:topDataProperty ;
             rdfs:domain :Valoracion ;
             rdfs:range xsd:string ;
             rdfs:comment "Texto libre incluido en una valoración de producto" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/dataPrevista
+:dataPrevista rdf:type owl:DatatypeProperty ;
+              rdfs:subPropertyOf owl:topDataProperty ;
+              rdfs:domain :OfertaTransport ;
+              rdfs:range xsd:dateTime ;
+              rdfs:comment "Fecha y hora estimada de entrega propuesta en una oferta de transporte" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/dataPrevistaLliurament
+:dataPrevistaLliurament rdf:type owl:DatatypeProperty ;
+                        rdfs:subPropertyOf owl:topDataProperty ;
+                        rdfs:domain :OfertaTransport ;
+                        rdfs:range xsd:dateTime ;
+                        rdfs:comment "Fecha prevista de lliurament (alias interoperable de dataPrevista)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/descripcionProducto
@@ -595,22 +603,6 @@ xsd:date rdf:type rdfs:Datatype .
                rdfs:domain :NotificarBusquedaRealizada ;
                rdfs:range xsd:dateTime ;
                rdfs:comment "Marca temporal en la que un AsistenteVirtual ha realizado una búsqueda registrada por el Agente Feedback (Protocolo Consulta Catálogo)" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/dataPrevista
-:dataPrevista rdf:type owl:DatatypeProperty ;
-             rdfs:subPropertyOf owl:topDataProperty ;
-             rdfs:domain :OfertaTransport ;
-             rdfs:range xsd:dateTime ;
-             rdfs:comment "Fecha y hora estimada de entrega propuesta en una oferta de transporte" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/dataPrevistaLliurament
-:dataPrevistaLliurament rdf:type owl:DatatypeProperty ;
-                      rdfs:subPropertyOf owl:topDataProperty ;
-                      rdfs:domain :OfertaTransport ;
-                      rdfs:range xsd:dateTime ;
-                      rdfs:comment "Fecha prevista de lliurament (alias interoperable de dataPrevista)" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/fechaFactura
@@ -729,13 +721,6 @@ xsd:date rdf:type rdfs:Datatype .
           rdfs:comment "Identificador único de un pedido (functional)" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/producteId
-:producteId rdf:type owl:DatatypeProperty ;
-           rdfs:subPropertyOf owl:topDataProperty ;
-           rdfs:range xsd:string ;
-           rdfs:comment "Identificador de producto en mensajes DemanarOfertaTransport / OfertaTransport" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/idProducto
 :idProducto rdf:type owl:DatatypeProperty ,
                      owl:FunctionalProperty ;
@@ -832,19 +817,19 @@ xsd:date rdf:type rdfs:Datatype .
                      rdfs:comment "Explicación breve del motivo por el que se recomienda un producto" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/nomTransportista
+:nomTransportista rdf:type owl:DatatypeProperty ;
+                  rdfs:subPropertyOf owl:topDataProperty ;
+                  rdfs:domain :Transportista ;
+                  rdfs:range xsd:string .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/nombreCentroLogistico
 :nombreCentroLogistico rdf:type owl:DatatypeProperty ;
                        rdfs:subPropertyOf owl:topDataProperty ;
                        rdfs:domain :CentroLogistico ;
                        rdfs:range xsd:string ;
                        rdfs:comment "Nombre identificativo de un centro logístico" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/nombreEmpresaTransportista
-:nomTransportista rdf:type owl:DatatypeProperty ;
-                            rdfs:subPropertyOf owl:topDataProperty ;
-                            rdfs:domain :Transportista ;
-                            rdfs:range xsd:string .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/nombreProducto
@@ -861,6 +846,14 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:domain :VendedorExterno ;
                 rdfs:range xsd:string ;
                 rdfs:comment "Nombre comercial de un vendedor externo" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaId
+:ofertaId rdf:type owl:DatatypeProperty ;
+          rdfs:subPropertyOf owl:topDataProperty ;
+          rdfs:domain :OfertaTransport ;
+          rdfs:range xsd:string ;
+          rdfs:comment "Identificador de la oferta en mensajes OfertaTransport" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pais
@@ -887,14 +880,6 @@ xsd:date rdf:type rdfs:Datatype .
                rdfs:comment "Peso total de los productos incluidos en un lote de envío" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/plazoMaximoDias
-:terminiDies rdf:type owl:DatatypeProperty ;
-                 rdfs:subPropertyOf owl:topDataProperty ;
-                 rdfs:domain :OfertaTransport ;
-                 rdfs:range xsd:integer ;
-                 rdfs:comment "Número máximo de días permitido para realizar una entrega" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/precioMaximo
 :precioMaximo rdf:type owl:DatatypeProperty ;
               rdfs:subPropertyOf owl:topDataProperty ;
@@ -909,14 +894,6 @@ xsd:date rdf:type rdfs:Datatype .
               rdfs:domain :RestriccionBusqueda ;
               rdfs:range xsd:decimal ;
               rdfs:comment "Precio mínimo indicado en una restricción de búsqueda" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/precioOferta
-:preuTransport rdf:type owl:DatatypeProperty ;
-              rdfs:subPropertyOf owl:topDataProperty ;
-              rdfs:domain :OfertaTransport ;
-              rdfs:range xsd:decimal ;
-              rdfs:comment "Precio propuesto por un transportista para realizar un envío" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/precioProducto
@@ -935,6 +912,14 @@ xsd:date rdf:type rdfs:Datatype .
                 rdfs:comment "Precio de una unidad de producto dentro de una línea de pedido" .
 
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/preuTransport
+:preuTransport rdf:type owl:DatatypeProperty ;
+               rdfs:subPropertyOf owl:topDataProperty ;
+               rdfs:domain :OfertaTransport ;
+               rdfs:range xsd:decimal ;
+               rdfs:comment "Precio propuesto por un transportista para realizar un envío" .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/prioridadEntrega
 :prioridadEntrega rdf:type owl:DatatypeProperty ;
                   rdfs:subPropertyOf owl:topDataProperty ;
@@ -949,6 +934,13 @@ xsd:date rdf:type rdfs:Datatype .
                rdfs:domain :LoteEnvio ;
                rdfs:range xsd:integer ;
                rdfs:comment "Prioridad de entrega asignada a un lote de envío" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/producteId
+:producteId rdf:type owl:DatatypeProperty ;
+            rdfs:subPropertyOf owl:topDataProperty ;
+            rdfs:range xsd:string ;
+            rdfs:comment "Identificador de producto en mensajes DemanarOfertaTransport / OfertaTransport" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/puntosRecomendacion
@@ -998,6 +990,14 @@ xsd:date rdf:type rdfs:Datatype .
          rdfs:domain :MetodoDePago ,
                      :RespuestaDatosEnvio ;
          rdfs:range xsd:string .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/terminiDies
+:terminiDies rdf:type owl:DatatypeProperty ;
+             rdfs:subPropertyOf owl:topDataProperty ;
+             rdfs:domain :OfertaTransport ;
+             rdfs:range xsd:integer ;
+             rdfs:comment "Número máximo de días permitido para realizar una entrega" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/tipoBusqueda
@@ -1082,17 +1082,6 @@ xsd:date rdf:type rdfs:Datatype .
 #    Classes
 #################################################################
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#OfertaTransportResposta
-:OfertaTransportResposta rdf:type owl:Class ;
-                         rdfs:subClassOf :Respuesta .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico#SolicitarOfertaTransport
-:SolicitarOfertaTransport rdf:type owl:Class ;
-                          rdfs:subClassOf :Accion ;
-                          rdfs:comment "Solicitar oferta transport" .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
         rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
@@ -1100,13 +1089,7 @@ xsd:date rdf:type rdfs:Datatype .
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Actor
 :Actor rdf:type owl:Class ;
-       rdfs:subClassOf :AgenteExterno ;
        rdfs:comment "Representa los actores externos con los que interactúa la tienda, modelados con vocabulario propio del dominio" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/AgenteExterno
-:AgenteExterno rdf:type owl:Class ;
-               rdfs:comment "Agente software o entidad externa que interactúa con la tienda dentro de los protocolos del sistema" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/AsistenteVirtual
@@ -1174,6 +1157,12 @@ xsd:date rdf:type rdfs:Datatype .
 :DecisionContratoTransporte rdf:type owl:Class ;
                             rdfs:subClassOf :Respuesta ;
                             rdfs:comment "Cierre informativo de FIPA Contract Net entre el Centro Logístico y un Transportista. Lleva la oferta; la performativa accept-proposal o reject-proposal indica el resultado (cap. 7.3.2)" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/DemanarOfertaTransport
+:DemanarOfertaTransport rdf:type owl:Class ;
+                        rdfs:subClassOf :Accion ;
+                        rdfs:comment "Acción mediante la cual un centro logístico solicita ofertas a transportistas para entregar un lote de productos" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Devolucion
@@ -1255,9 +1244,14 @@ xsd:date rdf:type rdfs:Datatype .
                            rdfs:comment "Notificación mediante la cual el Agente Comerciante informa al Agente Feedback de que un pedido ha sido completado" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransporte
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransport
 :OfertaTransport rdf:type owl:Class ;
-                  rdfs:comment "Propuesta realizada por un transportista para entregar un lote, indicando precio, fecha estimada y condiciones de entrega" .
+                 rdfs:comment "Propuesta realizada por un transportista para entregar un lote, indicando precio, fecha estimada y condiciones de entrega" .
+
+
+###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransportResposta
+:OfertaTransportResposta rdf:type owl:Class ;
+                         rdfs:subClassOf :Respuesta .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/OperacionPago
@@ -1425,12 +1419,6 @@ xsd:date rdf:type rdfs:Datatype .
 :SolicitarOperacionPago rdf:type owl:Class ;
                         rdfs:subClassOf :Accion ;
                         rdfs:comment "Acción mediante la cual se solicita al proveedor de pagos ejecutar una operación económica asociada a una compra, devolución o pago a un vendedor externo" .
-
-
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarPresupuestoTransporte
-:DemanarOfertaTransport rdf:type owl:Class ;
-                                rdfs:subClassOf :Accion ;
-                                rdfs:comment "Acción mediante la cual un centro logístico solicita ofertas a transportistas para entregar un lote de productos" .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/SolicitarRecogidaDevolucion
@@ -1685,12 +1673,12 @@ xsd:date rdf:type rdfs:Datatype .
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/ofertaGSLiPhone19Barcelona
 :ofertaGSLiPhone19Barcelona rdf:type owl:NamedIndividual ,
                                      :OfertaTransport ;
-                            :ofertaParaLote :loteEnvioiPhone19Barcelona ;
                             :ofertaDeTransportista :transportistaGSL ;
-                            :estadoOferta "aceptada" ;
+                            :ofertaParaLote :loteEnvioiPhone19Barcelona ;
                             :dataPrevista "2025-05-05T10:30:00"^^xsd:dateTime ;
-                            :terminiDies 2 ;
-                            :preuTransport 8.50 .
+                            :estadoOferta "aceptada" ;
+                            :preuTransport 8.50 ;
+                            :terminiDies 2 .
 
 
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/pagoVendedorTechMarket
