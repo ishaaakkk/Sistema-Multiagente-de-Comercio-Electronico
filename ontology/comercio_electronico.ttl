@@ -1082,6 +1082,11 @@ xsd:date rdf:type rdfs:Datatype .
 #    Classes
 #################################################################
 
+###  http://www.semanticweb.org/ecsdi/comercio_electronico#RespuestaOfertaTransporte
+:RespuestaOfertaTransporte rdf:type owl:Class ;
+                           rdfs:subClassOf :Respuesta .
+
+
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/Accion
 :Accion rdf:type owl:Class ;
         rdfs:comment "Funcionalidad que un agente ejecuta a petición de otro mediante una request" .
