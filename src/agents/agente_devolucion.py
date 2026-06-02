@@ -28,6 +28,7 @@ from utilities.runtime import (
     unregister_service,
 )
 from utilities.storage import load_json, save_json, save_named_graph
+from utilities.payment import normalize_card_digits
 
 
 DEFAULT_AGENT_URI = AGENTS.AgenteDevolucion
@@ -149,7 +150,17 @@ def _handle_devolucion(
     )
 
     importe = _line_amount(order_graph, line, product)
-    reembolso_graph = _request_reembolso(agent_uri, financiero_url, devolucion, pedido, product, importe)
+    payment_method, payment_card = _extract_refund_payment_data(order_graph, pedido)
+    reembolso_graph = _request_reembolso(
+        agent_uri,
+        financiero_url,
+        devolucion,
+        pedido,
+        product,
+        importe,
+        payment_method,
+        payment_card,
+    )
     if reembolso_graph is None:
         return _build_resolution(
             agent_uri,
@@ -237,9 +248,20 @@ def _request_reembolso(
     pedido: URIRef,
     product: URIRef,
     importe: Decimal,
+    payment_method: str,
+    payment_card: str | None = None,
 ) -> Graph | None:
     try:
-        message = build_reembolso_request(agent_uri, AGENTS.AgenteFinanciero, devolucion, pedido, product, importe)
+        message = build_reembolso_request(
+            agent_uri,
+            AGENTS.AgenteFinanciero,
+            devolucion,
+            pedido,
+            product,
+            importe,
+            payment_method=payment_method,
+            payment_card=payment_card,
+        )
         response = post_graph(financiero_url, message)
         msg = get_message(response)
         if msg and msg.performative == ACL.inform:
@@ -382,6 +404,21 @@ def _line_amount(graph: Graph, line: URIRef, product: URIRef) -> Decimal:
     if price is None:
         price = next(graph.objects(product, ECSDI.precioProducto), "0")
     return Decimal(str(price)) * quantity
+
+
+def _extract_refund_payment_data(order_graph: Graph, pedido: URIRef) -> tuple[str, str | None]:
+    """Usa el mismo método de pago original; si falta, aplica fallback seguro."""
+
+    method = str(next(order_graph.objects(pedido, ECSDI.metodoPago), "transferencia")).strip().lower()
+    if method in ("paypal", "transferencia"):
+        return method, None
+    if method == "tarjeta":
+        card = normalize_card_digits(str(next(order_graph.objects(pedido, ECSDI.tarjeta), "")))
+        if card:
+            return "tarjeta", card
+        # Si el pedido no conserva PAN, evitamos bloquear devoluciones.
+        return "transferencia", None
+    return "transferencia", None
 
 
 def _return_allowed(motivo: str, delivery_date: datetime | None) -> bool:

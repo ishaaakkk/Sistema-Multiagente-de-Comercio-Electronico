@@ -601,6 +601,8 @@ def build_reembolso_request(
     pedido: URIRef,
     product: URIRef,
     importe: Decimal,
+    payment_method: str | None = None,
+    payment_card: str | None = None,
 ) -> Graph:
     """AgenteDevolucion → AgenteFinanciero: SolicitarReembolso."""
     graph = Graph()
@@ -611,9 +613,17 @@ def build_reembolso_request(
     graph.add((action, ECSDI.accionSobrePedido, pedido))
     graph.add((action, ECSDI.accionSobreProducto, product))
     graph.add((action, ECSDI.accionTieneOperacionPago, operacion))
+    method = (payment_method or "transferencia").strip().lower()
+    graph.add((action, ECSDI.metodoPago, Literal(method)))
     graph.add((operacion, RDF.type, ECSDI.ReembolsoCliente))
     graph.add((operacion, ECSDI.idOperacionPago, Literal(f"RB-{uuid4().hex[:8].upper()}")))
     graph.add((operacion, ECSDI.importeOperacion, decimal_literal(importe)))
+    graph.add((operacion, ECSDI.metodoPago, Literal(method)))
+    if method == "tarjeta":
+        card_digits = normalize_card_digits(payment_card)
+        if card_digits:
+            graph.add((action, ECSDI.tarjeta, Literal(card_digits)))
+            graph.add((operacion, ECSDI.tarjeta, Literal(card_digits)))
     graph.add((operacion, ECSDI.estadoOperacion, Literal("solicitada")))
     graph.add((devolucion, ECSDI.devolucionTieneReembolso, operacion))
     return build_message(graph, action, ACL.request, sender, receiver)
