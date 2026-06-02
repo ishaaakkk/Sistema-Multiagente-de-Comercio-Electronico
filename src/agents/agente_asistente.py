@@ -606,7 +606,7 @@ IFACE_HTML = """<!DOCTYPE html>
         </div>
       </div>
       <div id="cart-box" style="margin-top:16px"></div>
-      <button class="btn" onclick="hacerPedido()">Confirmar pedido →</button>
+      <button id="order-submit-btn" class="btn" onclick="hacerPedido()">Confirmar pedido →</button>
     </div>
 
     <div id="confirm-box" style="display:none"></div>
@@ -725,6 +725,7 @@ IFACE_HTML = """<!DOCTYPE html>
   let lastInboxCount = 0;
   let lastFeedbackCount = 0;
   let orderHistory = [];
+  let pendingOrderIds = new Set();
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -901,12 +902,20 @@ IFACE_HTML = """<!DOCTYPE html>
       payment_card: document.getElementById('o-card').value,
       delivery_dist: parseInt(document.getElementById('o-dist').value) || 0,
     };
+    const submitBtn = document.getElementById('order-submit-btn');
+    const pendingOrderId = addPendingOrder(items);
+    if (submitBtn) submitBtn.disabled = true;
 
     setStatus('Procesando pedido…', 'loading');
     try {
       const res = await fetch('/order', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const data = await res.json();
-      if (data.error) { setStatus(data.error, 'error'); return; }
+      if (data.error) {
+        markPendingOrderFailed(pendingOrderId, data.error);
+        setStatus(data.error, 'error');
+        return;
+      }
+      removePendingOrder(pendingOrderId);
       renderConfirmation(data);
       setStatus('Pedido realizado correctamente', 'ok');
       lastPedidoId = data.pedido_id || '';
@@ -914,15 +923,19 @@ IFACE_HTML = """<!DOCTYPE html>
       renderCart();
       await cargarPedidos();
     } catch (e) {
+      markPendingOrderFailed(pendingOrderId, 'No se pudo confirmar el pedido');
       setStatus('Error al realizar el pedido', 'error');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   }
 
   function renderConfirmation(data) {
-    renderConfirmationInBox(data, 'confirm-box');
+    renderConfirmationInBox(data, 'confirm-box', { showFeedbackHint: true });
   }
 
-  function renderConfirmationInBox(data, boxId) {
+  function renderConfirmationInBox(data, boxId, options = {}) {
+    const showFeedbackHint = options.showFeedbackHint === true;
     const box = document.getElementById(boxId);
     if (!box) return;
     box.style.display = 'block';
@@ -969,13 +982,15 @@ IFACE_HTML = """<!DOCTYPE html>
       html += row('Envío', 'Sin datos de envío en la respuesta');
     }
 
-    box.innerHTML = html
-      + `<div class="selected-product-info" style="margin-top:12px;border-color:var(--accent2)">
+    if (showFeedbackHint) {
+      html += `<div class="selected-product-info" style="margin-top:12px;border-color:var(--accent2)">
            <div style="font-size:12px;color:var(--accent2)">Valoración pendiente de solicitud</div>
            <div style="margin-top:6px">
              Te pediremos valorar este producto automáticamente tras el retardo configurado.
            </div>
          </div>`;
+    }
+    box.innerHTML = html;
   }
 
   // ── Valoración ────────────────────────────────────────────
@@ -1247,6 +1262,13 @@ IFACE_HTML = """<!DOCTYPE html>
       const itemsText = (order.items || [])
         .map((i) => `${i.product_id || '—'} ×${i.quantity || 1}`)
         .join(', ') || 'Sin líneas';
+      const isPending = order._pending === true;
+      const isFailed = order._failed === true;
+      const actionButton = isPending
+        ? `<button class="btn secondary" disabled>En procesamiento…</button>`
+        : isFailed
+          ? `<button class="btn secondary" disabled>Sin detalle</button>`
+          : `<button class="btn secondary" onclick="verDetallePedido(${idx})">Ver detalle completo</button>`;
       return `<div class="order-card">
         <div class="order-card-head">
           <div>
@@ -1259,8 +1281,9 @@ IFACE_HTML = """<!DOCTYPE html>
           </div>
         </div>
         <div class="order-card-items">${itemsText}</div>
+        ${isFailed ? `<div class="order-card-meta" style="margin-top:8px;color:var(--danger)">${order.error || 'No se pudo completar el pedido'}</div>` : ''}
         <div class="rec-actions" style="margin-top:10px">
-          <button class="btn secondary" onclick="verDetallePedido(${idx})">Ver detalle completo</button>
+          ${actionButton}
         </div>
       </div>`;
     }).join('');
@@ -1269,7 +1292,7 @@ IFACE_HTML = """<!DOCTYPE html>
   function verDetallePedido(index) {
     const order = orderHistory[index];
     if (!order) { setStatus('No se encontró el pedido seleccionado', 'error'); return; }
-    renderConfirmationInBox(order.confirmation || order, 'orders-confirm-box');
+    renderConfirmationInBox(order.confirmation || order, 'orders-confirm-box', { showFeedbackHint: false });
     setStatus(`Detalle cargado para ${order.pedido_id || 'pedido'}`, 'ok');
   }
 
@@ -1277,13 +1300,57 @@ IFACE_HTML = """<!DOCTYPE html>
     try {
       const res = await fetch('/orders-history');
       const data = await res.json();
-      orderHistory = data.orders || [];
+      const confirmed = data.orders || [];
+      const pending = orderHistory.filter((o) => o._pending || o._failed);
+      orderHistory = [...pending, ...confirmed.filter((o) => !pendingOrderIds.has(o.pedido_id))];
       renderPedidos(orderHistory);
     } catch (e) {
       if (document.getElementById('tab-pedidos').classList.contains('active')) {
         document.getElementById('orders-list').innerHTML = '<p class="empty-state">No se pudo cargar el histórico de pedidos.</p>';
       }
     }
+  }
+
+  function addPendingOrder(items) {
+    const ts = Date.now();
+    const pendingId = `PEND-${ts}`;
+    const total = items.reduce((acc, item) => acc + ((parseFloat(item.price) || 0) * (item.quantity || 1)), 0);
+    const pendingOrder = {
+      pedido_id: pendingId,
+      factura_id: '—',
+      estado: 'procesando',
+      estado_label: 'Procesando…',
+      importe: String(total),
+      fecha: new Date(ts).toISOString(),
+      items: items.map((i) => ({ product_id: i.id, quantity: i.quantity || 1 })),
+      _pending: true,
+    };
+    pendingOrderIds.add(pendingId);
+    orderHistory = [pendingOrder, ...orderHistory];
+    renderPedidos(orderHistory);
+    return pendingId;
+  }
+
+  function removePendingOrder(pendingId) {
+    pendingOrderIds.delete(pendingId);
+    orderHistory = orderHistory.filter((o) => o.pedido_id !== pendingId);
+    renderPedidos(orderHistory);
+  }
+
+  function markPendingOrderFailed(pendingId, reason) {
+    pendingOrderIds.delete(pendingId);
+    orderHistory = orderHistory.map((o) => {
+      if (o.pedido_id !== pendingId) return o;
+      return {
+        ...o,
+        _pending: false,
+        _failed: true,
+        estado: 'error',
+        estado_label: 'Error',
+        error: reason || 'No se pudo completar el pedido',
+      };
+    });
+    renderPedidos(orderHistory);
   }
 
   // ── Init ─────────────────────────────────────────────────
