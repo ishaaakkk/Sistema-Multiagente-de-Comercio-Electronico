@@ -5,7 +5,6 @@ digraph ComercioElectronico {
     "Accion";
     "Actor";
     "AgenteDirectorio";
-    "AgenteExterno";
     "AsistenteVirtual";
     "AvisarCL";
     "BuscarAgente";
@@ -68,7 +67,6 @@ digraph ComercioElectronico {
     "ResultadoBusqueda";
     "SolicitarCobro";
     "SolicitarDevolucion";
-    "SolicitarOfertaTransport";
     "SolicitarOperacionPago";
     "SolicitarRecogidaDevolucion";
     "SolicitarReembolso";
@@ -76,7 +74,6 @@ digraph ComercioElectronico {
     "Transportista";
     "Valoracion";
     "VendedorExterno";
-    "Actor" -> "AgenteExterno" [label="isA", color="#2f5597"];
     "AsistenteVirtual" -> "Actor" [label="isA", color="#2f5597"];
     "AvisarCL" -> "Accion" [label="isA", color="#2f5597"];
     "BuscarAgente" -> "Accion" [label="isA", color="#2f5597"];
@@ -123,7 +120,6 @@ digraph ComercioElectronico {
     "ResultadoBusqueda" -> "Respuesta" [label="isA", color="#2f5597"];
     "SolicitarCobro" -> "SolicitarOperacionPago" [label="isA", color="#2f5597"];
     "SolicitarDevolucion" -> "Accion" [label="isA", color="#2f5597"];
-    "SolicitarOfertaTransport" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarOperacionPago" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarRecogidaDevolucion" -> "Accion" [label="isA", color="#2f5597"];
     "SolicitarReembolso" -> "SolicitarOperacionPago" [label="isA", color="#2f5597"];

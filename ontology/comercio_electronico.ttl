@@ -1249,11 +1249,6 @@ xsd:date rdf:type rdfs:Datatype .
                  rdfs:comment "Propuesta realizada por un transportista para entregar un lote, indicando precio, fecha estimada y condiciones de entrega" .
 
 
-###  http://www.semanticweb.org/ecsdi/comercio_electronico/OfertaTransportResposta
-:OfertaTransportResposta rdf:type owl:Class ;
-                         rdfs:subClassOf :Respuesta .
-
-
 ###  http://www.semanticweb.org/ecsdi/comercio_electronico/OperacionPago
 :OperacionPago rdf:type owl:Class ;
                rdfs:comment "Representa una operación económica solicitada al proveedor de pagos" .
