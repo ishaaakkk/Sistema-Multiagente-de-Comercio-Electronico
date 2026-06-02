@@ -815,14 +815,13 @@ IFACE_HTML = """<!DOCTYPE html>
       html += row('Envío', 'Sin datos de envío en la respuesta');
     }
 
-    // Pre-rellenar pestaña valoración
-    document.getElementById('v-pedido').value = data.pedido_id || '';
-    document.getElementById('v-product').value = data.items && data.items.length ? data.items[0].product_id : (selectedProduct ? selectedProduct.id : '');
-
     box.innerHTML = html
-      + `<button class="btn" style="margin-top:12px" onclick="showTab('valoracion', document.querySelectorAll('nav button')[2])">
-           Valorar este producto →
-         </button>`;
+      + `<div class="selected-product-info" style="margin-top:12px;border-color:var(--accent2)">
+           <div style="font-size:12px;color:var(--accent2)">Valoración diferida</div>
+           <div style="margin-top:6px">
+             La valoración se solicitará cuando llegue la notificación de feedback.
+           </div>
+         </div>`;
   }
 
   // ── Valoración ────────────────────────────────────────────
@@ -852,6 +851,7 @@ IFACE_HTML = """<!DOCTYPE html>
       if (data.error) { setStatus(data.error, 'error'); document.getElementById('val-result').textContent = data.error; return; }
       setStatus('Valoración registrada', 'ok');
       document.getElementById('val-result').textContent = '✓ Valoración enviada correctamente.';
+      await cargarFeedbackPendiente();
     } catch (e) {
       setStatus('Error al enviar valoración', 'error');
     }
@@ -1226,6 +1226,16 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con feedback: {exc}"}),
                 mimetype="application/json"
             )
+
+        pending = getattr(app, "_feedback_requests", [])
+        app._feedback_requests = [
+            req
+            for req in pending
+            if not (
+                req.get("pedido_id") == str(pedido_id)
+                and req.get("product_id") == str(product_id)
+            )
+        ]
 
         return app.response_class(
             json.dumps({"ok": True}),
