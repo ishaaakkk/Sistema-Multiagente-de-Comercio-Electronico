@@ -341,6 +341,24 @@ IFACE_HTML = """<!DOCTYPE html>
     align-items: center;
   }
 
+  .pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pending-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
   .rec-hint {
     color: var(--muted);
     font-size: 11px;
@@ -548,6 +566,9 @@ IFACE_HTML = """<!DOCTYPE html>
 <!-- TAB: VALORACIÓN -->
 <div class="tab" id="tab-valoracion">
   <p class="section-title">Enviar valoración</p>
+  <div style="margin-bottom:14px;color:var(--muted);font-size:12px;max-width:860px">
+    Las valoraciones se registran por <strong>producto del pedido</strong>. Si un pedido tiene varios productos, debes valorar cada elemento por separado.
+  </div>
   <div class="form-grid">
     <div class="field">
       <label>ID Pedido</label>
@@ -1098,16 +1119,28 @@ IFACE_HTML = """<!DOCTYPE html>
       const reqs = data.requests || [];
       updateFeedbackBadge(reqs.length);
       if (!reqs.length) { box.innerHTML = ''; return; }
-      const last = reqs[reqs.length - 1];
-      box.innerHTML = `<div class="selected-product-info" style="border-color:var(--accent2)">
-        <div>
-          <div style="font-size:12px;color:var(--accent2)">PedirFeedback pendiente</div>
-          <div style="margin-top:6px">Pedido <strong>${last.pedido_id}</strong> · Producto <strong>${last.product_id}</strong></div>
-        </div>
-        <button class="btn secondary" onclick="document.getElementById('v-pedido').value='${last.pedido_id}';document.getElementById('v-product').value='${last.product_id}'">
-          Rellenar formulario
-        </button>
-      </div>`;
+      const grouped = {};
+      reqs.forEach(r => {
+        const pid = r.pedido_id || '—';
+        grouped[pid] = grouped[pid] || [];
+        grouped[pid].push(r);
+      });
+      const sections = Object.entries(grouped).map(([pedidoId, items]) => {
+        const rows = items.map(item =>
+          `<div class="pending-item">
+            <span>Producto <strong>${item.product_id || '—'}</strong></span>
+            <button class="btn secondary" style="margin:0;padding:7px 10px" onclick="selectFeedbackItem('${pedidoId}','${item.product_id || ''}')">Valorar este elemento</button>
+          </div>`
+        ).join('');
+        return `<div class="selected-product-info" style="border-color:var(--accent2);align-items:flex-start;flex-direction:column;gap:10px">
+          <div>
+            <div style="font-size:12px;color:var(--accent2)">PedirFeedback pendiente</div>
+            <div style="margin-top:6px">Pedido <strong>${pedidoId}</strong> · ${items.length} producto(s) por valorar</div>
+          </div>
+          <div class="pending-list" style="width:100%">${rows}</div>
+        </div>`;
+      }).join('');
+      box.innerHTML = sections;
       lastFeedbackCount = reqs.length;
       const activeValTab = document.getElementById('tab-valoracion').classList.contains('active');
       if (activeValTab) {
@@ -1117,6 +1150,12 @@ IFACE_HTML = """<!DOCTYPE html>
     } catch (e) {
       box.innerHTML = '';
     }
+  }
+
+  function selectFeedbackItem(pedidoId, productId) {
+    document.getElementById('v-pedido').value = pedidoId || '';
+    document.getElementById('v-product').value = productId || '';
+    setStatus(`Formulario preparado para ${productId || 'producto'}`, 'ok');
   }
 
   // ── Init ─────────────────────────────────────────────────
