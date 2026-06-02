@@ -766,21 +766,24 @@ IFACE_HTML = """<!DOCTYPE html>
     if (error) { el.innerHTML = `<p class="empty-state">${error}</p>`; return; }
     if (!products.length) { el.innerHTML = '<p class="empty-state">No se encontraron productos.</p>'; return; }
 
-    const header = `<div class="list-header">
+    const header = `<div class="list-header" style="grid-template-columns:1fr 100px 80px 120px 120px 90px 120px">
       <span>Producto</span><span>Marca</span><span>Tipo</span>
       <span style="text-align:right">Precio</span><span style="text-align:right">★ Rating</span>
+      <span style="text-align:right">Cant.</span><span></span>
     </div>`;
 
     const rows = products.map((p, i) => {
       const badge = p.type === 'interno'
         ? '<span class="product-badge badge-interno">interno</span>'
         : '<span class="product-badge badge-externo">externo</span>';
-      return `<div class="product-row" id="prow-${i}" onclick="selectProduct(${i}, this)">
+      return `<div class="product-row" id="prow-${i}" onclick="selectProduct(${i}, this)" style="grid-template-columns:1fr 100px 80px 120px 120px 90px 120px">
         <span class="product-name">${p.name}</span>
         <span class="product-brand">${p.brand}</span>
         ${badge}
         <span class="product-price">${parseFloat(p.price).toFixed(2)} €</span>
         <span class="product-rating">${parseFloat(p.rating).toFixed(2)}</span>
+        <input id="qty-${i}" type="number" min="1" value="1" style="width:80px" onclick="event.stopPropagation()">
+        <button class="btn secondary" style="margin:0;padding:7px 10px" onclick="addToCartFromSearch(${i}, event)">Añadir</button>
       </div>`;
     }).join('');
 
@@ -819,6 +822,7 @@ IFACE_HTML = """<!DOCTYPE html>
     const noBanner = document.getElementById('no-product-banner');
     const form = document.getElementById('order-form');
     const confirmBox = document.getElementById('confirm-box');
+    const hasCart = cart.length > 0;
 
     if (selectedProduct) {
       banner.style.display = 'flex';
@@ -826,6 +830,10 @@ IFACE_HTML = """<!DOCTYPE html>
       form.style.display = 'block';
       document.getElementById('sel-name').textContent = selectedProduct.name;
       document.getElementById('sel-price').textContent = parseFloat(selectedProduct.price).toFixed(2) + ' €';
+    } else if (hasCart) {
+      banner.style.display = 'none';
+      noBanner.style.display = 'none';
+      form.style.display = 'block';
     } else {
       banner.style.display = 'none';
       noBanner.style.display = 'block';
@@ -849,16 +857,32 @@ IFACE_HTML = """<!DOCTYPE html>
     setStatus(`${selectedProduct.name} añadido al carrito`, 'ok');
   }
 
+  function addToCartFromSearch(i, ev) {
+    if (ev) ev.stopPropagation();
+    const products = document.getElementById('search-results')._products || [];
+    const selected = products[i];
+    if (!selected) { setStatus('Producto no disponible', 'error'); return; }
+    const qtyInput = document.getElementById('qty-' + i);
+    const qty = Math.max(1, parseInt(qtyInput ? qtyInput.value : '1') || 1);
+    const existing = cart.find(item => item.id === selected.id);
+    if (existing) existing.quantity += qty;
+    else cart.push({ ...selected, quantity: qty });
+    setStatus(`${selected.name} añadido al carrito (x${qty})`, 'ok');
+    if (document.getElementById('tab-pedido').classList.contains('active')) refreshOrderPanel();
+    else renderCart();
+  }
+
   function removeCartItem(index) {
     cart.splice(index, 1);
-    renderCart();
+    if (document.getElementById('tab-pedido').classList.contains('active')) refreshOrderPanel();
+    else renderCart();
   }
 
   function renderCart() {
     const box = document.getElementById('cart-box');
     if (!box) return;
     if (!cart.length) {
-      box.innerHTML = '<div class="empty-state" style="padding:8px 0">Carrito vacío: se pedirá el producto seleccionado.</div>';
+      box.innerHTML = '<div class="empty-state" style="padding:8px 0">Carrito vacío.</div>';
       return;
     }
     box.innerHTML = '<div class="product-list">' + cart.map((item, i) =>
