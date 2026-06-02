@@ -1004,7 +1004,10 @@ IFACE_HTML = """<!DOCTYPE html>
     }
     if (envios.length) {
       envios.forEach((env, idx) => {
-        const clLabel = [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ') || '—';
+        const clLabel = env.centro_label
+          || [env.nombre_centro, env.centro_id].filter(Boolean).join(' · ')
+          || [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ')
+          || '—';
         const prefix = envios.length > 1 ? ` (${idx + 1})` : '';
         html += row('Centro logístico' + prefix, clLabel)
           + row('Lote', env.lote_id || '—')

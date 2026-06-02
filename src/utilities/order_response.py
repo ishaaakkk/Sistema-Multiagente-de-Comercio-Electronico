@@ -7,6 +7,7 @@ from rdflib.namespace import RDF
 
 from .acl import get_message
 from .namespaces import ECSDI
+from .catalog import format_centro_label
 from .transport_proto import find_transport_offer, offer_delivery_datetime, offer_price
 
 # Mayor valor = estado más avanzado en el flujo de compra.
@@ -88,20 +89,19 @@ def _friendly_transportista(uri: URIRef | None) -> str:
     return _TRANSPORTISTA_LABELS.get(tail, tail)
 
 
-def _centro_from_lote(graph: Graph, lote: URIRef | None) -> tuple[str, str]:
+def _centro_from_lote(graph: Graph, lote: URIRef | None) -> tuple[str, str, str]:
     if lote is None:
-        return "", ""
-    centro_id = str(next(graph.objects(lote, ECSDI.idCentroLogistico), "") or "")
+        return "", "", ""
     ciudad = str(next(graph.objects(lote, ECSDI.ciudadCentroLogistico), "") or "")
-    if centro_id and ciudad:
-        return centro_id, ciudad
     center = next(graph.objects(lote, ECSDI.loteOrigenCentro), None)
+    centro_id = ""
+    nombre = ""
     if center is not None:
-        if not centro_id:
-            centro_id = str(next(graph.objects(center, ECSDI.idCentroLogistico), "") or "")
+        centro_id = str(next(graph.objects(center, ECSDI.idCentroLogistico), "") or "")
+        nombre = str(next(graph.objects(center, ECSDI.nombreCentroLogistico), "") or "")
         if not ciudad:
             ciudad = str(next(graph.objects(center, ECSDI.ciudadCentroLogistico), "") or "")
-    return centro_id, ciudad
+    return centro_id, ciudad, nombre
 
 
 def _iter_confirmaciones_pedido(graph: Graph, pedido: URIRef):
@@ -136,10 +136,16 @@ def _envio_record_from_confirmacion(graph: Graph, confirmacion: URIRef) -> dict:
     lote_id = str(next(graph.objects(lote, ECSDI.idLote), "")) if lote else ""
     centro_id = str(next(graph.objects(envio, ECSDI.idCentroLogistico), "")) if envio else ""
     ciudad_cl = str(next(graph.objects(envio, ECSDI.ciudadCentroLogistico), "")) if envio else ""
-    if not centro_id or not ciudad_cl:
-        fallback_id, fallback_city = _centro_from_lote(graph, lote)
+    nombre_cl = ""
+    if envio is not None:
+        center = next(graph.objects(envio, ECSDI.envioDesdeCentro), None)
+        if center is not None:
+            nombre_cl = str(next(graph.objects(center, ECSDI.nombreCentroLogistico), "") or "")
+    if not centro_id or not ciudad_cl or not nombre_cl:
+        fallback_id, fallback_city, fallback_name = _centro_from_lote(graph, lote)
         centro_id = centro_id or fallback_id
         ciudad_cl = ciudad_cl or fallback_city
+        nombre_cl = nombre_cl or fallback_name
 
     oferta = next(graph.subjects(ECSDI.ofertaParaLote, lote), None) if lote is not None else None
     if oferta is None:
@@ -153,6 +159,8 @@ def _envio_record_from_confirmacion(graph: Graph, confirmacion: URIRef) -> dict:
         "lote_id": lote_id,
         "centro_id": centro_id,
         "ciudad_centro": ciudad_cl,
+        "nombre_centro": nombre_cl,
+        "centro_label": format_centro_label(centro_id, ciudad_cl, nombre_cl),
         "fecha_entrega": str(fecha) if fecha else "",
         "coste_envio": precio,
     }
@@ -215,6 +223,8 @@ def extract_order_summary(graph: Graph) -> dict:
                 "lote_id": first.get("lote_id", ""),
                 "centro_id": first.get("centro_id", ""),
                 "ciudad_centro": first.get("ciudad_centro", ""),
+                "nombre_centro": first.get("nombre_centro", ""),
+                "centro_label": first.get("centro_label", ""),
             }
         )
     elif envio_externo:

@@ -78,9 +78,10 @@ start_agent "TransportistaEco" "$PYTHON" -m agents.transportista_agent --port 90
 sleep 0.5
 # Dos centros logísticos — extensión #3: el comerciante contacta CLs en orden
 # por proximidad |dist_CL - dist_entrega| (fan-out secuencial greedy).
-start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130 --stock-products "P-IPHONE19,P-MACBOOK-AIR,P-EBOOK-AURORA,P-BATIDORA-MINI,P-LIBRO-RUST"
+# Cada CL ofrece todos los productos logísticos del catálogo (defecto --stock-products *).
+start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130
 sleep 0.5
-start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500 --stock-products "P-IPHONE19,P-MACBOOK-AIR,P-EBOOK-AURORA,P-BATIDORA-MINI,P-LIBRO-RUST"
+start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500
 sleep 0.5
 start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos_agent --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
@@ -89,11 +90,12 @@ sleep 0.5
 # Feedback con scheduler proactivo y delay corto para la demo.
 start_agent "AgenteFeedback" "$PYTHON" -m agents.agente_feedback --port 9007 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --feedback-delay 60 --recommendation-period 120 --recommendation-warmup 30
 sleep 0.5
-start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
-sleep 0.5
 start_agent "Tienda" "$PYTHON" -m agents.agente_comerciante --port 9001 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 start_agent "AgenteCatalogo" "$PYTHON" -m agents.agente_catalogo --port 9006 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+sleep 0.5
+# Tras el catálogo: anuncia P-CARGADOR-GAN (envío externo) vía DarAltaProductoExterno.
+start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --announce-products
 sleep 0.5
 start_agent "AgenteDevolucion" "$PYTHON" -m agents.agente_devolucion --port 9009 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
