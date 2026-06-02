@@ -1079,12 +1079,6 @@ def create_app(
         if max_price:  constraints["max_price"]  = Decimal(max_price)
         if min_rating: constraints["min_rating"] = Decimal(min_rating)
 
-        if not constraints:
-            return app.response_class(
-                json.dumps({"error": "Introduce al menos un criterio de búsqueda."}),
-                mimetype="application/json"
-            )
-
         try:
             search_message = build_search_message(
                 sender=agent_uri,
