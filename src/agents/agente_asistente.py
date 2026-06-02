@@ -403,7 +403,9 @@ IFACE_HTML = """<!DOCTYPE html>
 <nav>
   <button class="active" onclick="showTab('buscar', this)">01 / Buscar</button>
   <button onclick="showTab('pedido', this)">02 / Pedido</button>
-  <button onclick="showTab('valoracion', this)">03 / Valoración</button>
+  <button onclick="showTab('valoracion', this)">
+    03 / Valoración<span id="val-badge" class="nav-badge" style="display:none">0</span>
+  </button>
   <button onclick="showTab('recomendaciones', this)">
     04 / Recomendaciones<span id="rec-badge" class="nav-badge" style="display:none">0</span>
   </button>
@@ -578,6 +580,7 @@ IFACE_HTML = """<!DOCTYPE html>
   let starRating = 0;
   let recPollTimer = null;
   let lastInboxCount = 0;
+  let lastFeedbackCount = 0;
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -815,14 +818,13 @@ IFACE_HTML = """<!DOCTYPE html>
       html += row('Envío', 'Sin datos de envío en la respuesta');
     }
 
-    // Pre-rellenar pestaña valoración
-    document.getElementById('v-pedido').value = data.pedido_id || '';
-    document.getElementById('v-product').value = data.items && data.items.length ? data.items[0].product_id : (selectedProduct ? selectedProduct.id : '');
-
     box.innerHTML = html
-      + `<button class="btn" style="margin-top:12px" onclick="showTab('valoracion', document.querySelectorAll('nav button')[2])">
-           Valorar este producto →
-         </button>`;
+      + `<div class="selected-product-info" style="margin-top:12px;border-color:var(--accent2)">
+           <div style="font-size:12px;color:var(--accent2)">Valoración pendiente de solicitud</div>
+           <div style="margin-top:6px">
+             Te pediremos valorar este producto automáticamente tras el retardo configurado.
+           </div>
+         </div>`;
   }
 
   // ── Valoración ────────────────────────────────────────────
@@ -852,6 +854,7 @@ IFACE_HTML = """<!DOCTYPE html>
       if (data.error) { setStatus(data.error, 'error'); document.getElementById('val-result').textContent = data.error; return; }
       setStatus('Valoración registrada', 'ok');
       document.getElementById('val-result').textContent = '✓ Valoración enviada correctamente.';
+      await cargarFeedbackPendiente();
     } catch (e) {
       setStatus('Error al enviar valoración', 'error');
     }
@@ -894,6 +897,18 @@ IFACE_HTML = """<!DOCTYPE html>
       badge.style.display = 'none';
     }
     lastInboxCount = count;
+  }
+
+  function updateFeedbackBadge(count) {
+    const badge = document.getElementById('val-badge');
+    if (!badge) return;
+    if (count > 0) {
+      badge.textContent = String(count);
+      badge.style.display = 'inline-block';
+    } else if (count === 0) {
+      badge.style.display = 'none';
+    }
+    lastFeedbackCount = count;
   }
 
   function renderRecommendations(items) {
@@ -988,6 +1003,7 @@ IFACE_HTML = """<!DOCTYPE html>
       const res = await fetch('/feedback-requests');
       const data = await res.json();
       const reqs = data.requests || [];
+      updateFeedbackBadge(reqs.length);
       if (!reqs.length) { box.innerHTML = ''; return; }
       const last = reqs[reqs.length - 1];
       box.innerHTML = `<div class="selected-product-info" style="border-color:var(--accent2)">
@@ -999,6 +1015,12 @@ IFACE_HTML = """<!DOCTYPE html>
           Rellenar formulario
         </button>
       </div>`;
+      lastFeedbackCount = reqs.length;
+      const activeValTab = document.getElementById('tab-valoracion').classList.contains('active');
+      if (activeValTab) {
+        const badge = document.getElementById('val-badge');
+        if (badge) badge.style.display = 'none';
+      }
     } catch (e) {
       box.innerHTML = '';
     }
@@ -1007,6 +1029,7 @@ IFACE_HTML = """<!DOCTYPE html>
   // ── Init ─────────────────────────────────────────────────
   setStatus('Listo', 'ok');
   cargarRecomendacionesInbox();
+  setInterval(cargarFeedbackPendiente, 15000);
 </script>
 </body>
 </html>
@@ -1226,6 +1249,16 @@ def create_app(
                 json.dumps({"error": f"No se pudo contactar con feedback: {exc}"}),
                 mimetype="application/json"
             )
+
+        pending = getattr(app, "_feedback_requests", [])
+        app._feedback_requests = [
+            req
+            for req in pending
+            if not (
+                req.get("pedido_id") == str(pedido_id)
+                and req.get("product_id") == str(product_id)
+            )
+        ]
 
         return app.response_class(
             json.dumps({"ok": True}),
