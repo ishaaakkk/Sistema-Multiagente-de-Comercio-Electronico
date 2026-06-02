@@ -5,3 +5,14 @@
 /__pycache__/
 *.pyc
 *.log
+
+# --- Runtime DB/state (no versionar) ---
+# Todo lo generado en ejecución bajo src/data (históricos, reservas, dataset, etc.)
+/src/data/*.json
+/src/data/*.trig
+/src/data/pending_lotes/
+/src/data/lotes/
+/src/data/completed_orders/
+
+# Mantener el catálogo semilla versionado
+!/src/data/catalog.ttl
