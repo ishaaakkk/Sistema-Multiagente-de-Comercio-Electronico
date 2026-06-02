@@ -403,7 +403,9 @@ IFACE_HTML = """<!DOCTYPE html>
 <nav>
   <button class="active" onclick="showTab('buscar', this)">01 / Buscar</button>
   <button onclick="showTab('pedido', this)">02 / Pedido</button>
-  <button onclick="showTab('valoracion', this)">03 / Valoración</button>
+  <button onclick="showTab('valoracion', this)">
+    03 / Valoración<span id="val-badge" class="nav-badge" style="display:none">0</span>
+  </button>
   <button onclick="showTab('recomendaciones', this)">
     04 / Recomendaciones<span id="rec-badge" class="nav-badge" style="display:none">0</span>
   </button>
@@ -578,6 +580,7 @@ IFACE_HTML = """<!DOCTYPE html>
   let starRating = 0;
   let recPollTimer = null;
   let lastInboxCount = 0;
+  let lastFeedbackCount = 0;
 
   // ── Estado bar ───────────────────────────────────────────
   function setStatus(msg, type = '') {
@@ -896,6 +899,18 @@ IFACE_HTML = """<!DOCTYPE html>
     lastInboxCount = count;
   }
 
+  function updateFeedbackBadge(count) {
+    const badge = document.getElementById('val-badge');
+    if (!badge) return;
+    if (count > 0) {
+      badge.textContent = String(count);
+      badge.style.display = 'inline-block';
+    } else if (count === 0) {
+      badge.style.display = 'none';
+    }
+    lastFeedbackCount = count;
+  }
+
   function renderRecommendations(items) {
     const el = document.getElementById('rec-list');
     if (!items || !items.length) {
@@ -988,6 +1003,7 @@ IFACE_HTML = """<!DOCTYPE html>
       const res = await fetch('/feedback-requests');
       const data = await res.json();
       const reqs = data.requests || [];
+      updateFeedbackBadge(reqs.length);
       if (!reqs.length) { box.innerHTML = ''; return; }
       const last = reqs[reqs.length - 1];
       box.innerHTML = `<div class="selected-product-info" style="border-color:var(--accent2)">
@@ -999,6 +1015,12 @@ IFACE_HTML = """<!DOCTYPE html>
           Rellenar formulario
         </button>
       </div>`;
+      lastFeedbackCount = reqs.length;
+      const activeValTab = document.getElementById('tab-valoracion').classList.contains('active');
+      if (activeValTab) {
+        const badge = document.getElementById('val-badge');
+        if (badge) badge.style.display = 'none';
+      }
     } catch (e) {
       box.innerHTML = '';
     }
@@ -1007,6 +1029,7 @@ IFACE_HTML = """<!DOCTYPE html>
   // ── Init ─────────────────────────────────────────────────
   setStatus('Listo', 'ok');
   cargarRecomendacionesInbox();
+  setInterval(cargarFeedbackPendiente, 15000);
 </script>
 </body>
 </html>
