@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--postal-code", default="08013")
     parser.add_argument("--country", default="Espana")
     parser.add_argument("--priority", type=int, default=1)
+    parser.add_argument("--payment-method", default="tarjeta", choices=["tarjeta", "paypal", "transferencia"])
+    parser.add_argument("--payment-card", default="4111111111111111", help="PAN para cobro con tarjeta (modo demo).")
     args = parser.parse_args()
 
     pedido_id = args.pedido_id
@@ -72,6 +74,8 @@ def _buy_product(args) -> tuple[str, str]:
         postal_code=args.postal_code,
         country=args.country,
         priority=args.priority,
+        payment_method=args.payment_method,
+        payment_card=args.payment_card,
         catalog_graph=search_response,
     )
     order_response = post_graph(args.shop_url, order_message)

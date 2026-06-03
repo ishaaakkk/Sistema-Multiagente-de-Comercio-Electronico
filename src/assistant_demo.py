@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument("--priority", type=int, default=1)
     parser.add_argument("--delivery-dist", type=int, default=130)
     parser.add_argument("--payment-method", default="tarjeta", choices=["tarjeta", "paypal", "transferencia"])
-    parser.add_argument("--payment-card", default="")
+    parser.add_argument("--payment-card", default="4111111111111111", help="PAN para cobro con tarjeta (modo demo).")
     parser.add_argument("--rate", type=int, default=None, help="Puntuacion 1..5 para valorar el primer producto comprado.")
     parser.add_argument("--comment", default="Valoracion enviada desde assistant_demo.")
     parser.add_argument("--feedback-wait", type=float, default=1.0)
