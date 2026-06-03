@@ -324,6 +324,20 @@ IFACE_HTML = """<!DOCTYPE html>
     font-size: 12px;
   }
 
+  .shipment-ticket {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .shipment-ticket h4 {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 10px;
+  }
   .return-summary {
     margin-top: 16px;
     max-width: 860px;
@@ -991,38 +1005,73 @@ IFACE_HTML = """<!DOCTYPE html>
       html += row('Líneas', data.items.map(i => `${i.product_id} ×${i.quantity}`).join(', '));
     }
 
+    const formatItems = (items) => (items && items.length)
+      ? items.map(i => `${i.product_id} ×${i.quantity || 1}`).join(', ')
+      : '';
+
     let envios = Array.isArray(data.envios_internos) ? data.envios_internos : [];
     if (!envios.length && data.envio_interno) {
       envios = [{
         centro_id: data.centro_id,
         ciudad_centro: data.ciudad_centro,
+        centro_label: data.centro_label,
+        nombre_centro: data.nombre_centro,
         lote_id: data.lote_id,
         transportista: data.transportista,
         fecha_entrega: data.fecha_entrega,
         coste_envio: data.coste_envio,
       }];
     }
+
+    let externos = Array.isArray(data.envios_externos) ? data.envios_externos : [];
+    if (!externos.length && (data.envio_externo || data.envio_externo_detalle)) {
+      externos = [data.envio_externo_detalle || {}];
+    }
+
+    const itemsLogistica = data.items_logistica || [];
+    const itemsVendedor = data.items_envio_vendedor || [];
+
     if (envios.length) {
       envios.forEach((env, idx) => {
         const clLabel = env.centro_label
           || [env.nombre_centro, env.centro_id].filter(Boolean).join(' · ')
           || [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ')
           || '—';
-        const prefix = envios.length > 1 ? ` (${idx + 1})` : '';
-        html += row('Centro logístico' + prefix, clLabel)
+        const title = envios.length > 1
+          ? `Ticket envío tienda / logística (${idx + 1})`
+          : 'Ticket envío tienda / logística';
+        let block = row('Centro logístico', clLabel)
           + row('Lote', env.lote_id || '—')
           + row('Transportista', env.transportista || '—')
           + row('Entrega estimada', env.fecha_entrega || '—')
           + row('Coste envío', env.coste_envio ? parseFloat(env.coste_envio).toFixed(2) + ' €' : '—');
+        const lineas = formatItems(itemsLogistica);
+        if (lineas) block += row('Productos', lineas);
+        html += `<div class="shipment-ticket"><h4>${title}</h4>${block}</div>`;
       });
-    } else if (data.envio_externo || data.envio_externo_detalle) {
-      const det = data.envio_externo_detalle || {};
-      html += row('Envío', 'Externo — ' + (det.vendedor || 'vendedor externo'))
-            + row('Gestión', det.mensaje || 'El vendedor gestiona el envío');
-    } else if (data.estado === 'aceptado_sin_pago') {
-      html += row('Envío', 'Pendiente de confirmación logística');
-    } else {
-      html += row('Envío', 'Sin datos de envío en la respuesta');
+    }
+
+    if (externos.length) {
+      externos.forEach((det, idx) => {
+        const title = externos.length > 1
+          ? `Ticket envío vendedor externo (${idx + 1})`
+          : 'Ticket envío vendedor externo';
+        let block = row('Vendedor', det.vendedor || 'vendedor externo')
+          + row('Gestión', det.mensaje || 'El vendedor gestiona el envío directamente');
+        const prods = (det.productos && det.productos.length)
+          ? det.productos.join(', ')
+          : formatItems(itemsVendedor);
+        if (prods) block += row('Productos', prods);
+        html += `<div class="shipment-ticket"><h4>${title}</h4>${block}</div>`;
+      });
+    }
+
+    if (!envios.length && !externos.length) {
+      if (data.estado === 'aceptado_sin_pago') {
+        html += row('Envío', 'Pendiente de confirmación logística');
+      } else {
+        html += row('Envío', 'Sin datos de envío en la respuesta');
+      }
     }
 
     if (showFeedbackHint) {
