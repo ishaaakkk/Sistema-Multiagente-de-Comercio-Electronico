@@ -1004,7 +1004,10 @@ IFACE_HTML = """<!DOCTYPE html>
     }
     if (envios.length) {
       envios.forEach((env, idx) => {
-        const clLabel = [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ') || '—';
+        const clLabel = env.centro_label
+          || [env.nombre_centro, env.centro_id].filter(Boolean).join(' · ')
+          || [env.centro_id, env.ciudad_centro].filter(Boolean).join(' · ')
+          || '—';
         const prefix = envios.length > 1 ? ` (${idx + 1})` : '';
         html += row('Centro logístico' + prefix, clLabel)
           + row('Lote', env.lote_id || '—')
@@ -1651,8 +1654,16 @@ def create_app(
             )
         ]
 
+        from utilities.catalog import load_persisted_catalog, product_uri as catalog_product_uri
+
+        new_rating = ""
+        catalog = load_persisted_catalog()
+        if len(catalog) > 0:
+            product_node = catalog_product_uri(str(product_id))
+            new_rating = str(next(catalog.objects(product_node, ECSDI.valoracionMedia), ""))
+
         return app.response_class(
-            json.dumps({"ok": True}),
+            json.dumps({"ok": True, "valoracion_media": new_rating}),
             mimetype="application/json"
         )
 

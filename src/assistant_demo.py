@@ -197,7 +197,8 @@ def _print_shipping_summary(summary: dict) -> None:
     if envios:
         print("Envio interno:")
         for idx, env in enumerate(envios, start=1):
-            print(f"  {idx}. Centro: {env.get('centro_id', '—')} · Lote: {env.get('lote_id', '—')}")
+            cl = env.get("centro_label") or f"{env.get('centro_id', '—')} · {env.get('ciudad_centro', '')}".strip(" ·")
+            print(f"  {idx}. Centro: {cl} · Lote: {env.get('lote_id', '—')}")
             print(f"     Transportista: {env.get('transportista', '—')}")
             print(f"     Fecha estimada: {env.get('fecha_entrega', '—')}")
             print(f"     Coste envio:    {env.get('coste_envio', '—')} EUR")

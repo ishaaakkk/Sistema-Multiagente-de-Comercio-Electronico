@@ -222,6 +222,172 @@ def decrement_catalog_stock(center_id: str, product_quantities: dict[str, int]) 
     persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
 
 
+def average_rating_from_opinions(opinions_db: list[dict], product_id: str) -> float | None:
+    """Media aritmética de las puntuaciones registradas para un producto."""
+
+    ratings = [
+        int(record["puntuacion"])
+        for record in opinions_db
+        if record.get("product_id") == product_id and record.get("puntuacion") is not None
+    ]
+    if not ratings:
+        return None
+    return sum(ratings) / len(ratings)
+
+
+def stamp_operating_center(graph: Graph, center: URIRef, center_id: str, center_city: str) -> None:
+    """Alinea el nodo centro del lote con el CL que opera (no solo ProductosDB)."""
+
+    graph.set((center, ECSDI.idCentroLogistico, Literal(center_id)))
+    graph.set((center, ECSDI.ciudadCentroLogistico, Literal(center_city)))
+    graph.set((center, ECSDI.nombreCentroLogistico, Literal(f"Centro Logístico {center_city}")))
+
+
+def catalog_center_profile(catalog: Graph, center_id: str) -> tuple[str, str]:
+    """Ciudad y nombre del centro en ProductosDB (si existe)."""
+
+    center = center_uri(center_id)
+    if (center, None, None) not in catalog:
+        return "", ""
+    return (
+        _str_value(catalog, center, ECSDI.ciudadCentroLogistico) or "",
+        _str_value(catalog, center, ECSDI.nombreCentroLogistico) or "",
+    )
+
+
+def format_centro_label(centro_id: str, ciudad: str, nombre: str = "") -> str:
+    """Etiqueta legible para tiquets/UI."""
+
+    nombre = (nombre or "").strip()
+    centro_id = (centro_id or "").strip()
+    ciudad = (ciudad or "").strip()
+    if nombre and centro_id and centro_id not in nombre:
+        return f"{nombre} ({centro_id})"
+    if nombre:
+        return nombre
+    if centro_id and ciudad:
+        return f"{centro_id} · {ciudad}"
+    return centro_id or ciudad or "—"
+
+
+def list_center_ids(catalog: Graph) -> list[str]:
+    """Identificadores de centros logísticos definidos en ProductosDB."""
+
+    ids: list[str] = []
+    for center in catalog.subjects(RDF.type, ECSDI.CentroLogistico):
+        center_id = _str_value(catalog, center, ECSDI.idCentroLogistico)
+        if center_id:
+            ids.append(center_id)
+    return sorted(set(ids))
+
+
+def is_product_shipped_by_logistics(catalog: Graph, product: URIRef) -> bool:
+    """True si el producto puede prepararse en un centro logístico de la tienda."""
+
+    if (product, RDF.type, ECSDI.ProductoInterno) in catalog:
+        return True
+    if (product, RDF.type, ECSDI.ProductoExterno) not in catalog:
+        return False
+    gestion = next(catalog.objects(product, ECSDI.gestionEnvioExterno), Literal(False))
+    return str(gestion).lower() not in ("true", "1")
+
+
+def product_ids_for_logistics(catalog: Graph) -> set[str]:
+    """Identificadores de productos que los centros logísticos pueden servir."""
+
+    product_ids: set[str] = set()
+    for product in catalog.subjects(RDF.type, ECSDI.Producto):
+        if not is_product_shipped_by_logistics(catalog, product):
+            continue
+        product_id = _str_value(catalog, product, ECSDI.idProducto)
+        if product_id:
+            product_ids.add(product_id)
+    return product_ids
+
+
+def product_ids_with_stock_at_center(
+    catalog: Graph,
+    center_id: str,
+    *,
+    min_quantity: int = 1,
+) -> set[str]:
+    """Productos con unidades disponibles en un centro (StockProductosDB)."""
+
+    center = center_uri(center_id)
+    product_ids: set[str] = set()
+    for stock in catalog.subjects(ECSDI.stockEnCentro, center):
+        available = _int_value(catalog, stock, ECSDI.cantidadDisponible) or 0
+        if available < min_quantity:
+            continue
+        product = next(catalog.objects(stock, ECSDI.stockDeProducto), None)
+        if product is None:
+            continue
+        product_id = _str_value(catalog, product, ECSDI.idProducto)
+        if product_id:
+            product_ids.add(product_id)
+    return product_ids
+
+
+def sync_stock_all_centers(catalog: Graph, default_quantity: int = 15) -> list[str]:
+    """Replica stock de cada producto logístico en todos los centros del catálogo."""
+
+    center_ids = list_center_ids(catalog)
+    if not center_ids:
+        return []
+    updated: list[str] = []
+    for product_id in sorted(product_ids_for_logistics(catalog)):
+        for center_id in center_ids:
+            ensure_stock_at_center(catalog, product_id, center_id, default_quantity)
+        updated.append(product_id)
+    return updated
+
+
+def ensure_stock_at_center(
+    catalog: Graph,
+    product_id: str,
+    center_id: str,
+    quantity: int,
+) -> bool:
+    """Crea o actualiza el stock de un producto en un centro."""
+
+    if quantity < 0:
+        return False
+    product = product_uri(product_id)
+    if (product, None, None) not in catalog:
+        return False
+    stock = stock_uri(product_id, center_id)
+    center = center_uri(center_id)
+    if (stock, None, None) not in catalog:
+        catalog.add((stock, RDF.type, ECSDI.StockProducto))
+        catalog.add((stock, ECSDI.stockDeProducto, product))
+        catalog.add((stock, ECSDI.stockEnCentro, center))
+        catalog.add((stock, ECSDI.cantidadDisponible, Literal(quantity, datatype=XSD.integer)))
+        return True
+    current = _int_value(catalog, stock, ECSDI.cantidadDisponible) or 0
+    if current < quantity:
+        catalog.set((stock, ECSDI.cantidadDisponible, Literal(quantity, datatype=XSD.integer)))
+    return True
+
+
+def provision_store_managed_external_product(
+    catalog: Graph,
+    product_id: str,
+    *,
+    quantity_per_center: int = 12,
+    center_ids: list[str] | None = None,
+) -> list[str]:
+    """Añade stock en centros para externos que envía la tienda (`gestionEnvioExterno` false)."""
+
+    product = product_uri(product_id)
+    if not is_product_shipped_by_logistics(catalog, product):
+        return []
+    updated: list[str] = []
+    for center_id in center_ids or list_center_ids(catalog):
+        if ensure_stock_at_center(catalog, product_id, center_id, quantity_per_center):
+            updated.append(center_id)
+    return updated
+
+
 def update_product_average_rating(product_id: str, rating: Decimal | str | int | float) -> bool:
     """Actualiza `valoracionMedia` de un producto en ProductosDB."""
 

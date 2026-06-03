@@ -2,6 +2,117 @@
 @prefix ecsdi: <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-EXT> a ecsdi:Producto,
+        ecsdi:ProductoExterno ;
+    ecsdi:gestionEnvioExterno true ;
+    ecsdi:idProducto "P-MI-EXT" ;
+    ecsdi:marcaProducto "MiMarca" ;
+    ecsdi:nombreProducto "Producto vendedor" ;
+    ecsdi:pesoProducto 0.4 ;
+    ecsdi:precioProducto 39.90 ;
+    ecsdi:productoOfrecidoPor agents:AgenteVendedorExterno ;
+    ecsdi:valoracionMedia 4.2 .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-SMARTWATCH-X> a ecsdi:Producto,
+        ecsdi:ProductoExterno ;
+    ecsdi:descripcionProducto "Reloj inteligente externo con GPS y monitor cardiaco" ;
+    ecsdi:gestionEnvioExterno true ;
+    ecsdi:idProducto "P-SMARTWATCH-X" ;
+    ecsdi:marcaProducto "TechWorld" ;
+    ecsdi:nombreProducto "SmartWatch X Pro" ;
+    ecsdi:pesoProducto 0.15 ;
+    ecsdi:precioProducto 299.00 ;
+    ecsdi:productoOfrecidoPor agents:VEND-TECHWORLD ;
+    ecsdi:valoracionMedia 4.50 .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-AIRPODS-PRO/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-AIRPODS-PRO> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-AIRPODS-PRO/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-AIRPODS-PRO> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-AURICULARES-BT/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-AURICULARES-BT> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-AURICULARES-BT/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-AURICULARES-BT> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-BATIDORA-MINI/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-BATIDORA-MINI> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-BATIDORA-MINI/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-BATIDORA-MINI> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-EBOOK-AURORA/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 18 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-EBOOK-AURORA> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-EBOOK-AURORA/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-EBOOK-AURORA> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 25 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-LIBRO-RUST/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-LIBRO-RUST/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 22 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MACBOOK-AIR/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MACBOOK-AIR> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MACBOOK-AIR/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MACBOOK-AIR> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MI-TIENDA/CL-BCN> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 15 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-TIENDA> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MI-TIENDA/CL-MAD> a ecsdi:StockProducto ;
+    ecsdi:cantidadDisponible 14 ;
+    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-TIENDA> ;
+    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
+
+agents:VEND-HOMEGADGETS a ecsdi:VendedorExterno ;
+    ecsdi:idVendedor "VEND-HOMEGADGETS" ;
+    ecsdi:nombreVendedor "HomeGadgets Europe" .
+
+agents:VEND-TECHWORLD a ecsdi:VendedorExterno ;
+    ecsdi:idVendedor "VEND-TECHWORLD" ;
+    ecsdi:nombreVendedor "TechWorld SL" .
+
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-AIRPODS-PRO> a ecsdi:Producto,
         ecsdi:ProductoExterno ;
     ecsdi:descripcionProducto "Auriculares Apple" ;
@@ -25,47 +136,6 @@
     ecsdi:precioProducto 89.90 ;
     ecsdi:productoOfrecidoPor agents:VEND-HOMEGADGETS ;
     ecsdi:valoracionMedia 4.20 .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-SMARTWATCH-X> a ecsdi:Producto,
-        ecsdi:ProductoExterno ;
-    ecsdi:descripcionProducto "Reloj inteligente externo con GPS y monitor cardiaco" ;
-    ecsdi:gestionEnvioExterno true ;
-    ecsdi:idProducto "P-SMARTWATCH-X" ;
-    ecsdi:marcaProducto "TechWorld" ;
-    ecsdi:nombreProducto "SmartWatch X Pro" ;
-    ecsdi:pesoProducto 0.15 ;
-    ecsdi:precioProducto 299.00 ;
-    ecsdi:productoOfrecidoPor agents:VEND-TECHWORLD ;
-    ecsdi:valoracionMedia 4.50 .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-BATIDORA-MINI/CL-MAD> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 11 ;
-    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-BATIDORA-MINI> ;
-    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-EBOOK-AURORA/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 18 ;
-    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-EBOOK-AURORA> ;
-    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 22 ;
-    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
-    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-LIBRO-RUST/CL-MAD> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 22 ;
-    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> ;
-    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MACBOOK-AIR/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 10 ;
-    ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MACBOOK-AIR> ;
-    ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
-
-agents:VEND-HOMEGADGETS a ecsdi:VendedorExterno ;
-    ecsdi:idVendedor "VEND-HOMEGADGETS" ;
-    ecsdi:nombreVendedor "HomeGadgets Europe" .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-BATIDORA-MINI> a ecsdi:Producto,
         ecsdi:ProductoInterno ;
@@ -95,7 +165,7 @@ agents:VEND-HOMEGADGETS a ecsdi:VendedorExterno ;
     ecsdi:nombreProducto "iPhone 19" ;
     ecsdi:pesoProducto 0.45 ;
     ecsdi:precioProducto 1199.00 ;
-    ecsdi:valoracionMedia 4.43 .
+    ecsdi:valoracionMedia 4.75 .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> a ecsdi:Producto,
         ecsdi:ProductoInterno ;
@@ -117,17 +187,26 @@ agents:VEND-HOMEGADGETS a ecsdi:VendedorExterno ;
     ecsdi:precioProducto 1299.00 ;
     ecsdi:valoracionMedia 4.80 .
 
-agents:VEND-TECHWORLD a ecsdi:VendedorExterno ;
-    ecsdi:idVendedor "VEND-TECHWORLD" ;
-    ecsdi:nombreVendedor "TechWorld SL" .
-
-<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> a ecsdi:CentroLogistico ;
-    ecsdi:ciudadCentroLogistico "Madrid" ;
-    ecsdi:idCentroLogistico "CL-MAD" ;
-    ecsdi:nombreCentroLogistico "Centro Logistico Madrid" .
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-TIENDA> a ecsdi:Producto,
+        ecsdi:ProductoExterno ;
+    ecsdi:gestionEnvioExterno false,
+        true ;
+    ecsdi:idProducto "P-MI-TIENDA" ;
+    ecsdi:marcaProducto "MiMarca" ;
+    ecsdi:nombreProducto "ProductoExterno",
+        "ProductoExternoEnviadoPormi" ;
+    ecsdi:pesoProducto 0.6 ;
+    ecsdi:precioProducto 29.90 ;
+    ecsdi:productoOfrecidoPor agents:AgenteVendedorExterno ;
+    ecsdi:valoracionMedia 4.0 .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> a ecsdi:CentroLogistico ;
     ecsdi:ciudadCentroLogistico "Barcelona" ;
     ecsdi:idCentroLogistico "CL-BCN" ;
     ecsdi:nombreCentroLogistico "Centro Logistico Barcelona" .
+
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> a ecsdi:CentroLogistico ;
+    ecsdi:ciudadCentroLogistico "Madrid" ;
+    ecsdi:idCentroLogistico "CL-MAD" ;
+    ecsdi:nombreCentroLogistico "Centro Logistico Madrid" .
 

@@ -22,7 +22,7 @@ from utilities.builders import (
     build_notify_purchase_completed,
     build_pago_externo_request,
 )
-from utilities.catalog import decimal_literal
+from utilities.catalog import decimal_literal, load_persisted_catalog, product_uri as catalog_product_uri
 from utilities.comm import comm_url as _comm_url, copy_subject as _copy_subject
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -912,11 +912,37 @@ def _copy_product_context(source: Graph, target: Graph, product: URIRef) -> None
     """Copia el producto y el contexto de stock/centro necesario para logistica."""
 
     _copy_subject(source, target, product)
+    copied_stock = False
     for stock in source.subjects(ECSDI.stockDeProducto, product):
+        copied_stock = True
         _copy_subject(source, target, stock)
         center = next(source.objects(stock, ECSDI.stockEnCentro), None)
         if center is not None:
             _copy_subject(source, target, center)
+    if copied_stock:
+        return
+
+    product_id = str(next(source.objects(product, ECSDI.idProducto), ""))
+    if not product_id:
+        uri = str(product)
+        if "/producto/" in uri:
+            product_id = uri.rsplit("/producto/", 1)[-1]
+    if not product_id:
+        return
+
+    catalog = load_persisted_catalog()
+    if len(catalog) == 0:
+        return
+    catalog_product = catalog_product_uri(product_id)
+    if (catalog_product, None, None) not in catalog:
+        catalog_product = next(catalog.subjects(ECSDI.idProducto, Literal(product_id)), None)
+    if catalog_product is None:
+        return
+    for stock in catalog.subjects(ECSDI.stockDeProducto, catalog_product):
+        _copy_subject(catalog, target, stock)
+        center = next(catalog.objects(stock, ECSDI.stockEnCentro), None)
+        if center is not None:
+            _copy_subject(catalog, target, center)
 
 
 def _build_order_graph(

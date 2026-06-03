@@ -134,6 +134,8 @@ class OrderResponseTests(unittest.TestCase):
         summary = extract_order_summary(shipping)
         self.assertEqual(summary["centro_id"], "CL-BCN")
         self.assertEqual(summary["ciudad_centro"], "Barcelona")
+        self.assertIn("CL-BCN", summary["centro_label"])
+        self.assertIn("Barcelona", summary["centro_label"])
 
 
 if __name__ == "__main__":

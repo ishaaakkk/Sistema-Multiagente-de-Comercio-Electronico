@@ -12,7 +12,7 @@ from uuid import uuid4
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
-from .catalog import decimal_literal, persist_lote
+from .catalog import decimal_literal, persist_lote, stamp_operating_center
 from .namespaces import DATA, ECSDI, bind_namespaces
 from .storage import DATA_DIR, save_graph_item, save_named_graph
 
@@ -231,6 +231,7 @@ def create_pending_lote(
     graph.add((lote, ECSDI.idLote, Literal(lote_id)))
     graph.add((lote, ECSDI.loteOrigenCentro, center))
     _copy_subject(order_graph, graph, center)
+    stamp_operating_center(graph, center, center_id, center_city)
     graph.add((lote, ECSDI.estadoLote, Literal(ESTADO_PENDIENTE_ENVIO)))
     graph.add((lote, ECSDI.prioridadLote, Literal(priority, datatype=XSD.integer)))
     graph.add((lote, ECSDI.ciudadCentroLogistico, Literal(center_city)))

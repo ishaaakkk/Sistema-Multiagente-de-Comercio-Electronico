@@ -12,7 +12,15 @@ from rdflib.namespace import RDF, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_aviso_cl_acceptance, build_shipping_confirmation, build_transport_request
-from utilities.catalog import center_uri, decimal_literal, decrement_catalog_stock
+from utilities.catalog import (
+    center_uri,
+    decimal_literal,
+    decrement_catalog_stock,
+    load_persisted_catalog,
+    product_ids_for_logistics,
+    stamp_operating_center,
+    catalog_center_profile,
+)
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -53,10 +61,12 @@ from utilities.transport_proto import (
 DEFAULT_AGENT_URI = AGENTS.CentroLogisticoBarcelona
 
 
-# Configuración por defecto: el centro logístico de Barcelona acepta todos los
-# productos internos. Para multi-CL se pasa --stock-products con la lista
-# concreta de identificadores de producto que cada centro maneja.
-DEFAULT_STOCK_ANY = ("*",)
+# Modos de --stock-products:
+#   * (defecto): todos los productos logísticos del catálogo (stock en cada CL).
+#   auto        : alias de * (compatibilidad).
+#   P-1,P-2,... : lista explícita (tests).
+STOCK_MODE_AUTO = "auto"
+STOCK_MODE_ALL = "*"
 
 # Timeout por transportista en la fase de CFP (Contract Net cap. 7.3.2).
 DEFAULT_TRANSPORT_TIMEOUT = float(os.environ.get("CL_TRANSPORT_TIMEOUT", "4"))
@@ -74,7 +84,7 @@ def create_app(
     directory_url: str | None = None,
     center_id: str = "CL-BCN",
     center_city: str = "Barcelona",
-    stock_products: tuple[str, ...] = DEFAULT_STOCK_ANY,
+    stock_products: str | tuple[str, ...] = STOCK_MODE_ALL,
     dist: int = 0,
     lot_dispatch_interval: float = DEFAULT_LOT_DISPATCH_INTERVAL,
     lot_debounce_seconds: float = DEFAULT_LOT_DEBOUNCE_SECONDS,
@@ -87,15 +97,13 @@ def create_app(
     Parámetros relevantes para la extensión avanzada #3 (multi-CL):
         center_id: identificador del centro (CL-BCN, CL-MAD, ...).
         center_city: ciudad servida por el centro.
-        stock_products: lista de IDs de producto que el centro puede servir;
-            ("*",) significa "todos los productos internos".
+        stock_products: "*" (todos los productos logísticos), "auto" o lista "P-1,P-2".
     """
 
     app = Flask(__name__)
     center = center_uri(center_id)
     stock_reservations = load_json("stock_reservations.json", {})
-    stock_set = {p.strip() for p in stock_products if p.strip()}
-    accepts_all = stock_set == {"*"} or not stock_set
+    stock_products_config = _parse_stock_products(stock_products)
     log_tag = f"logistico-{center_id}"
 
     @app.get("/")
@@ -104,13 +112,20 @@ def create_app(
 
     @app.get("/info")
     def info():
+        accepts_all, stock_set = _resolve_stock_scope(center_id, stock_products_config)
+        if accepts_all:
+            catalog = load_persisted_catalog()
+            offered = sorted(product_ids_for_logistics(catalog)) if len(catalog) else []
+        else:
+            offered = sorted(stock_set)
         pending = [describe_pending_lote(center_id, lote_id) for lote_id in list_pending_lote_ids(center_id)]
         return {
             "center_id": center_id,
             "center_uri": str(center),
             "center_city": center_city,
             "accepts_all": accepts_all,
-            "stock_products": sorted(stock_set) if not accepts_all else [],
+            "stock_products": offered,
+            "stock_products_mode": stock_products_config,
             "dist": dist,
             "lot_dispatch_interval": lot_dispatch_interval,
             "lot_debounce_seconds": lot_debounce_seconds,
@@ -196,6 +211,7 @@ def create_app(
             if pedido is None:
                 return reply(build_failure(agent_uri, message.sender, action, "Falta el pedido"))
 
+            accepts_all, stock_set = _resolve_stock_scope(center_id, stock_products_config)
             fulfillable_lines = _filter_lines_by_stock(
                 graph,
                 pedido,
@@ -574,6 +590,7 @@ def _build_lote_graph(
     pedido: URIRef,
     lines: list[URIRef],
     center: URIRef,
+    center_id: str,
     center_city: str,
 ) -> tuple[Graph, URIRef]:
     graph = Graph()
@@ -587,6 +604,7 @@ def _build_lote_graph(
     graph.add((lote, ECSDI.idLote, Literal(f"LOT-{uuid4().hex[:8].upper()}")))
     graph.add((lote, ECSDI.loteOrigenCentro, center))
     _copy_subject(order_graph, graph, center)
+    stamp_operating_center(graph, center, center_id, center_city)
     graph.add((lote, ECSDI.estadoLote, Literal("pendiente_transportista")))
     graph.add((lote, ECSDI.prioridadLote, Literal(priority, datatype=XSD.integer)))
     graph.add((lote, ECSDI.ciudadCentroLogistico, Literal(center_city)))
@@ -627,11 +645,22 @@ def _merge_graphs(target: Graph, source: Graph) -> None:
         target.add(triple)
 
 
-def _parse_stock_products(raw: str | None) -> tuple[str, ...]:
-    if not raw:
-        return DEFAULT_STOCK_ANY
-    items = [s.strip() for s in raw.split(",") if s.strip()]
-    return tuple(items) if items else DEFAULT_STOCK_ANY
+def _parse_stock_products(raw: str | None) -> str | tuple[str, ...]:
+    if raw is None:
+        return STOCK_MODE_ALL
+    value = raw.strip()
+    if not value or value.lower() in (STOCK_MODE_AUTO, STOCK_MODE_ALL):
+        return STOCK_MODE_ALL
+    items = [s.strip() for s in value.split(",") if s.strip()]
+    return tuple(items) if items else STOCK_MODE_ALL
+
+
+def _resolve_stock_scope(center_id: str, stock_products: str | tuple[str, ...]) -> tuple[bool, set[str]]:
+    """Devuelve (accepts_all, ids). Por defecto todos los productos logísticos del catálogo."""
+
+    if stock_products in (STOCK_MODE_ALL, STOCK_MODE_AUTO):
+        return True, set()
+    return False, {str(product_id) for product_id in stock_products}
 
 
 def main():
@@ -647,7 +676,7 @@ def main():
     parser.add_argument(
         "--stock-products",
         default=None,
-        help="Lista de IDs de producto separados por coma; '*' = todos los productos internos",
+        help="* (defecto)=todos los productos logísticos; auto=igual que *; o P-1,P-2,...",
     )
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument(
@@ -672,6 +701,16 @@ def main():
     center_city = args.center_city or os.environ.get("CL_CENTER_CITY") or "Barcelona"
     stock_products = _parse_stock_products(args.stock_products or os.environ.get("CL_STOCK_PRODUCTS"))
 
+    catalog = load_persisted_catalog()
+    if len(catalog) > 0:
+        catalog_city, catalog_name = catalog_center_profile(catalog, center_id)
+        if catalog_city and catalog_city != center_city:
+            log(
+                f"logistico-{center_id}-{args.port}",
+                f"Aviso: en ProductosDB {center_id} figura ciudad={catalog_city}; "
+                f"arrancaste con --center-city {center_city}. Usa --center-id acorde o alinea catalog.ttl.",
+            )
+
     service_id = agent_id(f"CENTRO_LOGISTICO_{center_id}", advertised_host, args.port)
     registered = register_service(
         args.dir,
@@ -686,7 +725,7 @@ def main():
             f"logistico-{center_id}-{args.port}",
             (
                 f"listening on {bind_host}:{args.port}, center={center_id} ({center_city}), "
-                f"stock={'*' if stock_products == DEFAULT_STOCK_ANY else stock_products}, "
+                f"stock={'*' if stock_products == STOCK_MODE_ALL else stock_products}, "
                 f"dir={args.dir or 'N/A'}, fallback_transport={fallback_transport or 'N/A'}"
             ),
         )

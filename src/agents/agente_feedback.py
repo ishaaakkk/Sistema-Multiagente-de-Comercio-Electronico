@@ -16,7 +16,11 @@ from utilities.builders import (
     build_recommendation_inform,
     build_valoracion_response,
 )
-from utilities.catalog import product_uri, update_product_average_rating
+from utilities.catalog import (
+    average_rating_from_opinions,
+    product_uri,
+    update_product_average_rating,
+)
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces
@@ -351,9 +355,13 @@ def _handle_registrar_valoracion(
         record["fecha_valoracion"] = datetime.now().isoformat(timespec="seconds")
         save_json("opinions.json", opinions_db)
         _persist_opinions_rdf(opinions_db)
-        new_average = _average_rating_for_product(opinions_db, product_id)
+        new_average = average_rating_from_opinions(opinions_db, product_id)
         if new_average is not None:
             update_product_average_rating(product_id, f"{new_average:.2f}")
+            log(
+                "feedback",
+                f"valoracionMedia actualizada: producto={product_id} media={new_average:.2f}",
+            )
 
     valoracion_graph = Graph()
     bind_namespaces(valoracion_graph)
@@ -868,17 +876,6 @@ def _find_pending(opinions_db: list[dict], pedido_id: str, product_id: str) -> d
         if record["pedido_id"] == pedido_id and record["product_id"] == product_id:
             return record
     return None
-
-
-def _average_rating_for_product(opinions_db: list[dict], product_id: str) -> float | None:
-    ratings = [
-        int(record["puntuacion"])
-        for record in opinions_db
-        if record.get("product_id") == product_id and record.get("puntuacion") is not None
-    ]
-    if not ratings:
-        return None
-    return sum(ratings) / len(ratings)
 
 
 def main():

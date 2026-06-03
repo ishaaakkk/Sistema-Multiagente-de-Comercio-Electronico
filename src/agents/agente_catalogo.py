@@ -10,11 +10,16 @@ from rdflib.namespace import RDF, XSD
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_busqueda_realizada_notification, build_search_response
 from utilities.catalog import (
+    build_stock_graph,
     decimal_literal,
     describe_product,
     extract_search_constraints,
     filter_products,
+    load_persisted_catalog,
+    list_center_ids,
     persist_catalog,
+    persist_stock_graph,
+    sync_stock_all_centers,
 )
 from utilities.comm import comm_url as _comm_url
 from utilities.http import graph_from_request, post_graph, rdf_response
@@ -50,10 +55,28 @@ def load_catalog_graph() -> Graph:
     return catalog
 
 
+def _bootstrap_unified_stock() -> None:
+    """Todos los productos logísticos con stock en cada centro (ProductosDB)."""
+
+    catalog = load_persisted_catalog()
+    if len(catalog) == 0:
+        return
+    stock_rows_before = sum(1 for _ in catalog.triples((None, ECSDI.stockEnCentro, None)))
+    sync_stock_all_centers(catalog)
+    stock_rows_after = sum(1 for _ in catalog.triples((None, ECSDI.stockEnCentro, None)))
+    if stock_rows_after == stock_rows_before:
+        return
+    persist_catalog(catalog)
+    for center_id in list_center_ids(catalog):
+        persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
+    log("catalogo", f"Stock unificado: {stock_rows_after} filas en {len(list_center_ids(catalog))} CL")
+
+
 def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
     app = Flask(__name__)
-    catalog = load_catalog_graph()
-    log("catalogo", f"ProductosDB lista ({len(catalog)} tripletas)")
+    initial_catalog = load_catalog_graph()
+    _bootstrap_unified_stock()
+    log("catalogo", f"ProductosDB lista ({len(initial_catalog)} tripletas)")
 
     # Historial de búsquedas local del Catálogo (útil para depurar).
     # Para persistencia del sistema de recomendación se usa el protocolo hacia AgenteFeedback,
@@ -87,13 +110,13 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
             # historial de búsquedas usado por la recomendación periódica.
             if (action, RDF.type, ECSDI.BuscarProductos) in graph:
                 return reply(
-                    _handle_search(catalog, search_history, agent_uri, message.sender, action, graph, feedback_url)
+                    _handle_search(search_history, agent_uri, message.sender, action, graph, feedback_url)
                 )
 
             # Capacidad AñadirProductoExt — Plan: ActualizarCatalogo
             # Msg entrante: DarAltaProductoExterno (VendedorExterno → AgenteCatalogo)
             if (action, RDF.type, ECSDI.DarAltaProductoExterno) in graph:
-                return reply(_handle_external_product_registration(catalog, agent_uri, message.sender, action, graph))
+                return reply(_handle_external_product_registration(agent_uri, message.sender, action, graph))
 
             return reply(build_not_understood(agent_uri, message.sender, "Accion no soportada por AgenteCatalogo"))
 
@@ -104,7 +127,6 @@ def create_app(agent_uri=DEFAULT_AGENT_URI, feedback_url: str | None = None):
 
 
 def _handle_search(
-    catalog: Graph,
     search_history: list[dict],
     agent_uri: URIRef,
     receiver: URIRef,
@@ -123,6 +145,7 @@ def _handle_search(
     (ACL.inform) al AgenteFeedback para que la búsqueda alimente el algoritmo
     de recomendación. Si el agente feedback no está disponible, se ignora.
     """
+    catalog = _load_live_catalog()
     constraints = extract_search_constraints(graph, action)
 
     products = filter_products(catalog, constraints)
@@ -153,14 +176,23 @@ def _handle_search(
     return build_search_response(agent_uri, receiver, action, products, catalog)
 
 
+def _load_live_catalog() -> Graph:
+    """ProductosDB en disco (recarga en cada petición para ver valoracionMedia actualizada)."""
+
+    catalog = load_persisted_catalog()
+    if len(catalog) > 0:
+        return catalog
+    return load_catalog_graph()
+
+
 def _handle_external_product_registration(
-    catalog: Graph,
     agent_uri: URIRef,
     sender: URIRef,
     action: URIRef,
     graph: Graph,
 ) -> Graph:
     """Plan: ActualizarCatalogo — integra productos externos anunciados."""
+    catalog = _load_live_catalog()
     products = list(graph.objects(action, ECSDI.accionSobreProducto))
     for product in graph.subjects(RDF.type, ECSDI.ProductoExterno):
         if product not in products:
@@ -195,8 +227,11 @@ def _handle_external_product_registration(
             catalog.add((product, ECSDI.productoOfrecidoPor, sender))
         _copy_subject(catalog, response_graph, product)
 
-    log("catalogo", f"Alta externa registrada: {len(products)} producto(s)")
+    sync_stock_all_centers(catalog)
     persist_catalog(catalog)
+    for center_id in list_center_ids(catalog):
+        persist_stock_graph(center_id, build_stock_graph(catalog, center_id))
+    log("catalogo", f"Alta externa registrada: {len(products)} producto(s)")
     return build_message(response_graph, response, ACL.inform, agent_uri, sender)
 
 
