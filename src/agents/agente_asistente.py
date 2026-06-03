@@ -1,6 +1,6 @@
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -1089,6 +1089,15 @@ IFACE_HTML = """<!DOCTYPE html>
       setStatus('La fecha de recepción es obligatoria para ese motivo', 'error');
       return;
     }
+    if (motivo === 'No satisface expectativas' && fecha_recepcion) {
+      const recepcion = new Date(fecha_recepcion + 'T12:00:00');
+      const limite = new Date();
+      limite.setDate(limite.getDate() - 15);
+      if (recepcion < limite) {
+        setStatus('Plazo de 15 días desde la recepción superado para este motivo', 'error');
+        return;
+      }
+    }
 
     setStatus('Solicitando devolución…', 'loading');
     box.style.display = 'none';
@@ -1688,6 +1697,26 @@ def create_app(
                 json.dumps({"error": "Para ese motivo debes indicar la fecha de recepción"}),
                 mimetype="application/json"
             )
+        if motivo == "No satisface expectativas" and fecha_recepcion:
+            try:
+                received = datetime.fromisoformat(f"{fecha_recepcion}T00:00:00")
+                if datetime.now() > received + timedelta(days=15):
+                    return app.response_class(
+                        json.dumps(
+                            {
+                                "error": (
+                                    "El plazo de 15 días desde la recepción ha expirado "
+                                    "para el motivo «No satisface expectativas»"
+                                )
+                            }
+                        ),
+                        mimetype="application/json",
+                    )
+            except ValueError:
+                return app.response_class(
+                    json.dumps({"error": "Fecha de recepción no válida"}),
+                    mimetype="application/json",
+                )
 
         motivo_final = motivo
         if detalle:
