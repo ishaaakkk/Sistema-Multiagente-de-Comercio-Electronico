@@ -81,31 +81,31 @@ case "$AGENT" in
     directorio)
         PORT="${PORT:-9000}"
         # El directorio no se registra a sí mismo, no necesita --dir.
-        exec "$PYTHON" -m agents.directory_service --port "$PORT" --open --hostaddr "$HOSTADDR"
+        exec "$PYTHON" -m agents.directorio --port "$PORT" --open --hostaddr "$HOSTADDR"
         ;;
     transportista_express)
         PORT="${PORT:-9003}"
-        exec "$PYTHON" -m agents.transportista_agent --port "$PORT" "${common_args[@]}" \
+        exec "$PYTHON" -m agents.transportista --port "$PORT" "${common_args[@]}" \
             --tarifa-base 4.50 --tarifa-kg 1.75 --tarifa-dia 0.80
         ;;
     transportista_eco)
         PORT="${PORT:-9011}"
-        exec "$PYTHON" -m agents.transportista_agent --port "$PORT" "${common_args[@]}" \
+        exec "$PYTHON" -m agents.transportista --port "$PORT" "${common_args[@]}" \
             --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
         ;;
     cl_bcn)
         PORT="${PORT:-9002}"
-        exec "$PYTHON" -m agents.centro_logistico_agent --port "$PORT" "${common_args[@]}" \
+        exec "$PYTHON" -m agents.agente_logistico --port "$PORT" "${common_args[@]}" \
             --center-id CL-BCN --center-city Barcelona --dist 130 \
         ;;
     cl_mad)
         PORT="${PORT:-9012}"
-        exec "$PYTHON" -m agents.centro_logistico_agent --port "$PORT" "${common_args[@]}" \
+        exec "$PYTHON" -m agents.agente_logistico --port "$PORT" "${common_args[@]}" \
             --center-id CL-MAD --center-city Madrid --dist 500
         ;;
     proveedor_pagos)
         PORT="${PORT:-9004}"
-        exec "$PYTHON" -m agents.proveedor_pagos_agent --port "$PORT" "${common_args[@]}"
+        exec "$PYTHON" -m agents.proveedor_pagos --port "$PORT" "${common_args[@]}"
         ;;
     financiero)
         PORT="${PORT:-9005}"
@@ -120,7 +120,7 @@ case "$AGENT" in
         ;;
     vendedor_externo)
         PORT="${PORT:-9008}"
-        exec "$PYTHON" -m agents.agente_VendedorExterno --port "$PORT" "${common_args[@]}" --announce-products
+        exec "$PYTHON" -m agents.vendedor_externo --port "$PORT" "${common_args[@]}" --announce-products
         ;;
     comerciante)
         PORT="${PORT:-9001}"
@@ -136,7 +136,7 @@ case "$AGENT" in
         ;;
     asistente)
         PORT="${PORT:-9010}"
-        exec "$PYTHON" -m agents.agente_asistente --port "$PORT" "${common_args[@]}"
+        exec "$PYTHON" -m agents.asistente --port "$PORT" "${common_args[@]}"
         ;;
     *)
         echo "Agente desconocido: $AGENT"

@@ -42,9 +42,9 @@ Además del flujo básico, la implementación cubre varios elementos avanzados:
 
 | Elemento | Implementación |
 | --- | --- |
-| Transportistas dinámicos | Varios `TransportistaAgent` registrados en el directorio; los centros logísticos solicitan ofertas y aceptan la mejor. |
-| Multi-centro logístico | Varios `CentroLogisticoAgent`, cada uno con stock y ciudad; cada centro filtra las líneas que puede servir. |
-| Agentes de pago | `AgenteFinanciero` y `ProveedorPagosAgent` separan la lógica financiera de la pasarela simulada. |
+| Transportistas dinámicos | Varios `Transportista` registrados en el directorio; los centros logísticos solicitan ofertas y aceptan la mejor. |
+| Multi-centro logístico | Varios `AgenteLogistico`, cada uno con stock y ciudad; cada centro filtra las líneas que puede servir. |
+| Componentes de pago | `AgenteFinanciero` y `ProveedorPagos` separan la lógica financiera de la pasarela simulada. |
 | Feedback y recomendación | `AgenteFeedback` registra compras, pide opiniones y ejecuta recomendaciones periódicas. |
 | Directorio FIPA | `DirectoryService` recibe `RegistrarAgente`, `BuscarAgente`, `BuscarTodosAgentes` y `EliminarAgente` mediante FIPA-ACL. |
 
@@ -144,12 +144,12 @@ Los roles del sistema se agrupan así:
 | --- | --- |
 | Búsqueda de productos | `agente_catalogo.py`, `utilities/catalog.py`, `build_search_message`. |
 | Pedido y compra | `agente_comerciante.py`, `build_order_message`. |
-| Envío y transporte | `centro_logistico_agent.py`, `transportista_agent.py`. |
-| Cobro/reembolso/pago externo | `agente_financiero.py`, `proveedor_pagos_agent.py`. |
-| Alta de productos externos | `agente_VendedorExterno.py`, `agente_catalogo.py`. |
-| Feedback y recomendaciones | `agente_feedback.py`, `agente_asistente.py`. |
+| Envío y transporte | `agente_logistico.py`, `transportista.py`. |
+| Cobro/reembolso/pago externo | `agente_financiero.py`, `proveedor_pagos.py`. |
+| Alta de productos externos | `vendedor_externo.py`, `agente_catalogo.py`. |
+| Feedback y recomendaciones | `agente_feedback.py`, `asistente.py`. |
 | Devoluciones | `agente_devolucion.py`. |
-| Directorio | `directory_service.py`, `utilities/runtime.py`. |
+| Directorio | `directorio.py`, `utilities/runtime.py`. |
 
 ## Capítulo 3. Diseño arquitectónico
 
@@ -188,15 +188,15 @@ semántica del sistema.
 | --- | --- | --- |
 | Agente Catalogo | BuscadorProductos, GestorProductosExternos | La búsqueda y el alta modifican el mismo catálogo. |
 | Agente Comerciante | GestorPedido, GestorEnvios | El pedido es el punto de coordinación de la compra. |
-| CentroLogisticoAgent | GestorCL, GestorTransportistas | Cada centro conoce su stock y negocia transporte. |
+| AgenteLogistico | GestorCL, GestorTransportistas | Cada centro conoce su stock y negocia transporte. |
 | Agente Financiero | GestorPagos | Agrupa cobros, reembolsos y pagos externos. |
 | Agente Feedback | Gestor Opiniones, Recomendador Productos | Las recomendaciones dependen de búsquedas, compras y opiniones. |
 | Agente Devolucion | Procesador Devolucion | Separa la lógica de devolución del flujo de compra. |
 | DirectoryService | Directorio/Matchmaker | Servicio transversal de infraestructura. |
 
 Además, la implementación convierte algunos actores externos del PD en agentes
-ejecutables (`TransportistaAgent`, `ProveedorPagosAgent`,
-`AgenteVendedorExterno` y `AgenteAsistente`) para poder demostrar la
+ejecutables (`Transportista`, `ProveedorPagos`,
+`VendedorExterno` y `AsistenteVirtual`) para poder demostrar la
 comunicación real entre procesos.
 
 ### 3.3. Agent Acquaintance
@@ -344,8 +344,8 @@ distintas.
 
 Implementación:
 
-- Centro logístico: `src/agents/centro_logistico_agent.py`.
-- Transportista: `src/agents/transportista_agent.py`.
+- Centro logístico: `src/agents/agente_logistico.py`.
+- Transportista: `src/agents/transportista.py`.
 - Mensajes: `AvisarCL`, `SolicitarPresupuestoTransporte`, `OfertaTransporte`,
   `DecisionContratoTransporte`, `ConfirmacionEnvio`.
 
@@ -368,7 +368,7 @@ con `SolicitarOperacionPago`. La respuesta estándar es una
 Implementación:
 
 - Financiero: `src/agents/agente_financiero.py`.
-- Proveedor externo: `src/agents/proveedor_pagos_agent.py`.
+- Proveedor externo: `src/agents/proveedor_pagos.py`.
 
 ### 4.5. Agente Feedback
 
@@ -419,15 +419,15 @@ Implementación:
 - Archivo: `src/agents/agente_devolucion.py`.
 - Persistencia: `devoluciones.json` y grafo `returns`.
 
-### 4.7. Agentes auxiliares
+### 4.7. Componentes auxiliares
 
 | Agente | Archivo | Función |
 | --- | --- | --- |
-| DirectoryService | `src/agents/directory_service.py` | Registro y descubrimiento FIPA. |
-| Agente Asistente | `src/agents/agente_asistente.py` | Interfaz web, búsqueda, compra, feedback y devoluciones. |
-| TransportistaAgent | `src/agents/transportista_agent.py` | Ofertas de transporte y recogida de devoluciones. |
-| Agente Vendedor Externo | `src/agents/agente_VendedorExterno.py` | Alta de productos externos y recepción de avisos de compra. |
-| ProveedorPagosAgent | `src/agents/proveedor_pagos_agent.py` | Simulación de pasarela de pago. |
+| DirectoryService | `src/agents/directorio.py` | Registro y descubrimiento FIPA. |
+| AsistenteVirtual | `src/agents/asistente.py` | Interfaz web, búsqueda, compra, feedback y devoluciones. |
+| Transportista | `src/agents/transportista.py` | Ofertas de transporte y recogida de devoluciones. |
+| VendedorExterno | `src/agents/vendedor_externo.py` | Alta de productos externos y recepción de avisos de compra. |
+| ProveedorPagos | `src/agents/proveedor_pagos.py` | Simulación de pasarela de pago. |
 
 ## Capítulo 5. Ontología
 
@@ -1018,7 +1018,7 @@ HOSTADDR=<ip-maquina> DIR_HOST=<ip-directorio> ./src/distributed.sh <agente> <pu
 | Agente Devolucion | 9009 |
 | Transportista Eco | 9011 |
 | CentroLogistico MAD | 9012 |
-| Agente Asistente | 9010 |
+| AsistenteVirtual | 9010 |
 
 ## Anexo C. Relación de documentación generada
 

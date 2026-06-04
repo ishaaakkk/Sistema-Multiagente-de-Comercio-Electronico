@@ -68,22 +68,22 @@ export SHIPPING_CONFIRMATION_TIMEOUT
 : "${ORDER_TIMEOUT:=$((SHIPPING_CONFIRMATION_TIMEOUT + 25))}"
 export ORDER_TIMEOUT
 
-start_agent "DirectoryService" "$PYTHON" -m agents.directory_service --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
+start_agent "DirectoryService" "$PYTHON" -m agents.directorio --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
 sleep 1
 # Dos transportistas con tarifas distintas — extensión avanzada #1: el
 # centro logístico negocia Contract Net en paralelo y elige la mejor oferta.
-start_agent "TransportistaExpress" "$PYTHON" -m agents.transportista_agent --port 9003 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 4.50 --tarifa-kg 1.75 --tarifa-dia 0.80
+start_agent "TransportistaExpress" "$PYTHON" -m agents.transportista --port 9003 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 4.50 --tarifa-kg 1.75 --tarifa-dia 0.80
 sleep 0.5
-start_agent "TransportistaEco" "$PYTHON" -m agents.transportista_agent --port 9011 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
+start_agent "TransportistaEco" "$PYTHON" -m agents.transportista --port 9011 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
 sleep 0.5
 # Dos centros logísticos — extensión #3: el comerciante contacta CLs en orden
 # por proximidad |dist_CL - dist_entrega| (fan-out secuencial greedy).
 # Cada CL ofrece todos los productos logísticos del catálogo (defecto --stock-products *).
-start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.centro_logistico_agent --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130
+start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.agente_logistico --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130
 sleep 0.5
-start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.centro_logistico_agent --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500
+start_agent "CentroLogisticoMAD" "$PYTHON" -m agents.agente_logistico --port 9012 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-MAD --center-city Madrid --dist 500
 sleep 0.5
-start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos_agent --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+start_agent "ProveedorPagos" "$PYTHON" -m agents.proveedor_pagos --port 9004 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 start_agent "AgenteFinanciero" "$PYTHON" -m agents.agente_financiero --port 9005 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --provider-url "http://${HOSTADDR}:9004"
 sleep 0.5
@@ -95,11 +95,11 @@ sleep 0.5
 start_agent "AgenteCatalogo" "$PYTHON" -m agents.agente_catalogo --port 9006 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
 # Tras el catálogo: anuncia P-CARGADOR-GAN (envío externo) vía DarAltaProductoExterno.
-start_agent "AgenteVendedorExterno" "$PYTHON" -m agents.agente_VendedorExterno --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --announce-products
+start_agent "VendedorExterno" "$PYTHON" -m agents.vendedor_externo --port 9008 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --announce-products
 sleep 0.5
 start_agent "AgenteDevolucion" "$PYTHON" -m agents.agente_devolucion --port 9009 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 sleep 0.5
-start_agent "AsistenteVirtual" "$PYTHON" -m agents.agente_asistente --port 9010 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
+start_agent "AsistenteVirtual" "$PYTHON" -m agents.asistente --port 9010 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR"
 
 echo
 echo "Agents are running."

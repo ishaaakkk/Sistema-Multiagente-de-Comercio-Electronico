@@ -53,7 +53,7 @@ $env:PYTHONPATH = "."
 
 Levantar el stack (mismo orden que `develop.sh`):
 
-1. `python -m agents.directory_service --port 9000 --open --hostaddr 127.0.0.1`
+1. `python -m agents.directorio --port 9000 --open --hostaddr 127.0.0.1`
 2. Transportista Express `9003`, Eco `9011` (con `--dir http://127.0.0.1:9000` y tarifas como en `develop.sh`)
 3. CL-BCN `9002`, CL-MAD `9012` (`--center-id` / `--center-city` / `--dist` como en `develop.sh`)
 4. Proveedor pagos `9004`, financiero `9005`, feedback `9007`, comerciante `9001` **con** `--dir http://127.0.0.1:9000`

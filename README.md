@@ -28,17 +28,22 @@ La implementacion de `src/` usa Flask para exponer endpoints HTTP y RDFLib
 para construir y procesar grafos RDF. Los mensajes de negocio se envian como
 grafos RDF con una envoltura FIPA-ACL minima.
 
-Agentes principales:
+Agentes del diseno PDT:
 
-- `agents.directory_service`: directorio de registro y descubrimiento de agentes.
 - `agents.agente_catalogo`: busqueda de productos en el catalogo RDF en memoria.
 - `agents.agente_comerciante`: agente comerciante; recibe pedidos, genera factura y coordina logistica, cobro, feedback y vendedores externos.
-- `agents.centro_logistico_agent`: selecciona un centro con stock suficiente, crea lotes de envio y solicita ofertas de transporte.
-- `agents.transportista_agent`: devuelve ofertas de transporte para lotes.
+- `agents.agente_logistico`: selecciona un centro con stock suficiente, crea lotes de envio y solicita ofertas de transporte.
 - `agents.agente_financiero`: simula el cobro del pedido.
-- `agents.proveedor_pagos_agent`: proveedor de pagos externo simplificado.
 - `agents.agente_feedback`: registra compras pendientes de valoracion y opiniones de productos.
 - `agents.agente_devolucion`: valida devoluciones de pedidos completados, solicita la recogida y despues solicita el reembolso al agente financiero.
+
+Componentes auxiliares:
+
+- `agents.directorio`: directorio de registro y descubrimiento de agentes.
+- `agents.transportista`: servicio de transporte que devuelve ofertas para lotes.
+- `agents.proveedor_pagos`: proveedor de pagos externo simplificado.
+- `agents.vendedor_externo`: vendedor externo que anuncia productos y recibe avisos de envio.
+- `agents.asistente`: interfaz web/API del asistente virtual.
 
 Flujo principal de la demo:
 
@@ -81,21 +86,21 @@ Terminal 1 - Directorio:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.directory_service --port 9000
+PYTHONPATH=src python -m agents.directorio --port 9000
 ```
 
 Terminal 2 - Transportista:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000
+PYTHONPATH=src python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000
 ```
 
 Terminal 3 - Centro logistico:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000
+PYTHONPATH=src python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000
 ```
 
 Terminal 4 - Agente financiero:
@@ -130,7 +135,7 @@ Terminal 8 - Agente vendedor externo:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --announce-products
+PYTHONPATH=src python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000 --announce-products
 ```
 
 Terminal 9 - Agente devolucion:
@@ -200,14 +205,14 @@ pip install -r src\requirements.txt
 Arranque de agentes:
 
 ```powershell
-$env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
-$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.directorio --port 9000
+$env:PYTHONPATH="src"; python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000
-$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000
+$env:PYTHONPATH="src"; python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000
 $env:PYTHONPATH="src"; python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000
 ```
 
@@ -225,13 +230,13 @@ $env:PYTHONPATH="src"; python -m devolucion_demo --catalog-url http://127.0.0.1:
 | --- | --- |
 | 9000 | `DirectoryService` |
 | 9001 | `AgenteComerciante` |
-| 9002 | `CentroLogisticoAgent` |
-| 9003 | `TransportistaAgent` |
-| 9004 | `ProveedorPagosAgent` |
+| 9002 | `AgenteLogistico` |
+| 9003 | `Transportista` |
+| 9004 | `ProveedorPagos` |
 | 9005 | `AgenteFinanciero` |
 | 9006 | `AgenteCatalogo` |
 | 9007 | `AgenteFeedback` |
-| 9008 | `AgenteVendedorExterno` |
+| 9008 | `VendedorExterno` |
 | 9009 | `AgenteDevolucion` |
 
 ## Script auxiliar

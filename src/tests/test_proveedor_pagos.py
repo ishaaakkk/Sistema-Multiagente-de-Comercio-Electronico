@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph
 from rdflib.namespace import RDF
 
-from agents.proveedor_pagos_agent import create_app
+from agents.proveedor_pagos import create_app
 from utilities.acl import get_message
 from utilities.builders import build_provider_payment_request
 from utilities.namespaces import ACL, AGENTS, DATA, ECSDI, bind_namespaces

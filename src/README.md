@@ -15,17 +15,22 @@ Alcance implementado:
 - Solicitud proactiva de feedback al asistente y recomendaciones basicas a partir de valoraciones.
 - Mensajes RDF con una envoltura FIPA-ACL minima y contenido definido con la ontologia del repositorio.
 
-Agentes:
+Agentes del diseno PDT:
 
-- `DirectoryService`: registro y descubrimiento de agentes para poder desplegarlos en procesos o maquinas distintas.
-- `AgenteComerciante`: atiende `RealizarPedido`, genera factura, coordina logistica, cobro, feedback y vendedores externos.
-- `CentroLogisticoAgent`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
-- `TransportistaAgent`: responde a `DemanarOfertaTransport` con una `OfertaTransport`.
-- `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
 - `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
+- `AgenteComerciante`: atiende `RealizarPedido`, genera factura, coordina logistica, cobro, feedback y vendedores externos.
+- `AgenteLogistico`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
+- `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
 - `AgenteFeedback`: registra compras completadas y valoraciones.
-- `AgenteVendedorExterno`: anuncia productos externos al catalogo y recibe avisos de envio de los productos que gestiona.
 - `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados, simula recogida por mensajeria interna y solicita reembolso al financiero.
+
+Componentes auxiliares:
+
+- `DirectoryService`: registro y descubrimiento para poder desplegar componentes en procesos o maquinas distintas.
+- `Transportista`: responde a `DemanarOfertaTransport` con una `OfertaTransport`.
+- `ProveedorPagos`: pasarela externa simulada para cobros, reembolsos y pagos.
+- `VendedorExterno`: anuncia productos externos al catalogo y recibe avisos de envio de los productos que gestiona.
+- `AsistenteVirtual`: cliente/interfaz que actua como intermediario del usuario.
 - `assistant_demo.py`: cliente de prueba que actua como `AsistenteVirtual`.
 - `devolucion_demo.py`: cliente de prueba que compra un producto y solicita su devolucion.
 
@@ -44,11 +49,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r src/requirements.txt
 
-PYTHONPATH=src python -m agents.transportista_agent --port 9003
-PYTHONPATH=src python -m agents.centro_logistico_agent --port 9002 --transport-url http://127.0.0.1:9003/comm
+PYTHONPATH=src python -m agents.transportista --port 9003
+PYTHONPATH=src python -m agents.agente_logistico --port 9002 --transport-url http://127.0.0.1:9003/comm
 PYTHONPATH=src python -m agents.agente_financiero --port 9005
 PYTHONPATH=src python -m agents.agente_feedback --port 9007
-PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008
+PYTHONPATH=src python -m agents.vendedor_externo --port 9008
 PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --logistics-url http://127.0.0.1:9002/comm --financiero-url http://127.0.0.1:9005/comm --feedback-url http://127.0.0.1:9007/comm --vendedor-externo-url http://127.0.0.1:9008/comm
 PYTHONPATH=src python -m agents.agente_catalogo --port 9006
 PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --shop-url http://127.0.0.1:9001/comm --financiero-url http://127.0.0.1:9005/comm
@@ -59,12 +64,12 @@ PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/com
 Con servicio de directorio:
 
 ```bash
-PYTHONPATH=src python -m agents.directory_service --port 9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.directorio --port 9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
+PYTHONPATH=src python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
 PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
@@ -87,23 +92,23 @@ Para una demostracion distribuida, cada agente puede arrancarse en una maquina d
 Update, en windows:
 .\.venv\Scripts\Activate.ps1
 
-Agentes:
-$env:PYTHONPATH="src"; python -m agents.directory_service --port 9000
-$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9003 --dir http://127.0.0.1:9000 --tarifa-base 2.00 --tarifa-kg 2.50 --tarifa-dia 0.20 --verbose
-$env:PYTHONPATH="src"; python -m agents.transportista_agent --port 9011 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
-$env:PYTHONPATH="src"; python -m agents.proveedor_pagos_agent --port 9004 --dir http://127.0.0.1:9000 --verbose
+Componentes:
+$env:PYTHONPATH="src"; python -m agents.directorio --port 9000
+$env:PYTHONPATH="src"; python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000 --tarifa-base 2.00 --tarifa-kg 2.50 --tarifa-dia 0.20 --verbose
+$env:PYTHONPATH="src"; python -m agents.transportista --port 9011 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
+$env:PYTHONPATH="src"; python -m agents.proveedor_pagos --port 9004 --dir http://127.0.0.1:9000 --verbose
 
 !!!! 
 $env:PYTHONPATH = "." 
-python agents\AgentTransportista.py --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
+python -m agents.transportista_externo --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
 !!!
 
-$env:PYTHONPATH="src"; python -m agents.centro_logistico_agent --port 9002 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_VendedorExterno --port 9008 --dir http://127.0.0.1:9000 --verbose
+$env:PYTHONPATH="src"; python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000 --verbose
 $env:PYTHONPATH="src"; python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --verbose
 
 Demo:
@@ -111,4 +116,4 @@ $env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9
 $env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
 $env:PYTHONPATH="src"; python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
 
-$env:PYTHONPATH="src"; python -m agents.agente_asistente --port 9010
+$env:PYTHONPATH="src"; python -m agents.asistente --port 9010

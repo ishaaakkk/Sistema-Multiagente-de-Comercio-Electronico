@@ -10,7 +10,7 @@ from rdflib import Literal
 from rdflib.namespace import RDF
 
 from agents.agente_catalogo import _handle_external_product_registration
-from agents.centro_logistico_agent import _resolve_stock_scope, STOCK_MODE_ALL
+from agents.agente_logistico import _resolve_stock_scope, STOCK_MODE_ALL
 from tests.fixtures.catalog_fixtures import build_catalog_graph
 from utilities.builders import build_external_product_registration
 from utilities.catalog import (

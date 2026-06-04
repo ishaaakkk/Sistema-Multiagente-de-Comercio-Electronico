@@ -1,4 +1,4 @@
-"""Tests del Agente Asistente."""
+"""Tests del AsistenteVirtual."""
 
 import json
 import sys
@@ -11,7 +11,7 @@ from rdflib.namespace import RDF, XSD
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agents.agente_asistente import _acl_failure_payload, create_app
+from agents.asistente import _acl_failure_payload, create_app
 from utilities.acl import ACL, build_failure, get_message
 from utilities.namespaces import AGENTS, ECSDI, bind_namespaces
 
@@ -67,7 +67,7 @@ class AsistenteSearchApiTests(unittest.TestCase):
         return graph
 
     def test_search_without_constraints_returns_products(self):
-        with patch("agents.agente_asistente.post_graph", return_value=self._catalog_search_response()):
+        with patch("agents.asistente.post_graph", return_value=self._catalog_search_response()):
             response = self.client.get("/search")
 
         self.assertEqual(response.status_code, 200)
@@ -96,7 +96,7 @@ class AsistenteSearchApiTests(unittest.TestCase):
             captured_constraints.update(parsed)
             return self._catalog_search_response()
 
-        with patch("agents.agente_asistente.post_graph", side_effect=fake_post_graph):
+        with patch("agents.asistente.post_graph", side_effect=fake_post_graph):
             response = self.client.get(
                 "/search?name=iphone&brand=apple&min_price=100&max_price=1200&min_rating=4.1"
             )

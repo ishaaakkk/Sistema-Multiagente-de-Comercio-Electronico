@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph, Literal
 from rdflib.namespace import RDF
 
-from agents.directory_service import _handle_search
+from agents.directorio import _handle_search
 from utilities.acl import get_message
 from utilities.namespaces import ACL, AGENTS, DATA, DSO, ECSDI, bind_namespaces
 

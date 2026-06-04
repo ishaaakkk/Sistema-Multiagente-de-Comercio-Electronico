@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdflib import Graph, Literal
 from rdflib.namespace import RDF, XSD
 
-from agents.centro_logistico_agent import _filter_lines_by_stock
+from agents.agente_logistico import _filter_lines_by_stock
 from utilities.catalog import center_uri, product_uri, stock_uri
 from utilities.namespaces import DATA, ECSDI, bind_namespaces
 
