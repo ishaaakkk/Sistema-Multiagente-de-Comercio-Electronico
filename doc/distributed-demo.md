@@ -34,16 +34,23 @@ Cada máquina lanza el agente que le corresponde:
 | Centro logístico MAD (10.0.0.12) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.12 ./src/distributed.sh cl_mad 9012` |
 | Transportista Express (10.0.0.13) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.13 ./src/distributed.sh transportista_express 9003` |
 | Transportista Eco (10.0.0.14) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.14 ./src/distributed.sh transportista_eco 9011` |
+| Transportista externo (10.0.0.20, opcional) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.20 ./src/distributed.sh transportista_externo 9014` |
 | Comerciante (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./src/distributed.sh comerciante 9001` |
 | Catálogo (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./src/distributed.sh catalogo 9006` |
 | Feedback (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./src/distributed.sh feedback 9007` |
-| Financiero (10.0.0.16) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.16 ./src/distributed.sh financiero 9005` |
 | Proveedor de pagos (10.0.0.16) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.16 ./src/distributed.sh proveedor_pagos 9004` |
-| Vendedor externo (10.0.0.17) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.17 ./src/distributed.sh vendedor_externo 9008` |
-| Devolución (10.0.0.18) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.18 ./src/distributed.sh devolucion 9009` |
+| Financiero (10.0.0.17) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.17 PROVEEDOR_HOSTADDR=10.0.0.16 ./src/distributed.sh financiero 9005` |
+| Vendedor externo (10.0.0.18) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.18 ./src/distributed.sh vendedor_externo 9008` |
+| Devolución (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./src/distributed.sh devolucion 9009` |
 | Asistente / UI (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./src/distributed.sh asistente 9010` |
 
 Después se accede al cliente en `http://10.0.0.19:9010/iface`.
+
+`distributed.sh` exporta las mismas variables de lote y timeout que
+`develop.sh` (`LOT_DEBOUNCE_SECONDS=30`, `ORDER_TIMEOUT`, etc.) y fija
+`PYTHONPATH=src` automáticamente. Si financiero y proveedor comparten
+máquina, basta `HOSTADDR`; si no, use `PROVEEDOR_HOSTADDR` como en la
+fila del financiero.
 
 ## 3. Despliegue con contenedores
 
