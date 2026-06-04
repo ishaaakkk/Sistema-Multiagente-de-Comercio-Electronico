@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument("--priority", type=int, default=1)
     parser.add_argument("--delivery-dist", type=int, default=130)
     parser.add_argument("--payment-method", default="tarjeta", choices=["tarjeta", "paypal", "transferencia"])
-    parser.add_argument("--payment-card", default="")
+    parser.add_argument("--payment-card", default="4111111111111111", help="PAN para cobro con tarjeta (modo demo).")
     parser.add_argument("--rate", type=int, default=None, help="Puntuacion 1..5 para valorar el primer producto comprado.")
     parser.add_argument("--comment", default="Valoracion enviada desde assistant_demo.")
     parser.add_argument("--feedback-wait", type=float, default=1.0)
@@ -194,25 +194,35 @@ def _print_products(products: list[dict]) -> None:
 
 def _print_shipping_summary(summary: dict) -> None:
     envios = summary.get("envios_internos") or []
+    externos = summary.get("envios_externos") or []
+    if not externos and summary.get("envio_externo_detalle"):
+        externos = [summary["envio_externo_detalle"]]
+
     if envios:
-        print("Envio interno:")
+        print("Ticket envio tienda / logistica:")
         for idx, env in enumerate(envios, start=1):
             cl = env.get("centro_label") or f"{env.get('centro_id', '—')} · {env.get('ciudad_centro', '')}".strip(" ·")
             print(f"  {idx}. Centro: {cl} · Lote: {env.get('lote_id', '—')}")
             print(f"     Transportista: {env.get('transportista', '—')}")
             print(f"     Fecha estimada: {env.get('fecha_entrega', '—')}")
             print(f"     Coste envio:    {env.get('coste_envio', '—')} EUR")
-        return
+        logistica = summary.get("items_logistica") or []
+        if logistica:
+            print(f"     Productos: {', '.join(i['product_id'] for i in logistica)}")
 
-    det = summary.get("envio_externo_detalle")
-    if det:
-        print(f"Envio externo: {det.get('mensaje', '')} ({det.get('vendedor', '')})")
-        return
+    for idx, det in enumerate(externos, start=1):
+        print(f"Ticket envio vendedor externo ({idx}):")
+        print(f"  Vendedor: {det.get('vendedor', '—')}")
+        print(f"  {det.get('mensaje', '')}")
+        prods = det.get("productos") or [i["product_id"] for i in summary.get("items_envio_vendedor", [])]
+        if prods:
+            print(f"  Productos: {', '.join(prods)}")
 
-    if summary.get("estado") == "aceptado_sin_pago":
-        print("Envio: pendiente de confirmacion logistica")
-    else:
-        print("Envio: no disponible en la respuesta")
+    if not envios and not externos:
+        if summary.get("estado") == "aceptado_sin_pago":
+            print("Envio: pendiente de confirmacion logistica")
+        else:
+            print("Envio: no disponible en la respuesta")
 
 
 def _send_rating(args, pedido_id: str, product_id: str) -> None:

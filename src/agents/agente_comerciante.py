@@ -832,6 +832,7 @@ def _gestionar_productos_externos(
         order_graph.add((envio_ext, RDF.type, ECSDI.EnvioExterno))
         order_graph.add((envio_ext, ECSDI.envioDePedido, pedido))
         order_graph.add((envio_ext, ECSDI.envioExternoGestionadoPor, vendedor))
+        order_graph.add((envio_ext, RDFS.comment, Literal(f"producto={product_id}")))
         order_graph.add((pedido, ECSDI.pedidoTieneEnvio, envio_ext))
         log("comerciante", f"Aviso envio externo enviado: producto={product_id} vendedor={vendedor}")
 

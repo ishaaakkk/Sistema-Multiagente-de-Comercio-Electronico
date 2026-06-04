@@ -2,6 +2,18 @@
 @prefix ecsdi: <http://www.semanticweb.org/ecsdi/comercio_electronico/> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+<http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-CARGADOR-GAN> a ecsdi:Producto,
+        ecsdi:ProductoExterno ;
+    ecsdi:descripcionProducto "Cargador USB-C de 65W anunciado por vendedor externo" ;
+    ecsdi:gestionEnvioExterno true ;
+    ecsdi:idProducto "P-CARGADOR-GAN" ;
+    ecsdi:marcaProducto "Voltix" ;
+    ecsdi:nombreProducto "Cargador GaN 65W" ;
+    ecsdi:pesoProducto 0.18 ;
+    ecsdi:precioProducto 29.90 ;
+    ecsdi:productoOfrecidoPor agents:agente_vendedor_externo-127-0-0-1-9008 ;
+    ecsdi:valoracionMedia 4.4 .
+
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-EXT> a ecsdi:Producto,
         ecsdi:ProductoExterno ;
     ecsdi:gestionEnvioExterno true ;
@@ -56,7 +68,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-EBOOK-AURORA/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 18 ;
+    ecsdi:cantidadDisponible 14 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-EBOOK-AURORA> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
@@ -66,7 +78,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 25 ;
+    ecsdi:cantidadDisponible 18 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
@@ -101,7 +113,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-MI-TIENDA/CL-MAD> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 14 ;
+    ecsdi:cantidadDisponible 15 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-MI-TIENDA> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
 
@@ -165,7 +177,7 @@ agents:VEND-TECHWORLD a ecsdi:VendedorExterno ;
     ecsdi:nombreProducto "iPhone 19" ;
     ecsdi:pesoProducto 0.45 ;
     ecsdi:precioProducto 1199.00 ;
-    ecsdi:valoracionMedia 4.75 .
+    ecsdi:valoracionMedia 4.33 .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-LIBRO-RUST> a ecsdi:Producto,
         ecsdi:ProductoInterno ;

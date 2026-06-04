@@ -15,7 +15,12 @@ from utilities.acl import build_message
 from utilities.namespaces import ACL
 from utilities.builders import build_order_message, build_shipping_confirmation
 from utilities.namespaces import AGENTS, DATA, ECSDI, bind_namespaces
-from utilities.order_response import extract_order_summary, pick_estado_pedido, resolve_pedido
+from utilities.order_response import (
+    extract_envios_externos,
+    extract_order_summary,
+    pick_estado_pedido,
+    resolve_pedido,
+)
 
 
 class OrderResponseTests(unittest.TestCase):
@@ -136,6 +141,74 @@ class OrderResponseTests(unittest.TestCase):
         self.assertEqual(summary["ciudad_centro"], "Barcelona")
         self.assertIn("CL-BCN", summary["centro_label"])
         self.assertIn("Barcelona", summary["centro_label"])
+
+    def test_mixed_internal_and_vendor_external_tickets(self):
+        catalog_graph = build_catalog_graph()
+        request = build_order_message(
+            sender=AGENTS.AsistenteVirtual,
+            receiver=AGENTS.AgenteComerciante,
+            product_quantities={"P-IPHONE19": 1, "P-SMARTWATCH-X": 1},
+            product_prices={"P-IPHONE19": Decimal("1199.00"), "P-SMARTWATCH-X": Decimal("299.00")},
+            city="Barcelona",
+            street="Carrer Mallorca 401",
+            postal_code="08013",
+            country="Espana",
+            priority=1,
+            catalog_graph=catalog_graph,
+        )
+        action = next(request.subjects(RDF.type, ECSDI.RealizarPedido))
+        pedido = next(request.objects(action, ECSDI.accionSobrePedido))
+        center = next(catalog_graph.subjects(ECSDI.idCentroLogistico, Literal("CL-BCN")))
+
+        order_graph = Graph()
+        bind_namespaces(order_graph)
+        for triple in request:
+            order_graph.add(triple)
+
+        lote = DATA["lote/MIXED"]
+        offer_graph = Graph()
+        bind_namespaces(offer_graph)
+        offer_graph.add((lote, RDF.type, ECSDI.LoteEnvio))
+        offer_graph.add((lote, ECSDI.idLote, Literal("LOT-MIXED")))
+        offer_graph.add((lote, ECSDI.loteOrigenCentro, center))
+        oferta = DATA["oferta/MIXED"]
+        offer_graph.add((oferta, RDF.type, ECSDI.OfertaTransport))
+        offer_graph.add((oferta, ECSDI.ofertaParaLote, lote))
+        offer_graph.add((oferta, ECSDI.preuTransport, Literal("9.00")))
+
+        shipping = build_shipping_confirmation(
+            AGENTS.CentroLogisticoBCN,
+            AGENTS.AgenteComerciante,
+            action,
+            pedido,
+            lote,
+            offer_graph,
+            oferta,
+            AGENTS.TransportistaEco,
+        )
+        for triple in shipping:
+            order_graph.add(triple)
+        confirmacion = next(shipping.subjects(RDF.type, ECSDI.ConfirmacionEnvio))
+        order_graph.add((pedido, ECSDI.pedidoTieneConfirmacion, confirmacion))
+
+        envio_ext = DATA["envio/externo/MIXED"]
+        order_graph.add((envio_ext, RDF.type, ECSDI.EnvioExterno))
+        order_graph.add((envio_ext, ECSDI.envioDePedido, pedido))
+        order_graph.add((envio_ext, ECSDI.envioExternoGestionadoPor, AGENTS.AgenteVendedorExterno))
+        from rdflib.namespace import RDFS
+
+        order_graph.add((envio_ext, RDFS.comment, Literal("producto=P-SMARTWATCH-X")))
+        order_graph.add((pedido, ECSDI.pedidoTieneEnvio, envio_ext))
+
+        summary = extract_order_summary(order_graph)
+        self.assertTrue(summary["envio_interno"])
+        self.assertTrue(summary["envio_externo"])
+        self.assertEqual(len(summary["envios_internos"]), 1)
+        self.assertEqual(len(summary["envios_externos"]), 1)
+        self.assertEqual(summary["envios_externos"][0]["productos"], ["P-SMARTWATCH-X"])
+        self.assertEqual(summary["items_envio_vendedor"][0]["product_id"], "P-SMARTWATCH-X")
+        self.assertEqual(summary["items_logistica"][0]["product_id"], "P-IPHONE19")
+        self.assertEqual(len(extract_envios_externos(order_graph, pedido)), 1)
 
 
 if __name__ == "__main__":

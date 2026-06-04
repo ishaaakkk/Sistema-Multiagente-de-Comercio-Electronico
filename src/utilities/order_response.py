@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from rdflib import Graph, URIRef
-from rdflib.namespace import RDF
+from rdflib import Graph, Literal, URIRef
+from rdflib.namespace import RDF, RDFS
 
 from .acl import get_message
 from .namespaces import ECSDI
@@ -175,16 +175,91 @@ def extract_envios_internos(graph: Graph, pedido: URIRef) -> list[dict]:
     return envios
 
 
-def extract_envio_externo(graph: Graph, pedido: URIRef) -> dict | None:
-    envio = next(graph.objects(pedido, ECSDI.pedidoTieneEnvio), None)
-    if envio is None or (envio, RDF.type, ECSDI.EnvioExterno) not in graph:
-        return None
+def _product_ids_vendor_shipping(graph: Graph, pedido: URIRef) -> list[str]:
+    """Productos externos cuyo envío gestiona el vendedor (gestionEnvioExterno=true)."""
+
+    ids: list[str] = []
+    for line in graph.objects(pedido, ECSDI.pedidoTieneLinea):
+        product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
+        if product is None or (product, RDF.type, ECSDI.ProductoExterno) not in graph:
+            continue
+        gestion = next(graph.objects(product, ECSDI.gestionEnvioExterno), Literal(False))
+        if str(gestion).lower() not in ("true", "1"):
+            continue
+        product_id = str(next(graph.objects(product, ECSDI.idProducto), ""))
+        if product_id and product_id not in ids:
+            ids.append(product_id)
+    return ids
+
+
+def _product_ids_from_envio_comment(graph: Graph, envio: URIRef) -> list[str]:
+    comment = str(next(graph.objects(envio, RDFS.comment), ""))
+    marker = "producto="
+    if marker not in comment:
+        return []
+    raw = comment.split(marker, 1)[1].strip()
+    product_id = raw.split()[0].strip(" ,;")
+    return [product_id] if product_id else []
+
+
+def _envio_externo_record(
+    graph: Graph,
+    envio: URIRef,
+    fallback_productos: list[str] | None = None,
+) -> dict:
     vendedor = next(graph.objects(envio, ECSDI.envioExternoGestionadoPor), None)
+    productos = _product_ids_from_envio_comment(graph, envio)
+    if not productos and fallback_productos:
+        productos = list(fallback_productos)
     return {
         "tipo": "externo",
         "vendedor": _uri_tail(vendedor),
         "mensaje": "Gestionado directamente por el vendedor externo",
+        "productos": productos,
     }
+
+
+def extract_envios_externos(graph: Graph, pedido: URIRef) -> list[dict]:
+    """Todos los EnvioExterno del pedido (un ticket por envío vendedor)."""
+
+    vendor_products = _product_ids_vendor_shipping(graph, pedido)
+    seen: set[str] = set()
+    envio_nodes: list[URIRef] = []
+
+    for envio in graph.objects(pedido, ECSDI.pedidoTieneEnvio):
+        key = str(envio)
+        if key in seen or (envio, RDF.type, ECSDI.EnvioExterno) not in graph:
+            continue
+        seen.add(key)
+        envio_nodes.append(envio)
+
+    for envio in graph.subjects(RDF.type, ECSDI.EnvioExterno):
+        key = str(envio)
+        if key in seen:
+            continue
+        if (envio, ECSDI.envioDePedido, pedido) not in graph:
+            continue
+        seen.add(key)
+        envio_nodes.append(envio)
+
+    fallback = vendor_products if len(envio_nodes) <= 1 else None
+    envios = [_envio_externo_record(graph, envio, fallback) for envio in envio_nodes]
+
+    if not envios and vendor_products:
+        envios.append(
+            {
+                "tipo": "externo",
+                "vendedor": "",
+                "mensaje": "Gestionado directamente por el vendedor externo",
+                "productos": vendor_products,
+            }
+        )
+    return envios
+
+
+def extract_envio_externo(graph: Graph, pedido: URIRef) -> dict | None:
+    envios = extract_envios_externos(graph, pedido)
+    return envios[0] if envios else None
 
 
 def extract_order_summary(graph: Graph) -> dict:
@@ -198,7 +273,9 @@ def extract_order_summary(graph: Graph) -> dict:
     pedido_id = str(next(graph.objects(pedido, ECSDI.idPedido), ""))
     estado = pick_estado_pedido(graph, pedido)
     envios_internos = extract_envios_internos(graph, pedido)
-    envio_externo = extract_envio_externo(graph, pedido)
+    envios_externos = extract_envios_externos(graph, pedido)
+    envio_externo = envios_externos[0] if envios_externos else None
+    vendor_product_ids = _product_ids_vendor_shipping(graph, pedido)
 
     result: dict = {
         "pedido_id": pedido_id,
@@ -207,10 +284,14 @@ def extract_order_summary(graph: Graph) -> dict:
         "factura_id": str(next(graph.objects(factura, ECSDI.idFactura), "")) if factura else "",
         "importe": str(next(graph.objects(factura, ECSDI.importeFactura), "0")) if factura else "0",
         "envios_internos": envios_internos,
+        "envios_externos": envios_externos,
         "envio_interno": bool(envios_internos),
-        "envio_externo": envio_externo is not None,
+        "envio_externo": bool(envios_externos),
         "envio_externo_detalle": envio_externo,
+        "productos_envio_vendedor": vendor_product_ids,
         "items": [],
+        "items_logistica": [],
+        "items_envio_vendedor": [],
     }
 
     if envios_internos:
@@ -230,13 +311,20 @@ def extract_order_summary(graph: Graph) -> dict:
     elif envio_externo:
         result["transportista"] = envio_externo.get("vendedor", "")
 
+    vendor_set = set(vendor_product_ids)
     for line in graph.objects(pedido, ECSDI.pedidoTieneLinea):
         product = next(graph.objects(line, ECSDI.lineaDeProducto), None)
         if product is None:
             continue
         product_id = str(next(graph.objects(product, ECSDI.idProducto), ""))
         qty = int(next(graph.objects(line, ECSDI.cantidad), 1))
-        if product_id:
-            result["items"].append({"product_id": product_id, "quantity": qty})
+        if not product_id:
+            continue
+        item = {"product_id": product_id, "quantity": qty}
+        result["items"].append(item)
+        if product_id in vendor_set:
+            result["items_envio_vendedor"].append(item)
+        else:
+            result["items_logistica"].append(item)
 
     return result

@@ -126,9 +126,23 @@ def _handle_devolucion(
             reason="El producto no pertenece al pedido indicado",
         )
 
-    delivery_date = _extract_delivery_date(order_graph) or _extract_datetime(order_graph, pedido, ECSDI.fechaPedido)
-    fallback_reception = _extract_reception_hint(motivo)
-    if not _return_allowed(motivo, delivery_date or fallback_reception):
+    pedido_id = _pedido_id(order_graph, pedido)
+    product_id = _product_id(order_graph, product)
+    if _return_already_accepted(devoluciones_db, pedido_id, product_id):
+        return _build_resolution(
+            agent_uri,
+            receiver,
+            action,
+            devolucion,
+            pedido,
+            product,
+            motivo,
+            accepted=False,
+            reason="Ya existe una devolucion aceptada para este producto en el pedido",
+        )
+
+    reception_date = _reception_date_for_policy(motivo, order_graph, pedido)
+    if not _return_allowed(motivo, reception_date):
         return _build_resolution(
             agent_uri,
             receiver,
@@ -421,19 +435,48 @@ def _extract_refund_payment_data(order_graph: Graph, pedido: URIRef) -> tuple[st
     return "transferencia", None
 
 
-def _return_allowed(motivo: str, delivery_date: datetime | None) -> bool:
+def _return_already_accepted(devoluciones_db: list[dict], pedido_id: str, product_id: str) -> bool:
+    """Un producto de un pedido solo puede tener una devolucion aceptada."""
+
+    if not pedido_id or not product_id:
+        return False
+    return any(
+        item.get("pedido_id") == pedido_id
+        and item.get("product_id") == product_id
+        and item.get("aceptada") is True
+        for item in devoluciones_db
+    )
+
+
+def _motivo_expectations(motivo: str) -> bool:
+    normalized = motivo.casefold()
+    expectation_reasons = ("no satisface", "expectativa", "expectation", "no cumple")
+    return any(reason in normalized for reason in expectation_reasons)
+
+
+def _reception_date_for_policy(motivo: str, order_graph: Graph, pedido: URIRef) -> datetime | None:
+    """Fecha de recepcion relevante para el plazo. Expectativas: solo la indicada por el cliente."""
+
+    if _motivo_expectations(motivo):
+        return _extract_reception_hint(motivo)
+    hint = _extract_reception_hint(motivo)
+    if hint is not None:
+        return hint
+    return _extract_delivery_date(order_graph) or _extract_datetime(order_graph, pedido, ECSDI.fechaPedido)
+
+
+def _return_allowed(motivo: str, reception_date: datetime | None) -> bool:
     normalized = motivo.casefold()
     immediate_reasons = ("defect", "defectuos", "equivoc", "incorrect", "roto", "dany", "dañ")
     if any(reason in normalized for reason in immediate_reasons):
         return True
-    expectation_reasons = ("no satisface", "expectativa", "expectation", "no cumple")
-    if any(reason in normalized for reason in expectation_reasons):
-        if delivery_date is None:
+    if _motivo_expectations(motivo):
+        if reception_date is None:
             return False
-        return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
-    if delivery_date is None:
-        return True
-    return datetime.now() <= delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
+        return datetime.now() <= reception_date + timedelta(days=RETURN_WINDOW_DAYS)
+    if reception_date is None:
+        return False
+    return datetime.now() <= reception_date + timedelta(days=RETURN_WINDOW_DAYS)
 
 
 def _extract_reception_hint(motivo: str) -> datetime | None:

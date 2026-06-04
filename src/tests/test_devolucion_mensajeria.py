@@ -9,7 +9,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rdflib.namespace import RDF
 
-from agents.agente_devolucion import _return_allowed, _simulate_mensajeria_interna
+from agents.agente_devolucion import (
+    RETURN_WINDOW_DAYS,
+    _motivo_expectations,
+    _reception_date_for_policy,
+    _return_allowed,
+    _return_already_accepted,
+    _simulate_mensajeria_interna,
+)
+from rdflib import Graph, Literal
+from rdflib.namespace import XSD
 from utilities.namespaces import AGENTS, DATA, ECSDI
 
 
@@ -41,6 +50,31 @@ class DevolucionMensajeriaTests(unittest.TestCase):
     def test_reason_expectations_outside_fifteen_days(self):
         out_of_window = datetime.now() - timedelta(days=20)
         self.assertFalse(_return_allowed("No satisface expectativas", out_of_window))
+
+    def test_duplicate_return_blocked(self):
+        db = [
+            {
+                "pedido_id": "PED-ABC",
+                "product_id": "P-IPHONE19",
+                "aceptada": True,
+            }
+        ]
+        self.assertTrue(_return_already_accepted(db, "PED-ABC", "P-IPHONE19"))
+        self.assertFalse(_return_already_accepted(db, "PED-ABC", "P-OTHER"))
+        self.assertFalse(_return_already_accepted(db, "PED-XYZ", "P-IPHONE19"))
+
+    def test_expectations_use_reception_hint_not_order_date(self):
+        pedido = DATA["pedido/P-TEST"]
+        graph = Graph()
+        graph.add((pedido, ECSDI.fechaPedido, Literal(datetime.now().isoformat(timespec="seconds"), datatype=XSD.dateTime)))
+        motivo = f"No satisface expectativas (recepcion={(datetime.now() - timedelta(days=20)).date().isoformat()})"
+        self.assertTrue(_motivo_expectations(motivo))
+        reception = _reception_date_for_policy(motivo, graph, pedido)
+        self.assertIsNotNone(reception)
+        self.assertFalse(_return_allowed(motivo, reception))
+
+    def test_window_days_constant(self):
+        self.assertEqual(RETURN_WINDOW_DAYS, 15)
 
 
 if __name__ == "__main__":

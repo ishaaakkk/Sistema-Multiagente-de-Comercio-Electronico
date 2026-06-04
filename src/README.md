@@ -79,6 +79,8 @@ cd src
 bash develop.sh
 ```
 
+**Juegos de prueba para la entrega:** ver [JUEGOS_PRUEBA.md](JUEGOS_PRUEBA.md) (escenarios reproducibles, evidencias y justificación).
+
 Para una demostracion distribuida, cada agente puede arrancarse en una maquina distinta usando `--open --hostaddr <ip>` y pasando `--dir http://<ip-directorio>:9000`.
 
 
