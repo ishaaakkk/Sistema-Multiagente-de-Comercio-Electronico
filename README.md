@@ -8,14 +8,14 @@ comercio electronico.
 - `ontology/`: ontologia OWL/RDF del dominio de comercio electronico.
   - `comercio_electronico.ttl`: ontologia principal en Turtle.
   - `catalog-v001.xml`: catalogo XML auxiliar para herramientas OWL.
-- `doc/`: documentacion generada para entregar como anexo.
+- `doc/`: documentacion generada como anexo.
   - `ontology/comercio_electronico.html`: documentacion automatica de la ontologia generada con PyLODE.
   - `ontology/comercio_electronico.docx`: version Word de la documentacion automatica.
   - `pdtool/defaultreport_2026-06-05/`: reporte HTML y diagramas generados desde PDT.
 - `src/`: implementacion Python del prototipo multiagente.
   - `develop.sh`: arranque del stack completo en local (recomendado).
   - `distributed.sh`: arranque de un solo agente para despliegue distribuido.
-  - `JUEGOS_PRUEBA.md`: juegos de prueba reproducibles para la entrega y defensa (interfaz web).
+  - `JUEGOS-PRUEBA.md`: juegos de prueba reproducibles para la interfaz web.
   - `requirements.txt`: dependencias Python de la implementacion.
   - `agents/`: agentes ejecutables del sistema.
   - `utilities/`: utilidades compartidas para RDF, FIPA-ACL, HTTP, catalogo y runtime.
@@ -110,7 +110,7 @@ El script arranca todos los agentes con el directorio y registra:
 
 Interfaz web del asistente: `http://127.0.0.1:9010/iface`
 
-Guion de juegos de prueba (JP-01…JP-19): [`src/JUEGOS_PRUEBA.md`](src/JUEGOS_PRUEBA.md)
+Guion de juegos de prueba (JP-01…JP-19): [`src/JUEGOS-PRUEBA.md`](src/JUEGOS-PRUEBA.md)
 
 Estado del directorio: `http://127.0.0.1:9000/info`
 
@@ -124,7 +124,7 @@ DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.10 bash src/develop.sh
 
 ## Ejecucion distribuida
 
-Para la demo en varias maquinas o contenedores (criterio 3.6), usar
+Para la demo en varias maquinas o contenedores, usar
 `src/distributed.sh`. Este script lanza **un solo agente** por ejecucion,
 exporta `PYTHONPATH` automaticamente y aplica los mismos parametros de lotes
 y timeouts que `develop.sh`.
@@ -241,11 +241,11 @@ source .venv/bin/activate
 PYTHONPATH=src python -m unittest discover -s src/tests -v
 ```
 
-## Documentacion de entrega
+## Documentacion
 
 | Recurso | Contenido |
 | --- | --- |
-| `src/JUEGOS_PRUEBA.md` | Juegos de prueba reproducibles para la defensa |
+| `src/JUEGOS-PRUEBA.md` | Juegos de prueba reproducibles |
 | `src/README.md` | Guia rapida del directorio `src/` |
 
 ## Ontologia

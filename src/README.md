@@ -40,8 +40,8 @@ Agentes soportados por `distributed.sh`:
 
 ## Juegos de prueba
 
-Escenarios reproducibles para la entrega y defensa (interfaz web):
-[JUEGOS_PRUEBA.md](JUEGOS_PRUEBA.md)
+Escenarios reproducibles para la interfaz web:
+[JUEGOS-PRUEBA.md](JUEGOS-PRUEBA.md)
 
 Abrir `http://127.0.0.1:9010/iface` tras `develop.sh` y seguir los pasos JP-01…JP-19.
 

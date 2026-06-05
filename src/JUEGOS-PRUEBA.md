@@ -1,19 +1,19 @@
-# Juegos de prueba — ECSDI (Capítulo 8)
+# Juegos de prueba — ECSDI
 
-Documento para la **entrega y defensa de la práctica**: escenarios reproducibles alineados con el **Capítulo 8** de la memoria. Cada juego aísla un mecanismo (directorio, RDF, FIPA-ACL, multi-CL, CFP transporte, lotes, externos, feedback, devoluciones). Se evita inflar instancias: **dos transportistas** (Express/Eco), **dos centros logísticos** (BCN/MAD) y, cuando haga falta, el **transportista de terceros** (puerto 9014) bastan para demostrar selección y competencia.
+Guía práctica para ejecutar escenarios reproducibles del sistema multiagente. Cada juego indica qué preparar, qué pasos seguir en la interfaz web y qué resultado comprobar en los tickets, logs o endpoints auxiliares.
 
 Todos los juegos se ejecutan mediante la **interfaz web** del asistente. Las consultas `curl` a `/info` son auxiliares para evidencia técnica (lotes, directorio).
 
 ---
 
-## Criterio de diseño
+## Cómo usar esta guía
 
-| Principio | Aplicación |
-|-----------|------------|
-| Un mecanismo por juego | Cada escenario comprueba una capacidad concreta. |
-| Instancias mínimas | 2 CL + 2 transportistas (+ 1 externo opcional en JP-14). |
-| Reproducibilidad | `develop.sh` + interfaz web (`http://127.0.0.1:9010/iface`). |
-| Evidencia | Logs de agentes, JSON en `/info`, tickets, ficheros en `data/`. |
+1. Arrancad el sistema con `bash develop.sh`.
+2. Abrid `http://127.0.0.1:9010/iface`.
+3. Ejecutad el juego indicado en la interfaz.
+4. Comprobad el resultado esperado con la interfaz, logs de agentes, JSON en `/info` o ficheros en `data/`.
+
+Los juegos están pensados para ejecutarse con la configuración local por defecto: dos transportistas (Express/Eco), dos centros logísticos (BCN/MAD) y, cuando haga falta, el transportista externo del puerto 9014.
 
 ### Productos de referencia (`data/catalog.ttl`)
 
@@ -95,33 +95,33 @@ Equivalente: levantar el stack con `bash develop.sh` (Git Bash) o agente a agent
 
 ---
 
-## Tabla resumen (Capítulo 8)
+## Tabla resumen
 
-| ID | Sección | Juego | Mecanismo |
-|----|---------|-------|-----------|
-| JP-01 | 8.1 | Catálogo sin filtros | ProductosDB + comunicación catálogo |
-| JP-02 | 8.1 | Filtros Apple → 1000 → iPhone + historial | RDF + `NotificarBusquedaRealizada` → Feedback |
-| JP-03 | 8.1 | Alta producto externo | `DarAltaProductoExterno` |
-| JP-04 | 8.2 | Carrito + Barcelona `dist` 130 | Proximidad CL-BCN + stock |
-| JP-05 | 8.2 | Compra urgente | Prioridad 1, entrega ≤ 1 día |
-| JP-06 | 8.2 | Compra no urgente + lote pendiente | `pending_lotes` antes del despacho |
-| JP-07 | 8.2 | Dos compras simultáneas (misma ubicación) | Mismo lote y transportista, distinto `pedido_id` |
-| JP-08 | 8.2 | Simultáneas con urgencia distinta | Adhesión al lote + prioridad del lote = 1 |
-| JP-09 | 8.2 | Carrito interno + externo | Despacho mixto comerciante |
-| JP-10 | 8.2 | Histórico de pedidos | Persistencia en asistente |
-| JP-11 | 8.2 | Producto pesado → `tarifa_kg` | CFP, gana Express (9003) |
-| JP-12 | 8.2 | Compra normal → `tarifa_dia` | CFP, prioridad 2, componente día |
-| JP-13 | 8.2 | Selección CL Madrid | Multi-CL por proximidad |
-| JP-14 | 8.2 | Transportista grupo de 3os | `transportista_externo` en CFP |
-| JP-15 | 8.3 | Callback `PedirFeedback` + media | Proactivo + `valoracionMedia` |
-| JP-16 | 8.3 | Recomendación tras búsqueda por marca | Historial + scheduler |
-| JP-17 | 8.3 | Recomendación tras compra | Perfil de compra |
-| JP-18 | 8.4 | Devolución aceptada | Agente devolución + reembolso |
-| JP-19 | 8.4 | Devolución rechazada (plazo 15 días) | Política de motivos |
+| ID | Juego | Mecanismo |
+|----|-------|-----------|
+| JP-01 | Catálogo sin filtros | ProductosDB + comunicación catálogo |
+| JP-02 | Filtros Apple → 1000 → iPhone + historial | RDF + `NotificarBusquedaRealizada` → Feedback |
+| JP-03 | Alta producto externo | `DarAltaProductoExterno` |
+| JP-04 | Carrito + Barcelona `dist` 130 | Proximidad CL-BCN + stock |
+| JP-05 | Compra urgente | Prioridad 1, entrega ≤ 1 día |
+| JP-06 | Compra no urgente + lote pendiente | `pending_lotes` antes del despacho |
+| JP-07 | Dos compras simultáneas (misma ubicación) | Mismo lote y transportista, distinto `pedido_id` |
+| JP-08 | Simultáneas con urgencia distinta | Adhesión al lote + prioridad del lote = 1 |
+| JP-09 | Carrito interno + externo | Despacho mixto comerciante |
+| JP-10 | Histórico de pedidos | Persistencia en asistente |
+| JP-11 | Producto pesado → `tarifa_kg` | CFP, gana Express (9003) |
+| JP-12 | Compra normal → `tarifa_dia` | CFP, prioridad 2, componente día |
+| JP-13 | Selección CL Madrid | Multi-CL por proximidad |
+| JP-14 | Transportista grupo de 3os | `transportista_externo` en CFP |
+| JP-15 | Callback `PedirFeedback` + media | Proactivo + `valoracionMedia` |
+| JP-16 | Recomendación tras búsqueda por marca | Historial + scheduler |
+| JP-17 | Recomendación tras compra | Perfil de compra |
+| JP-18 | Devolución aceptada | Agente devolución + reembolso |
+| JP-19 | Devolución rechazada (plazo 15 días) | Política de motivos |
 
 ---
 
-## 8.1 Búsqueda, filtros y persistencia
+## Búsqueda, filtros y persistencia
 
 ### JP-01 — Catálogo entero sin filtros
 
@@ -182,7 +182,7 @@ Equivalente: levantar el stack con `bash develop.sh` (Git Bash) o agente a agent
 
 ---
 
-## 8.2 Compra y planificación de pedido
+## Compra y planificación de pedido
 
 ### JP-04 — Carrito, Barcelona (`dist` 130) y selección de CL
 
@@ -411,7 +411,7 @@ curl -s http://127.0.0.1:9002/info | python3 -m json.tool
 
 ---
 
-## 8.3 Valoraciones y recomendaciones
+## Valoraciones y recomendaciones
 
 ### JP-15 — Callback `PedirFeedback` y actualización de media
 
@@ -471,7 +471,7 @@ curl -s http://127.0.0.1:9002/info | python3 -m json.tool
 
 ---
 
-## 8.4 Devoluciones
+## Devoluciones
 
 ### JP-18 — Devolución aceptada
 
