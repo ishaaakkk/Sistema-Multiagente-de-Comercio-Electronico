@@ -76,6 +76,10 @@ start_agent "TransportistaExpress" "$PYTHON" -m agents.transportista --port 9003
 sleep 0.5
 start_agent "TransportistaEco" "$PYTHON" -m agents.transportista --port 9011 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
 sleep 0.5
+# Transportista proporcionado por un tercero, con tarifa fija  
+start_agent "TransportistaExterno" "$PYTHON" -m agents.transportista_externo --port 9014 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --preu "${TRANSPORTISTA_PREU:-5.50}" --dies "${TRANSPORTISTA_DIES:-3}"
+sleep 0.5
+
 # Dos centros logísticos; el comerciante contacta cada CL en orden de
 # proximidad a la dirección de entrega (|dist_CL - dist_entrega|).
 # Cada CL ofrece todos los productos logísticos del catálogo (defecto --stock-products *).

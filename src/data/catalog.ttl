@@ -68,7 +68,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-EBOOK-AURORA/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 14 ;
+    ecsdi:cantidadDisponible 15 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-EBOOK-AURORA> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
@@ -78,7 +78,7 @@
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-MAD> .
 
 <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/stock/P-IPHONE19/CL-BCN> a ecsdi:StockProducto ;
-    ecsdi:cantidadDisponible 18 ;
+    ecsdi:cantidadDisponible 17 ;
     ecsdi:stockDeProducto <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/producto/P-IPHONE19> ;
     ecsdi:stockEnCentro <http://www.semanticweb.org/ecsdi/comercio_electronico/instances/centro/CL-BCN> .
 
