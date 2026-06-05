@@ -1,10 +1,11 @@
 import argparse
 from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 from flask import Flask
 from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import RDF, XSD
+from rdflib.namespace import RDF, RDFS, XSD
 
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import build_transport_offer
@@ -73,8 +74,6 @@ def create_app(
                 return reply(build_not_understood(agent_uri, message.sender, "Se esperaba performativa request"))
 
             action = message.content
-            # Recogida de devolución: solo mensajería interna (PDT); los transportistas
-            # atienden presupuestos de lotes de envío comercial.
             if (action, RDF.type, ECSDI.SolicitarRecogidaDevolucion) in graph:
                 return reply(_handle_recogida_devolucion(agent_uri, message.sender, action, graph))
 
@@ -134,6 +133,7 @@ def _handle_recogida_devolucion(agent_uri: URIRef, receiver: URIRef, action: URI
         response_graph.add((devolucion, ECSDI.devolucionDeProducto, product))
     response_graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
     response_graph.add((envio, ECSDI.envioRealizadoPor, URIRef(agent_uri)))
+    response_graph.add((envio, RDFS.comment, Literal(f"TRACK-DEV-{uuid4().hex[:10].upper()}")))
 
     log(str(agent_uri).split("/")[-1], f"Recogida devolucion aceptada: pedido={pedido} producto={product}")
     return build_message(response_graph, devolucion, ACL.inform, agent_uri, receiver)

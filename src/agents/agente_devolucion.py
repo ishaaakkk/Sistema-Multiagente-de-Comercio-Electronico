@@ -11,6 +11,7 @@ from rdflib.namespace import RDF, RDFS, XSD
 from utilities.acl import build_failure, build_message, build_not_understood, correlate_reply, get_message
 from utilities.builders import (
     build_completed_order_info_request,
+    build_recogida_devolucion_request,
     build_reembolso_request,
 )
 from utilities.catalog import decimal_literal, product_uri
@@ -40,6 +41,7 @@ def create_app(
     agent_uri=DEFAULT_AGENT_URI,
     shop_url="http://127.0.0.1:9001/comm",
     financiero_url="http://127.0.0.1:9005/comm",
+    transportista_url="http://127.0.0.1:9003/comm",
 ):
     app = Flask(__name__)
     devoluciones_db: list[dict] = load_json("devoluciones.json", [])
@@ -75,6 +77,7 @@ def create_app(
                         graph,
                         shop_url,
                         financiero_url,
+                        transportista_url,
                     )
                 )
 
@@ -93,6 +96,7 @@ def _handle_devolucion(
     request_graph: Graph,
     shop_url: str,
     financiero_url: str,
+    transportista_url: str,
 ) -> Graph:
     devolucion, pedido, product, motivo = _extract_request(request_graph, action)
     if pedido is None or product is None:
@@ -155,12 +159,32 @@ def _handle_devolucion(
             reason=f"El motivo indicado exige estar dentro de los {RETURN_WINDOW_DAYS} dias desde la recepcion",
         )
 
-    pickup_graph = _simulate_mensajeria_interna(devolucion, pedido, product)
+    pickup_graph = _request_recogida(
+        agent_uri,
+        transportista_url,
+        devolucion,
+        pedido,
+        product,
+        order_graph,
+    )
+    if pickup_graph is None:
+        return _build_resolution(
+            agent_uri,
+            receiver,
+            action,
+            devolucion,
+            pedido,
+            product,
+            motivo,
+            accepted=False,
+            reason="No se pudo coordinar la recogida con el transportista",
+        )
+
     pickup_date = _pickup_date_from_graph(pickup_graph) or datetime.now() + timedelta(days=DEFAULT_PICKUP_DAYS)
     log(
         "devolucion",
-        f"Mensajeria interna (mock): recogida confirmada pedido={_pedido_id(order_graph, pedido)} "
-        f"fecha={pickup_date.isoformat(timespec='seconds')}",
+        f"Recogida confirmada por {_courier_from_pickup_graph(pickup_graph)} "
+        f"pedido={pedido_id} fecha={pickup_date.isoformat(timespec='seconds')}",
     )
 
     importe = _line_amount(order_graph, line, product)
@@ -255,6 +279,32 @@ def _fetch_order_info(agent_uri: URIRef, pedido: URIRef, request_graph: Graph, s
     return None
 
 
+def _request_recogida(
+    agent_uri: URIRef,
+    transportista_url: str,
+    devolucion: URIRef,
+    pedido: URIRef,
+    product: URIRef,
+    order_graph: Graph,
+) -> Graph | None:
+    try:
+        message = build_recogida_devolucion_request(
+            agent_uri,
+            AGENTS.TransportistaExpress,
+            devolucion,
+            pedido,
+            product,
+            order_graph,
+        )
+        response = post_graph(transportista_url, message)
+        msg = get_message(response)
+        if msg and msg.performative == ACL.inform:
+            return response
+    except Exception as exc:
+        log("devolucion", f"No se pudo solicitar recogida al transportista: {exc}")
+    return None
+
+
 def _request_reembolso(
     agent_uri: URIRef,
     financiero_url: str,
@@ -283,35 +333,6 @@ def _request_reembolso(
     except Exception as exc:
         log("devolucion", f"No se pudo solicitar reembolso: {exc}")
     return None
-
-
-def _simulate_mensajeria_interna(
-    devolucion: URIRef,
-    pedido: URIRef,
-    product: URIRef,
-    pickup_days: int = DEFAULT_PICKUP_DAYS,
-) -> Graph:
-    """Mock MensajeriaInternaConfirma (PDT): siempre confirma y devuelve fecha de recogida."""
-
-    pickup_date = datetime.now() + timedelta(days=pickup_days)
-    graph = Graph()
-    bind_namespaces(graph)
-    envio = DATA[f"envio/devolucion/{uuid4()}"]
-    graph.add((devolucion, RDF.type, ECSDI.Devolucion))
-    graph.add((devolucion, ECSDI.devolucionDePedido, pedido))
-    graph.add((devolucion, ECSDI.devolucionDeProducto, product))
-    graph.add(
-        (
-            devolucion,
-            ECSDI.fechaRecogidaDevolucion,
-            Literal(pickup_date.isoformat(timespec="seconds"), datatype=XSD.dateTime),
-        )
-    )
-    graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
-    graph.add((envio, ECSDI.envioDePedido, pedido))
-    graph.add((envio, ECSDI.envioRealizadoPor, AGENTS.MensajeriaInterna))
-    graph.add((envio, RDFS.comment, Literal(f"TRACK-DEV-{uuid4().hex[:10].upper()}")))
-    return graph
 
 
 def _build_resolution(
@@ -359,12 +380,6 @@ def _build_resolution(
 
     if pickup_graph is not None:
         _add_business_triples(pickup_graph, graph)
-
-    if accepted and not list(graph.subjects(RDF.type, ECSDI.EnvioDevolucion)):
-        envio = DATA[f"envio/devolucion/{uuid4()}"]
-        graph.add((envio, RDF.type, ECSDI.EnvioDevolucion))
-        graph.add((envio, ECSDI.envioDePedido, pedido))
-        graph.add((envio, ECSDI.envioRealizadoPor, AGENTS.MensajeriaInterna))
 
     return build_message(graph, response, ACL.inform, sender, receiver)
 
@@ -503,6 +518,17 @@ def _extract_delivery_date(graph: Graph) -> datetime | None:
     return None
 
 
+def _courier_from_pickup_graph(graph: Graph) -> str:
+    envio = next(graph.subjects(RDF.type, ECSDI.EnvioDevolucion), None)
+    if envio is None:
+        return "transportista"
+    courier = next(graph.objects(envio, ECSDI.envioRealizadoPor), None)
+    if courier is None:
+        return "transportista"
+    uri = str(courier)
+    return uri.rsplit("/", 1)[-1]
+
+
 def _pickup_date_from_graph(graph: Graph | None) -> datetime | None:
     if graph is None:
         return None
@@ -556,6 +582,7 @@ def main():
     parser.add_argument("--dir", default=None, help="URL del servicio de directorio")
     parser.add_argument("--shop-url", default=None)
     parser.add_argument("--financiero-url", default=None)
+    parser.add_argument("--transportista-url", default=None)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -566,8 +593,14 @@ def main():
 
     shop_base = args.shop_url or search_service(args.dir, "AGENTE_COMERCIANTE", service_id) or "http://127.0.0.1:9001"
     financiero_base = args.financiero_url or search_service(args.dir, "AGENTE_FINANCIERO", service_id) or "http://127.0.0.1:9005"
+    transportista_base = (
+        args.transportista_url
+        or search_service(args.dir, "TRANSPORTISTA", service_id)
+        or "http://127.0.0.1:9003"
+    )
     shop_url = _comm_url(shop_base)
     financiero_url = _comm_url(financiero_base)
+    transportista_url = _comm_url(transportista_base)
     registered = register_service(
         args.dir,
         service_id,
@@ -579,10 +612,14 @@ def main():
     try:
         log(
             f"devolucion-{args.port}",
-            f"listening on {bind_host}:{args.port}, shop={shop_url}, financiero={financiero_url}, "
-            f"mensajeria=mock({DEFAULT_PICKUP_DAYS}d)",
+            f"listening on {bind_host}:{args.port}, shop={shop_url}, "
+            f"financiero={financiero_url}, transportista={transportista_url}",
         )
-        create_app(shop_url=shop_url, financiero_url=financiero_url).run(
+        create_app(
+            shop_url=shop_url,
+            financiero_url=financiero_url,
+            transportista_url=transportista_url,
+        ).run(
             host=bind_host, port=args.port, debug=False, use_reloader=False
         )
     finally:

@@ -1167,7 +1167,7 @@ IFACE_HTML = """<!DOCTYPE html>
       box.style.display = 'block';
       if (data.accepted) {
         const importe = data.refund_amount ? `${parseFloat(data.refund_amount).toFixed(2)} €` : 'No disponible';
-        const mensajeria = data.courier_name || 'Mensajería de la tienda (mock)';
+        const mensajeria = data.courier_name || 'Transportista';
         const tracking = data.courier_tracking || 'Pendiente';
         const etiqueta = data.courier_label || 'Se enviará por email';
         box.innerHTML = `<strong>✓ Devolución aceptada</strong><br>
@@ -1797,6 +1797,7 @@ def create_app(
         reembolso = next(response.objects(devolucion_node, ECSDI.devolucionTieneReembolso), None) if devolucion_node else None
         accepted_raw = str(next(response.objects(devolucion_node, ECSDI.devolucionAceptada), "false")).lower() if devolucion_node else "false"
         envio_node = next(response.subjects(RDF.type, ECSDI.EnvioDevolucion), None)
+        courier_uri = str(next(response.objects(envio_node, ECSDI.envioRealizadoPor), "")) if envio_node else ""
         refund_amount = str(next(response.objects(reembolso, ECSDI.importeOperacion), "")) if reembolso else ""
         result = {
             "accepted": accepted_raw in ("true", "1"),
@@ -1804,7 +1805,7 @@ def create_app(
             "pickup": str(next(response.objects(devolucion_node, ECSDI.fechaRecogidaDevolucion), "")) if devolucion_node else "",
             "refund_ref": str(next(response.objects(reembolso, ECSDI.referenciaPago), "")) if reembolso else "",
             "refund_amount": refund_amount,
-            "courier_name": str(next(response.objects(envio_node, ECSDI.envioRealizadoPor), "")) if envio_node else "",
+            "courier_name": _format_courier_name(courier_uri) if courier_uri else "",
             "courier_tracking": str(next(response.objects(envio_node, RDFS.comment), "")) if envio_node else "",
             "courier_label": "Usa la etiqueta de devolución enviada por la tienda" if envio_node else "",
         }
@@ -1971,6 +1972,13 @@ def _acl_failure_payload(response: Graph, default_reason: str) -> dict | None:
         return None
     reason = str(next(response.objects(None, RDFS.comment), "")) or default_reason
     return {"error": reason}
+
+
+def _format_courier_name(courier_uri: str) -> str:
+    slug = courier_uri.rsplit("/", 1)[-1]
+    if slug.startswith("transportista"):
+        return slug.replace("_", " ").title()
+    return slug
 
 
 def main():
