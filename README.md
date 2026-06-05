@@ -9,6 +9,7 @@ comercio electronico.
   - `comercio_electronico.ttl`: ontologia principal en Turtle.
   - `catalog-v001.xml`: catalogo XML auxiliar para herramientas OWL.
 - `doc/`: documentacion generada como anexo.
+  - `Documentación práctica ECSDI.pdf`: documentacion de la practica.
   - `ontology/comercio_electronico.html`: documentacion automatica de la ontologia generada con PyLODE.
   - `ontology/comercio_electronico.docx`: version Word de la documentacion automatica.
   - `pdtool/defaultreport_2026-06-05/`: reporte HTML y diagramas generados desde PDT.
@@ -245,6 +246,7 @@ PYTHONPATH=src python -m unittest discover -s src/tests -v
 
 | Recurso | Contenido |
 | --- | --- |
+| `doc/Documentación práctica ECSDI.pdf` | Documentación de la práctica |
 | `src/JUEGOS-PRUEBA.md` | Juegos de prueba reproducibles |
 | `src/README.md` | Guia rapida del directorio `src/` |
 
