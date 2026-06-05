@@ -14,6 +14,8 @@ bash develop.sh
 
 Interfaz web: `http://127.0.0.1:9010/iface`
 
+Tarjeta demo por defecto (pago con tarjeta): `4111111111111111`
+
 ## Scripts de despliegue
 
 | Script | Uso |
@@ -36,25 +38,12 @@ Agentes soportados por `distributed.sh`:
 `financiero`, `feedback`, `vendedor_externo`, `comerciante`, `catalogo`,
 `devolucion`, `asistente`
 
-## Clientes de prueba (CLI)
-
-```bash
-PYTHONPATH=. python -m assistant_demo \
-  --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
-
-PYTHONPATH=. python -m feedback_demo \
-  --feedback-url http://127.0.0.1:9007/comm --simulate-notify
-
-PYTHONPATH=. python -m devolucion_demo \
-  --catalog-url http://127.0.0.1:9006/comm \
-  --shop-url http://127.0.0.1:9001/comm \
-  --devolucion-url http://127.0.0.1:9009/comm
-```
-
 ## Juegos de prueba
 
-Escenarios reproducibles para la entrega y defensa:
+Escenarios reproducibles para la entrega y defensa (interfaz web):
 [JUEGOS_PRUEBA.md](JUEGOS_PRUEBA.md)
+
+Abrir `http://127.0.0.1:9010/iface` tras `develop.sh` y seguir los pasos JP-01…JP-19.
 
 ## Tests
 

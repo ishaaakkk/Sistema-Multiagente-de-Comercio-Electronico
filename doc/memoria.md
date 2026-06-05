@@ -836,8 +836,9 @@ La guía completa está en `doc/distributed-demo.md`.
 
 ## Capítulo 7. Juegos de prueba
 
-Los escenarios de prueba están descritos en `doc/test-scenarios.md`. Cubren
-tareas básicas, elementos avanzados y fallos esperados.
+Los escenarios de prueba reproducibles para la defensa están en
+`src/JUEGOS_PRUEBA.md` (identificadores JP-01…JP-19, interfaz web).
+Escenarios complementarios y casos de fallo: `doc/test-scenarios.md`.
 
 ### 7.1. Pruebas funcionales
 
@@ -897,7 +898,7 @@ La planificación se organizó por módulos funcionales:
 | Finanzas | Cobro, reembolso, pago externo y proveedor de pagos. |
 | Feedback | Valoraciones diferidas, búsquedas y recomendaciones. |
 | Devoluciones | Validación de pedidos, recogida y reembolso. |
-| Pruebas | Demos, tests unitarios y escenarios de fallo. |
+| Pruebas | Juegos de prueba (interfaz web), tests unitarios y escenarios de fallo. |
 | Documentación | Memoria, PyLODE, diagramas y guías de ejecución. |
 
 ### 8.2. Evolución del diseño

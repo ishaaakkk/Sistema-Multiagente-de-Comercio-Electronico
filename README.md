@@ -18,8 +18,7 @@ comercio electronico.
 - `src/`: implementacion Python del prototipo multiagente.
   - `develop.sh`: arranque del stack completo en local (recomendado).
   - `distributed.sh`: arranque de un solo agente para despliegue distribuido.
-  - `assistant_demo.py`, `feedback_demo.py`, `devolucion_demo.py`: clientes CLI de prueba.
-  - `JUEGOS_PRUEBA.md`: juegos de prueba reproducibles para la entrega y defensa.
+  - `JUEGOS_PRUEBA.md`: juegos de prueba reproducibles para la entrega y defensa (interfaz web).
   - `requirements.txt`: dependencias Python de la implementacion.
   - `agents/`: agentes ejecutables del sistema.
   - `utilities/`: utilidades compartidas para RDF, FIPA-ACL, HTTP, catalogo y runtime.
@@ -70,7 +69,7 @@ Extensiones implementadas:
 
 Flujo principal de la demo:
 
-1. El asistente (web o CLI) solicita una busqueda a `AgenteCatalogo`.
+1. El asistente (interfaz web) solicita una busqueda a `AgenteCatalogo`.
 2. El catalogo devuelve productos que cumplen las restricciones RDF.
 3. El asistente envia un pedido a `AgenteComerciante`.
 4. La tienda genera factura y delega la logistica a uno o varios centros.
@@ -114,59 +113,17 @@ El script arranca todos los agentes con el directorio y registra:
 
 Interfaz web del asistente: `http://127.0.0.1:9010/iface`
 
+Guion de juegos de prueba (JP-01…JP-19): [`src/JUEGOS_PRUEBA.md`](src/JUEGOS_PRUEBA.md)
+
 Estado del directorio: `http://127.0.0.1:9000/info`
+
+Estado de opiniones pendientes (feedback): `http://127.0.0.1:9007/status`
 
 Para lanzar el stack con IP de red (p. ej. detras de NAT):
 
 ```bash
 DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.10 bash src/develop.sh
 ```
-
-## Demos por CLI
-
-Con el stack en marcha, en otra terminal:
-
-```bash
-source .venv/bin/activate
-cd src
-
-# Compra
-PYTHONPATH=. python -m assistant_demo \
-  --catalog-url http://127.0.0.1:9006/comm \
-  --shop-url http://127.0.0.1:9001/comm
-
-# Compra con parametros de busqueda y entrega
-PYTHONPATH=. python -m assistant_demo \
-  --search-name iphone \
-  --max-price 1300 \
-  --city Barcelona \
-  --street "Carrer Mallorca 401" \
-  --postal-code 08013 \
-  --country Espana \
-  --priority 1
-
-# Valoracion (con --simulate-notify no hace falta compra previa)
-PYTHONPATH=. python -m feedback_demo \
-  --feedback-url http://127.0.0.1:9007/comm --simulate-notify
-
-# Valorar un pedido concreto tras assistant_demo
-PYTHONPATH=. python -m feedback_demo \
-  --feedback-url http://127.0.0.1:9007/comm \
-  --pedido-id PED-XXXXXXXX --product-id P-IPHONE19
-
-# Devolucion completa (compra + devolucion)
-PYTHONPATH=. python -m devolucion_demo \
-  --catalog-url http://127.0.0.1:9006/comm \
-  --shop-url http://127.0.0.1:9001/comm \
-  --devolucion-url http://127.0.0.1:9009/comm
-
-# Devolver un pedido ya completado
-PYTHONPATH=. python -m devolucion_demo \
-  --pedido-id PED-XXXXXXXX --product-id P-IPHONE19 \
-  --devolucion-url http://127.0.0.1:9009/comm
-```
-
-Estado de opiniones pendientes: `http://127.0.0.1:9007/status`
 
 ## Ejecucion distribuida
 

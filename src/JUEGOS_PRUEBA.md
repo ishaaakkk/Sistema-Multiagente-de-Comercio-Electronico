@@ -2,6 +2,8 @@
 
 Documento para la **entrega y defensa de la práctica**: escenarios reproducibles alineados con el **Capítulo 8** de la memoria. Cada juego aísla un mecanismo (directorio, RDF, FIPA-ACL, multi-CL, CFP transporte, lotes, externos, feedback, devoluciones). Se evita inflar instancias: **dos transportistas** (Express/Eco), **dos centros logísticos** (BCN/MAD) y, cuando haga falta, el **transportista de terceros** (puerto 9014) bastan para demostrar selección y competencia.
 
+Todos los juegos se ejecutan mediante la **interfaz web** del asistente. Las consultas `curl` a `/info` son auxiliares para evidencia técnica (lotes, directorio).
+
 ---
 
 ## Criterio de diseño
@@ -9,8 +11,8 @@ Documento para la **entrega y defensa de la práctica**: escenarios reproducible
 | Principio | Aplicación |
 |-----------|------------|
 | Un mecanismo por juego | Cada escenario comprueba una capacidad concreta. |
-| Instancias mínimas | 2 CL + 2 transportistas (+ 1 externo opcional en JP-18). |
-| Reproducibilidad | `develop.sh` + `assistant_demo` / interfaz web. |
+| Instancias mínimas | 2 CL + 2 transportistas (+ 1 externo opcional en JP-14). |
+| Reproducibilidad | `develop.sh` + interfaz web (`http://127.0.0.1:9010/iface`). |
 | Evidencia | Logs de agentes, JSON en `/info`, tickets, ficheros en `data/`. |
 
 ### Productos de referencia (`data/catalog.ttl`)
@@ -45,21 +47,16 @@ cd src
 bash develop.sh
 ```
 
-En **otra terminal**:
+Abrir en el navegador: [http://127.0.0.1:9010/iface](http://127.0.0.1:9010/iface)
 
-```bash
-cd src
-export PYTHONPATH=.
-```
-
-### Interfaz y demos
+### Interfaz y consultas auxiliares
 
 | Recurso | URL / comando |
 |---------|----------------|
 | Interfaz asistente | [http://127.0.0.1:9010/iface](http://127.0.0.1:9010/iface) |
 | Directorio | `curl -s http://127.0.0.1:9000/info \| jq` |
 | CL-BCN `pending_lotes` | `curl -s http://127.0.0.1:9002/info \| jq .pending_lotes` |
-| Demo CLI | `python -m assistant_demo` (tarjeta demo por defecto: `4111111111111111`) |
+| Estado feedback | `http://127.0.0.1:9007/status` |
 
 ### Variables de lote (`develop.sh`)
 
@@ -79,7 +76,7 @@ export PYTHONPATH=.
 
 ### Pago
 
-Método por defecto: **tarjeta**. Sin PAN válido el ProveedorPagos rechaza el cobro. En la interfaz, rellenad «Número tarjeta» al confirmar el pedido.
+Método por defecto: **tarjeta**. Tarjeta demo: `4111111111111111`. Sin PAN válido el ProveedorPagos rechaza el cobro. Rellenad «Número tarjeta» al confirmar el pedido en la pestaña **02 / Pedido**.
 
 ### Transportista de terceros (solo JP-14)
 
@@ -94,7 +91,7 @@ Comprobad que aparece en `http://127.0.0.1:9000/info` antes del pedido de prueba
 
 ### Windows
 
-Equivalente: `$env:PYTHONPATH = "."` y los mismos módulos `python -m agents.*` (ver lista en versiones anteriores del doc o `src/README.md`).
+Equivalente: levantar el stack con `bash develop.sh` (Git Bash) o agente a agente según [README.md](../README.md). Interfaz: `http://127.0.0.1:9010/iface`.
 
 ---
 
@@ -130,7 +127,7 @@ Equivalente: `$env:PYTHONPATH = "."` y los mismos módulos `python -m agents.*` 
 
 **Objetivo:** Comprobar acceso a ProductosDB con atributos y comunicación Asistente → Catálogo.
 
-**Pasos (interfaz — pestaña «01 / Buscar»)**
+**Pasos (pestaña «01 / Buscar»)**
 
 1. Dejad vacíos: marca, nombre, precio máximo, valoración mínima.
 2. Pulsad **Buscar**.
@@ -142,15 +139,13 @@ Equivalente: `$env:PYTHONPATH = "."` y los mismos módulos `python -m agents.*` 
 
 **Evidencia:** Captura de la lista o log `[catalogo] Busqueda: {}`.
 
-> `assistant_demo` siempre intenta comprar si hay resultados; para este juego usad la **interfaz** (solo búsqueda).
-
 ---
 
 ### JP-02 — Filtros en cadena + historial Feedback
 
 **Objetivo:** Ver cómo se reducen resultados al añadir restricciones y que el **AgenteFeedback** registra cada consulta (Protocolo Consulta Catálogo).
 
-**Pasos (interfaz — misma pestaña, sin recargar entre pasos si queréis ver el efecto “dinámico”)**
+**Pasos (pestaña «01 / Buscar», sin recargar entre pasos si queréis ver el efecto dinámico)**
 
 | Paso | Marca | Precio máx. | Nombre | Resultado esperado |
 |------|-------|-------------|--------|-------------------|
@@ -166,13 +161,6 @@ Equivalente: `$env:PYTHONPATH = "."` y los mismos módulos `python -m agents.*` 
   - `src/data/catalog_searches.json` (traza local del catálogo)
 
 **Evidencia:** Últimas líneas de `searches.json` con `brand`, `max_price`, `name` y recuento de productos.
-
-**CLI (paso 3, incluye compra opcional):**
-
-```bash
-python -m assistant_demo --brand Apple --max-price 1000 --search-name iphone \
-  --city Barcelona --delivery-dist 130 --priority 2 --payment-card 4111111111111111
-```
 
 ---
 
@@ -200,18 +188,11 @@ python -m assistant_demo --brand Apple --max-price 1000 --search-name iphone \
 
 **Objetivo:** Añadir productos al carrito, comprar en Barcelona con distancia logística 130; el comerciante elige **CL-BCN** por proximidad y el CL comprueba stock.
 
-**Pasos (interfaz — recomendado para carrito)**
+**Pasos**
 
 1. **01 / Buscar:** `iphone` → seleccionar `P-IPHONE19` → **Añadir al carrito** (podéis añadir un segundo interno si queréis varias líneas).
-2. **02 / Pedido:** ciudad `Barcelona`, calle `Carrer Mallorca 401`, CP `08013`, **Distancia logística entrega** `130`, prioridad `2` (normal), tarjeta demo.
+2. **02 / Pedido:** ciudad `Barcelona`, calle `Carrer Mallorca 401`, CP `08013`, **Distancia logística entrega** `130`, prioridad **2 — Normal (3 días)**, método tarjeta, PAN `4111111111111111`.
 3. Confirmar pedido.
-
-**CLI (un producto):**
-
-```bash
-python -m assistant_demo --search-name iphone --city Barcelona \
-  --delivery-dist 130 --priority 2 --payment-card 4111111111111111
-```
 
 **Resultado esperado**
 
@@ -228,19 +209,16 @@ python -m assistant_demo --search-name iphone --city Barcelona \
 
 **Pasos**
 
-```bash
-python -m assistant_demo --search-name iphone --city Barcelona \
-  --delivery-dist 130 --priority 1 --payment-card 4111111111111111
-```
-
-O en interfaz: prioridad de entrega **Urgente (1)**.
+1. **01 / Buscar:** `iphone` → añadir `P-IPHONE19` al carrito.
+2. **02 / Pedido:** Barcelona, `Carrer Mallorca 401`, CP `08013`, distancia `130`, prioridad **1 — Urgente (1 día)**, tarjeta demo.
+3. Confirmar pedido.
 
 **Resultado esperado**
 
-- En consola / ticket: `Fecha estimada` a **1 día** vista (oferta CFP con `dias=1` en log del transportista).
+- En ticket: **Entrega estimada** a **1 día** vista (oferta CFP con `dias=1` en log del transportista).
 - El lote usa debounce corto (`LOT_URGENT_DEBOUNCE`, ~5 s) si consultáis `pending_lotes` justo después.
 
-**Evidencia:** Línea `Fecha estimada` en `assistant_demo` o bloque «Ticket envío tienda / logística» en iface.
+**Evidencia:** Bloque «Ticket envío tienda / logística» con fecha de entrega ≤ 1 día.
 
 ---
 
@@ -250,7 +228,7 @@ O en interfaz: prioridad de entrega **Urgente (1)**.
 
 **Pasos**
 
-1. Ejecutad JP-04 con **prioridad 3** (o 2) y **no** esperéis 35 s.
+1. Repetid JP-04 con **prioridad 3 — Económico (5 días)** (o prioridad 2) y **no** esperéis 35 s.
 2. Inmediatamente:
 
 ```bash
@@ -268,26 +246,26 @@ curl -s http://127.0.0.1:9002/info | python3 -m json.tool
 
 ### JP-07 — Dos compras simultáneas (misma ubicación)
 
-**Objetivo:** Dos pedidos desde el mismo destino comparten **lote** y **transportista**; cada pedido tiene **identificador distinto** (`pedido_id` / confirmación distinta).
+**Objetivo:** Dos pedidos desde el mismo destino comparten **lote** y **transportista**; cada pedido tiene **identificador distinto** (`pedido_id`).
 
 **Pasos**
 
-En **dos terminales**, casi a la vez (misma ciudad y `delivery-dist`):
+Abrid **dos pestañas** del navegador en `http://127.0.0.1:9010/iface` y confirmad casi a la vez (misma ciudad y distancia):
 
-```bash
-# Terminal A
-python -m assistant_demo --search-name batidora --city Barcelona \
-  --delivery-dist 130 --priority 3 --payment-card 4111111111111111
+**Pestaña A**
 
-# Terminal B (inmediatamente)
-python -m assistant_demo --search-name libro --city Barcelona \
-  --delivery-dist 130 --priority 3 --payment-card 4111111111111111
-```
+1. Buscar `batidora` → añadir `P-BATIDORA-MINI` al carrito.
+2. **02 / Pedido:** Barcelona, `Carrer Mallorca 401`, CP `08013`, dist `130`, prioridad **3**, tarjeta demo → confirmar.
+
+**Pestaña B (inmediatamente)**
+
+1. Buscar `libro` → añadir `P-LIBRO-RUST` al carrito.
+2. Mismos datos de entrega (Barcelona, dist `130`, prioridad **3**) → confirmar.
 
 **Resultado esperado**
 
 - Un solo `lote_id` en `pending_lotes` con **≥ 2** líneas / pedidos.
-- Tras el despacho: mismos transportista y lote en ambos tickets; **`Pedido:`** distinto en cada consola (códigos de envío / pedido distintos).
+- Tras el despacho: mismos transportista y lote en ambos tickets; **`Pedido:`** distinto en cada confirmación.
 
 **Evidencia:** `curl` a `9002/info` + captura de dos tickets con mismo `Lote:` y distinto `Pedido:`.
 
@@ -299,21 +277,19 @@ python -m assistant_demo --search-name libro --city Barcelona \
 
 **Pasos**
 
-1. Terminal A — pedido **no urgente** (prioridad 3):
+**Pestaña A — pedido no urgente (prioridad 3)**
+
+1. Buscar `batidora` → carrito → pedido Barcelona dist `130`, prioridad **3** → confirmar.
+
+**Pestaña B — en los 5 s siguientes, pedido urgente (prioridad 1)**
+
+1. Buscar `iphone` → carrito → pedido Barcelona dist `130`, prioridad **1** → confirmar.
+
+2. Consultad `pending_lotes`:
 
 ```bash
-python -m assistant_demo --search-name batidora --city Barcelona \
-  --delivery-dist 130 --priority 3 --payment-card 4111111111111111
+curl -s http://127.0.0.1:9002/info | python3 -m json.tool
 ```
-
-2. En los **5 s siguientes**, terminal B — pedido **urgente** (prioridad 1):
-
-```bash
-python -m assistant_demo --search-name iphone --city Barcelona \
-  --delivery-dist 130 --priority 1 --payment-card 4111111111111111
-```
-
-3. Consultad `pending_lotes`: el lote debe mostrar `prioridad: 1` y `ready_for_dispatch` antes que si solo hubiera pedidos con prioridad 3.
 
 **Resultado esperado**
 
@@ -327,19 +303,11 @@ python -m assistant_demo --search-name iphone --city Barcelona \
 
 **Objetivo:** Un solo pedido mezcla línea **interna** (CL) y **externa** (vendedor envía).
 
-**Pasos (interfaz)**
+**Pasos**
 
 1. Buscar `iphone` → añadir `P-IPHONE19` al carrito.
 2. Buscar `cargador` → añadir `P-CARGADOR-GAN` al carrito.
-3. Pedido a Barcelona, `dist` 130, prioridad 2, confirmar.
-
-**CLI (dos búsquedas fusionadas):**
-
-```bash
-python -m assistant_demo --search-name iphone --extra-search-name cargador \
-  --buy-results 2 --product-index 1 --city Barcelona --delivery-dist 130 \
-  --priority 2 --payment-card 4111111111111111
-```
+3. **02 / Pedido:** Barcelona, dist `130`, prioridad **2**, tarjeta demo → confirmar.
 
 **Resultado esperado**
 
@@ -347,7 +315,7 @@ python -m assistant_demo --search-name iphone --extra-search-name cargador \
 - Log vendedor 9008: `ComunicarProductosExternosPedidos`.
 - Log CL-BCN: actividad solo para la línea interna.
 
-**Evidencia:** Resumen de pedido en iface con dos bloques de envío.
+**Evidencia:** Resumen de pedido en interfaz con dos bloques de envío.
 
 ---
 
@@ -358,11 +326,11 @@ python -m assistant_demo --search-name iphone --extra-search-name cargador \
 **Pasos**
 
 1. Completad al menos JP-04 o JP-05.
-2. Interfaz → pestaña **«06 / Pedidos»** → **Actualizar**.
+2. Interfaz → pestaña **«06 / Pedidos»** → **Actualizar histórico**.
 
 **Resultado esperado**
 
-- Lista con `pedido_id`, fecha, importe y enlaces a devolución/valoración.
+- Lista con `pedido_id`, fecha, importe y líneas compradas.
 - Tras reiniciar solo el asistente (comerciante y `data/completed_orders/` intactos), el histórico sigue visible si el comerciante responde a la consulta.
 
 **Evidencia:** Captura pestaña 06 + ficheros en `src/data/completed_orders/`.
@@ -375,12 +343,8 @@ python -m assistant_demo --search-name iphone --extra-search-name cargador \
 
 **Pasos**
 
-```bash
-python -m assistant_demo --search-name batidora --city Barcelona \
-  --delivery-dist 130 --priority 2 --payment-card 4111111111111111
-```
-
-(`P-BATIDORA-MINI`, 1,20 kg.)
+1. **01 / Buscar:** `batidora` → añadir `P-BATIDORA-MINI` (1,20 kg) al carrito.
+2. **02 / Pedido:** Barcelona, dist `130`, prioridad **2**, tarjeta demo → confirmar.
 
 **Resultado esperado**
 
@@ -397,17 +361,15 @@ python -m assistant_demo --search-name batidora --city Barcelona \
 
 **Pasos**
 
-```bash
-python -m assistant_demo --search-name iphone --city Barcelona \
-  --delivery-dist 130 --priority 2 --payment-card 4111111111111111
-```
+1. **01 / Buscar:** `iphone` → añadir `P-IPHONE19` al carrito.
+2. **02 / Pedido:** Barcelona, dist `130`, prioridad **2**, tarjeta demo → confirmar.
 
 **Resultado esperado**
 
 - Suele ganar **TransportistaEco (9011)** por menor coste total (base baja + `tarifa_dia` 0,50 × 3 días).
 - Log: `dias=3` en la oferta.
 
-**Evidencia:** Log CL + línea `Coste envio` en ticket; comparar con JP-11 (mismo CL, distinto ganador según peso).
+**Evidencia:** Log CL + línea «Coste envío» en ticket; comparar con JP-11 (mismo CL, distinto ganador según peso).
 
 ---
 
@@ -417,11 +379,8 @@ python -m assistant_demo --search-name iphone --city Barcelona \
 
 **Pasos**
 
-```bash
-python -m assistant_demo --search-name iphone --city Madrid \
-  --street "Gran Via 28" --postal-code 28013 --delivery-dist 480 \
-  --priority 2 --payment-card 4111111111111111
-```
+1. **01 / Buscar:** `iphone` → añadir al carrito.
+2. **02 / Pedido:** ciudad `Madrid`, calle `Gran Via 28`, CP `28013`, **Distancia logística entrega** `480`, prioridad **2**, tarjeta demo → confirmar.
 
 **Resultado esperado**
 
@@ -441,12 +400,7 @@ python -m assistant_demo --search-name iphone --city Madrid \
 **Pasos**
 
 1. Arrancad `transportista_externo` (9014).
-2. Pedido estándar en Barcelona:
-
-```bash
-python -m assistant_demo --search-name iphone --city Barcelona \
-  --delivery-dist 130 --priority 2 --payment-card 4111111111111111
-```
+2. Pedido estándar en Barcelona: buscar `iphone`, carrito, Barcelona dist `130`, prioridad **2**, tarjeta demo → confirmar.
 
 **Resultado esperado**
 
@@ -466,22 +420,14 @@ python -m assistant_demo --search-name iphone --city Barcelona \
 **Pasos**
 
 1. Completad JP-04 (compra iPhone).
-2. Esperad **~60 s** (consola asistente 9010 o pestaña valoración / notificaciones).
-3. Valorad el producto (p. ej. 5 estrellas) desde la notificación o pestaña correspondiente.
+2. Esperad **~60 s** (log asistente 9010 o badge en pestaña **03 / Valoración**).
+3. Pestaña **03 / Valoración:** pulsad **Valorar este elemento** en la notificación pendiente (o rellenad ID pedido + `P-IPHONE19`), puntuación p. ej. 5 estrellas → **Enviar valoración**.
 4. Buscad de nuevo `iphone` en **01 / Buscar**.
 
 **Resultado esperado**
 
 - Log asistente: `PedirFeedback recibido`.
 - `valoracionMedia` de `P-IPHONE19` distinta a la previa.
-
-**Atajo de laboratorio (si el tiempo en defensa es corto):**
-
-```bash
-python -m feedback_demo --simulate-notify --product-id P-IPHONE19 --puntuacion 4
-```
-
-Luego repetid la búsqueda en iface.
 
 **Evidencia:** Captura antes/después de la media + entrada en catálogo persistido.
 
@@ -493,9 +439,9 @@ Luego repetid la búsqueda en iface.
 
 **Pasos**
 
-1. JP-02 paso 1 (marca **Apple**) o búsqueda `--brand Apple`.
+1. JP-02 paso 1: en **01 / Buscar**, marca **Apple** (resto vacío) → Buscar.
 2. Esperad **~2 min** (`recommendation-warmup` 30 s + `recommendation-period` 120 s).
-3. Interfaz → **Recomendaciones** → **Actualizar buzón**.
+3. **04 / Recomendaciones** → **Actualizar buzón**.
 
 **Resultado esperado**
 
@@ -509,20 +455,13 @@ Luego repetid la búsqueda en iface.
 
 ### JP-17 — Recomendación proactiva tras compra
 
-**Objetivo:** Tras una compra, se recomiendan productos similares a los intereses.
+**Objetivo:** Tras una compra, se recomiendan productos similares a los intereses del usuario.
 
 **Pasos**
 
 1. Completad JP-04.
-2. Esperad el periodo de recomendación (~2 min) o forzad con compra reciente y buzón actualizado.
-3. Revisad pestaña **Recomendaciones**.
-
-**CLI auxiliar:**
-
-```bash
-python -m assistant_demo --search-name iphone --show-recommendations \
-  --payment-card 4111111111111111
-```
+2. Opción A: esperad el periodo de recomendación (~2 min) y **Actualizar buzón** en **04 / Recomendaciones**.
+3. Opción B (inmediato): **04 / Recomendaciones** → **Pedir ahora al feedback**.
 
 **Resultado esperado**
 
@@ -540,18 +479,15 @@ python -m assistant_demo --search-name iphone --show-recommendations \
 
 **Pasos**
 
-```bash
-python -m devolucion_demo --search-name iphone \
-  --motivo "Pantalla con defecto de fabrica" --payment-card 4111111111111111
-```
-
-O interfaz → devolución sobre un pedido de JP-04 con motivo «Producto defectuoso».
+1. Completad JP-04 y anotad `pedido_id` e ID producto (`P-IPHONE19`) desde el ticket o pestaña **06 / Pedidos**.
+2. **05 / Devoluciones:** ID pedido, ID producto, motivo **«Producto defectuoso»** → **Solicitar devolución**.
 
 **Resultado esperado**
 
-- Devolución **aceptada**; log agente devolución (9009) y reembolso simulado.
+- Devolución **aceptada** en la interfaz (reembolso, recogida, instrucciones).
+- Log agente devolución (9009) y reembolso simulado.
 
-**Evidencia:** Salida de `devolucion_demo` o confirmación en UI.
+**Evidencia:** Confirmación en UI (bloque «Devolución aceptada»).
 
 ---
 
@@ -559,7 +495,7 @@ O interfaz → devolución sobre un pedido de JP-04 con motivo «Producto defect
 
 **Objetivo:** Impedir la devolución cuando el motivo **«No satisface expectativas»** y la **fecha de recepción** supera los **15 días** (política implementada en `agente_devolucion` y validación en interfaz).
 
-**Pasos (interfaz — pestaña devolución)**
+**Pasos (pestaña «05 / Devoluciones»)**
 
 1. Elegid un pedido completado (JP-04).
 2. Motivo: **«No satisface expectativas»**.
@@ -568,7 +504,7 @@ O interfaz → devolución sobre un pedido de JP-04 con motivo «Producto defect
 
 **Resultado esperado**
 
-- Mensaje de error / solicitud **denegada** (UI o `failure` ACL).
+- Mensaje de error / solicitud **denegada** en la interfaz.
 - Texto referente al plazo de 15 días.
 
 **Evidencia:** Captura del mensaje de denegación (sin reembolso).
@@ -593,7 +529,7 @@ curl -s http://127.0.0.1:9000/info | python3 -m json.tool
 
 1. En `data/catalog.ttl`: `cantidadDisponible 0` para un producto solo en CL-BCN; mantener stock en CL-MAD.
 2. Reiniciar catálogo y CLs.
-3. Pedido con `delivery-dist` que prefiera BCN pero stock solo en MAD.
+3. Pedido con `delivery-dist` que prefiera BCN pero stock solo en MAD (interfaz, pestaña Pedido).
 
 **Resultado esperado:** Pedido aceptado vía **CL-MAD** tras skip/fallo de BCN.
 

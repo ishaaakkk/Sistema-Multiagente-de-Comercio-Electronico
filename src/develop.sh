@@ -107,10 +107,8 @@ start_agent "AsistenteVirtual" "$PYTHON" -m agents.asistente --port 9010 --dir "
 
 echo
 echo "Agents are running."
-echo "Run the demo in another terminal with:"
-echo "  cd $SCRIPT_DIR && PYTHONPATH=$SCRIPT_DIR $PYTHON -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm"
-echo "  cd $SCRIPT_DIR && PYTHONPATH=$SCRIPT_DIR $PYTHON -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm"
-echo "  Interfaz web: http://127.0.0.1:9010/iface"
+echo "Interfaz web: http://127.0.0.1:9010/iface"
+echo "Juegos de prueba: ver JUEGOS_PRUEBA.md"
 echo
 read -r -n 1 -s -p "Press any key to stop all agents..."
 echo
