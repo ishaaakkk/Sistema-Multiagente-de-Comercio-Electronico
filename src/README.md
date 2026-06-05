@@ -29,7 +29,7 @@ Ejemplo distribuido (en cada maquina):
 DIR_HOST=<ip-directorio> HOSTADDR=<ip-esta-maquina> ./distributed.sh <agente> [puerto]
 ```
 
-Guia completa: [doc/distributed-demo.md](../doc/distributed-demo.md)
+Guia completa: [README.md](../README.md#ejecucion-distribuida)
 
 Agentes soportados por `distributed.sh`:
 

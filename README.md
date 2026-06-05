@@ -7,14 +7,12 @@ comercio electronico.
 
 - `ontology/`: ontologia OWL/RDF del dominio de comercio electronico.
   - `comercio_electronico.ttl`: ontologia principal en Turtle.
-  - `comercio_electronico.properties`: metadatos auxiliares generados por la herramienta de ontologias.
+  - `catalog-v001.xml`: catalogo XML auxiliar para herramientas OWL.
 - `doc/`: documentacion generada para entregar como anexo.
   - `memoria.md`: memoria redactada del proyecto.
-  - `distributed-demo.md`: guia de despliegue en varias maquinas o contenedores.
-  - `test-scenarios.md`: escenarios de prueba complementarios.
-  - `ontology/Pylode/doc_ontology.html`: documentacion automatica de la ontologia generada con PyLODE.
-  - `ontology/Pylode/doc_ontology.docx`: version Word de la documentacion automatica.
-  - `pdtool/defaultreport_2026-05-26/`: reporte HTML y diagramas generados desde PDT.
+  - `ontology/comercio_electronico.html`: documentacion automatica de la ontologia generada con PyLODE.
+  - `ontology/comercio_electronico.docx`: version Word de la documentacion automatica.
+  - `pdtool/defaultreport_2026-06-05/`: reporte HTML y diagramas generados desde PDT.
 - `src/`: implementacion Python del prototipo multiagente.
   - `develop.sh`: arranque del stack completo en local (recomendado).
   - `distributed.sh`: arranque de un solo agente para despliegue distribuido.
@@ -127,29 +125,62 @@ DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.10 bash src/develop.sh
 
 ## Ejecucion distribuida
 
-Para la demo en varias maquinas (criterio 3.6), usar `src/distributed.sh`
-en cada PC con la IP alcanzable de esa maquina:
+Para la demo en varias maquinas o contenedores (criterio 3.6), usar
+`src/distributed.sh`. Este script lanza **un solo agente** por ejecucion,
+exporta `PYTHONPATH` automaticamente y aplica los mismos parametros de lotes
+y timeouts que `develop.sh`.
 
 ```bash
-# Maquina del directorio (10.0.0.10)
-HOSTADDR=10.0.0.10 ./distributed.sh directorio 9000
-
-# Maquina de un centro logistico (10.0.0.11)
-DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.11 ./distributed.sh cl_bcn 9002
-
-# Financiero con proveedor de pagos en otra maquina
-DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.17 \
-  PROVEEDOR_HOSTADDR=10.0.0.16 ./distributed.sh financiero 9005
+cd src
+DIR_HOST=<ip-directorio> HOSTADDR=<ip-esta-maquina> ./distributed.sh <agente> [puerto]
 ```
 
-La guia completa con tabla de agentes, puertos y ejemplo Docker esta en
-`doc/distributed-demo.md`.
+El primer agente que debe arrancar es el directorio. El resto de maquinas
+deben indicar `DIR_HOST` para registrarse contra el directorio y `HOSTADDR`
+para anunciar una URL accesible desde la red:
 
-Transportista externo (opcional, puerto 9014):
+| Maquina | Comando |
+| --- | --- |
+| Directorio (10.0.0.10) | `HOSTADDR=10.0.0.10 ./distributed.sh directorio 9000` |
+| Comerciante (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh comerciante 9001` |
+| Catalogo (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh catalogo 9006` |
+| Feedback (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh feedback 9007` |
+| Centro logistico BCN (10.0.0.11) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.11 ./distributed.sh cl_bcn 9002` |
+| Centro logistico MAD (10.0.0.12) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.12 ./distributed.sh cl_mad 9012` |
+| Transportista Express (10.0.0.13) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.13 ./distributed.sh transportista_express 9003` |
+| Transportista Eco (10.0.0.14) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.14 ./distributed.sh transportista_eco 9011` |
+| Transportista externo (10.0.0.20, opcional) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.20 ./distributed.sh transportista_externo 9014` |
+| Proveedor de pagos (10.0.0.16) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.16 ./distributed.sh proveedor_pagos 9004` |
+| Financiero (10.0.0.17) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.17 PROVEEDOR_HOSTADDR=10.0.0.16 ./distributed.sh financiero 9005` |
+| Vendedor externo (10.0.0.18) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.18 ./distributed.sh vendedor_externo 9008` |
+| Devolucion (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./distributed.sh devolucion 9009` |
+| Asistente / UI (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./distributed.sh asistente 9010` |
 
-```bash
-DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.20 ./distributed.sh transportista_externo 9014
+Despues de arrancar los agentes, abrir la interfaz en:
+
+```text
+http://10.0.0.19:9010/iface
 ```
+
+Variables utiles:
+
+| Variable | Uso |
+| --- | --- |
+| `DIR_HOST` | IP/host del directorio. |
+| `DIR_PORT` | Puerto del directorio, por defecto `9000`. |
+| `DIR_URL` | URL completa del directorio; sobrescribe `DIR_HOST`/`DIR_PORT`. |
+| `HOSTADDR` | IP/host con el que el agente se anuncia al directorio. |
+| `PROVEEDOR_HOSTADDR` | IP/host del proveedor de pagos cuando no comparte maquina con financiero. |
+| `FEEDBACK_DELAY` | Retardo antes de pedir valoracion. |
+| `RECOMMENDATION_PERIOD` | Periodo de recomendaciones proactivas. |
+| `TRANSPORTISTA_PREU` / `TRANSPORTISTA_DIES` | Tarifa fija y dias del transportista externo. |
+
+Agentes soportados por `distributed.sh`:
+
+`directorio`, `transportista_express`, `transportista_eco`,
+`transportista_externo`, `cl_bcn`, `cl_mad`, `proveedor_pagos`,
+`financiero`, `feedback`, `vendedor_externo`, `comerciante`, `catalogo`,
+`devolucion`, `asistente`.
 
 ## Ejecucion en Windows PowerShell
 
@@ -217,8 +248,6 @@ PYTHONPATH=src python -m unittest discover -s src/tests -v
 | --- | --- |
 | `doc/memoria.md` | Memoria completa del proyecto |
 | `src/JUEGOS_PRUEBA.md` | Juegos de prueba reproducibles para la defensa |
-| `doc/distributed-demo.md` | Despliegue en varias maquinas |
-| `doc/test-scenarios.md` | Escenarios de prueba adicionales |
 | `src/README.md` | Guia rapida del directorio `src/` |
 
 ## Ontologia
@@ -229,19 +258,19 @@ La ontologia principal del proyecto se encuentra en:
 
 La documentacion automatica generada con PyLODE esta disponible como anexo:
 
-- `doc/ontology/Pylode/doc_ontology.html`
-- `doc/ontology/Pylode/doc_ontology.docx`
+- `doc/ontology/comercio_electronico.html`
+- `doc/ontology/comercio_electronico.docx`
 
 Para regenerar la documentacion HTML:
 
 ```bash
-.venv/bin/pylode ontology/comercio_electronico.ttl -o doc/ontology/Pylode/doc_ontology.html
+pylode ontology/comercio_electronico.ttl -o doc/ontology/comercio_electronico.html -c true -s -p ontpub
 ```
 
 Para generar la version Word a partir del HTML:
 
 ```bash
-pandoc doc/ontology/Pylode/doc_ontology.html -f html -t docx -o doc/ontology/Pylode/doc_ontology.docx
+pandoc doc/ontology/comercio_electronico.html -f html -t docx -o doc/ontology/comercio_electronico.docx
 ```
 
 Esta documentacion automatica sirve como anexo y no sustituye la seccion
