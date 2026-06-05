@@ -94,7 +94,7 @@ def create_app(
 ):
     """Crea la aplicación Flask del centro logístico.
 
-    Parámetros relevantes para la extensión avanzada #3 (multi-CL):
+    Parámetros del centro logístico (multi-CL):
         center_id: identificador del centro (CL-BCN, CL-MAD, ...).
         center_city: ciudad servida por el centro.
         stock_products: "*" (todos los productos logísticos), "auto" o lista "P-1,P-2".

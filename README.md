@@ -14,7 +14,7 @@ comercio electronico.
   - `test-scenarios.md`: escenarios de prueba complementarios.
   - `ontology/Pylode/doc_ontology.html`: documentacion automatica de la ontologia generada con PyLODE.
   - `ontology/Pylode/doc_ontology.docx`: version Word de la documentacion automatica.
-  - `pdtool/defaultreport_2026-05-19/`: reporte HTML y diagramas generados desde PDT.
+  - `pdtool/defaultreport_2026-05-26/`: reporte HTML y diagramas generados desde PDT.
 - `src/`: implementacion Python del prototipo multiagente.
   - `develop.sh`: arranque del stack completo en local (recomendado).
   - `distributed.sh`: arranque de un solo agente para despliegue distribuido.

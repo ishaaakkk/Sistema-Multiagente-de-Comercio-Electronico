@@ -468,7 +468,7 @@ def _discover_logistics_centers(
     fallback: list[str],
     requester: URIRef,
 ) -> list[str]:
-    """Descubre todos los centros logísticos registrados (extensión avanzada #3 multi-CL).
+    """Descubre todos los centros logísticos registrados (multi-CL).
 
     Si hay directorio, devuelve la lista de centros registrados como
     CENTRO_LOGISTICO; si no hay resultados usa la lista de fallback.
@@ -708,11 +708,10 @@ def _dispatch_to_logistics_ordered(
     pedido: URIRef,
     ordered_urls: list[str],
 ) -> tuple[list[Graph], list[URIRef]]:
-    """
-    Asignación greedy:
-    - se prueba CL más cercano primero
-    - si acepta → se asigna y se termina
-    - si no → siguiente CL
+    """Contacta centros logísticos en orden de proximidad.
+
+    Prueba el CL más cercano primero; si cubre las líneas pendientes,
+    termina. Si no, continúa con el siguiente hasta agotar líneas o CLs.
     """
     log("comerciante", "ENTRANDO EN DISPATCH LOGISTICS ORDERED")
     remaining_lines = list(logistics_graph.objects(pedido, ECSDI.pedidoTieneLinea))

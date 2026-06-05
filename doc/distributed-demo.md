@@ -92,14 +92,14 @@ networks:
 > ejecutar (`pip install -r src/requirements.txt`) o usa una imagen
 > intermedia que las precargue.
 
-## 4. Checklist de cosas que NO deben usar `127.0.0.1`
+## 4. Configuración de red
 
-- `develop.sh` (ya parametrizado) ✔
-- `distributed.sh` (lanzamiento por máquina) ✔
-- `--open` en todos los agentes (Flask bind 0.0.0.0) ✔
-- URLs anunciadas al directorio = `--hostaddr` ✔
+En despliegue distribuido use la IP alcanzable de cada máquina:
 
-Las URLs "fallback" hardcodeadas a `127.0.0.1` que aún aparecen en
-`agente_comerciante.py` y en otros agentes solo se usan cuando NO se
-pasa `--dir`. En la demo distribuida siempre se arranca con `--dir`,
-así que se ignoran.
+- `DIR_HOST`: IP donde corre el directorio.
+- `HOSTADDR`: IP de la máquina que ejecuta el agente.
+
+Los scripts `develop.sh` y `distributed.sh` arrancan los agentes con
+`--open` (Flask escucha en `0.0.0.0`) y `--hostaddr`, de modo que las
+URLs registradas en el directorio sean accesibles desde el resto de la
+red. Compruebe el registro en `http://<DIR_HOST>:9000/info`.

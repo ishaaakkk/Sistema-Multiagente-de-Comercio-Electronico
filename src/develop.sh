@@ -70,14 +70,14 @@ export ORDER_TIMEOUT
 
 start_agent "DirectoryService" "$PYTHON" -m agents.directorio --port "$DIR_PORT" --open --hostaddr "$HOSTADDR"
 sleep 1
-# Dos transportistas con tarifas distintas — extensión avanzada #1: el
-# centro logístico negocia Contract Net en paralelo y elige la mejor oferta.
+# Dos transportistas con tarifas distintas; el centro logístico negocia
+# Contract Net en paralelo y elige la mejor oferta.
 start_agent "TransportistaExpress" "$PYTHON" -m agents.transportista --port 9003 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 4.50 --tarifa-kg 1.75 --tarifa-dia 0.80
 sleep 0.5
 start_agent "TransportistaEco" "$PYTHON" -m agents.transportista --port 9011 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --tarifa-base 3.00 --tarifa-kg 2.50 --tarifa-dia 0.50
 sleep 0.5
-# Dos centros logísticos — extensión #3: el comerciante contacta CLs en orden
-# por proximidad |dist_CL - dist_entrega| (fan-out secuencial greedy).
+# Dos centros logísticos; el comerciante contacta cada CL en orden de
+# proximidad a la dirección de entrega (|dist_CL - dist_entrega|).
 # Cada CL ofrece todos los productos logísticos del catálogo (defecto --stock-products *).
 start_agent "CentroLogisticoBCN" "$PYTHON" -m agents.agente_logistico --port 9002 --dir "$DIR_URL" --open --hostaddr "$HOSTADDR" --center-id CL-BCN --center-city Barcelona --dist 130
 sleep 0.5
