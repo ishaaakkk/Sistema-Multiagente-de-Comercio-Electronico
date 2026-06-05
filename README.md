@@ -9,7 +9,6 @@ comercio electronico.
   - `comercio_electronico.ttl`: ontologia principal en Turtle.
   - `catalog-v001.xml`: catalogo XML auxiliar para herramientas OWL.
 - `doc/`: documentacion generada para entregar como anexo.
-  - `memoria.md`: memoria redactada del proyecto.
   - `ontology/comercio_electronico.html`: documentacion automatica de la ontologia generada con PyLODE.
   - `ontology/comercio_electronico.docx`: version Word de la documentacion automatica.
   - `pdtool/defaultreport_2026-06-05/`: reporte HTML y diagramas generados desde PDT.
@@ -246,7 +245,6 @@ PYTHONPATH=src python -m unittest discover -s src/tests -v
 
 | Recurso | Contenido |
 | --- | --- |
-| `doc/memoria.md` | Memoria completa del proyecto |
 | `src/JUEGOS_PRUEBA.md` | Juegos de prueba reproducibles para la defensa |
 | `src/README.md` | Guia rapida del directorio `src/` |
 
@@ -273,8 +271,7 @@ Para generar la version Word a partir del HTML:
 pandoc doc/ontology/comercio_electronico.html -f html -t docx -o doc/ontology/comercio_electronico.docx
 ```
 
-Esta documentacion automatica sirve como anexo y no sustituye la seccion
-redactada de la memoria.
+Esta documentacion automatica sirve como anexo de referencia.
 
 ## Autores
 
