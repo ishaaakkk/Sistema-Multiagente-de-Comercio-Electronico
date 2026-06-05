@@ -1,8 +1,5 @@
 """Helpers compartidos de comunicación entre agentes.
 
-Centralizan dos utilidades que estaban duplicadas en casi todos los
-agentes:
-
 * `comm_url`: normaliza una URL base de un agente añadiéndole el sufijo
   `/comm` que es el endpoint estándar donde los agentes aceptan mensajes
   FIPA-ACL.

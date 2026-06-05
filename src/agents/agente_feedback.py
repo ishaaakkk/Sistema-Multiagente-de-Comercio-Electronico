@@ -496,9 +496,7 @@ def _materialize_recommendations_sparql(
     """Materializa el grafo de Recomendacion vía SPARQL CONSTRUCT (cap. 6).
 
     Construye primero un grafo semilla con los tuples (producto, score) y
-    aplica un CONSTRUCT para producir la respuesta normalizada. Esto evita
-    repartir la lógica de serialización por todo el código y se documenta
-    fácilmente en la memoria como uso real de SPARQL CONSTRUCT.
+    aplica un CONSTRUCT para producir la respuesta normalizada. 
     """
 
     seed = Graph()

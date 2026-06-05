@@ -559,8 +559,6 @@ O interfaz → devolución sobre un pedido de JP-04 con motivo «Producto defect
 
 **Objetivo:** Impedir la devolución cuando el motivo **«No satisface expectativas»** y la **fecha de recepción** supera los **15 días** (política implementada en `agente_devolucion` y validación en interfaz).
 
-> **Nota memoria:** El rechazo por plazo aplica al motivo *expectativas* con fecha de recepción explícita, no al motivo «defecto de fábrica» (sin límite de 15 días en la política actual). Ajustad la redacción del capítulo 8.4 si el evaluador debe ver exactamente este flujo.
-
 **Pasos (interfaz — pestaña devolución)**
 
 1. Elegid un pedido completado (JP-04).
