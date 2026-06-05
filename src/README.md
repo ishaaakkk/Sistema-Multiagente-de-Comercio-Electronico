@@ -1,119 +1,63 @@
-# README - Prototipo fase 3
+# README - Implementacion multiagente
 
-Este directorio contiene una implementacion preliminar alineada con la tercera fase de ECSDI.
+Este directorio contiene la implementacion Python del sistema multiagente de
+comercio electronico. La guia general del repositorio esta en
+[README.md](../README.md).
 
-Alcance implementado:
-
-- Busqueda de productos internos de la tienda mediante restricciones RDF: nombre, marca, precio y valoracion.
-- Compra simple de productos internos vendidos por la tienda.
-- Verificacion logistica de que las lineas con stock declarado se pueden servir desde un unico centro logistico con stock suficiente.
-- Planificacion de envio con negociacion de transporte y reserva de stock logistico.
-- Agente externo de transporte separado del centro logistico.
-- Cobro simulado del pedido y pagos a vendedores externos.
-- Registro de compras completadas para feedback y validacion de devoluciones.
-- Devolucion de productos comprados con consulta del pedido completado, recogida y reembolso simulado posterior.
-- Solicitud proactiva de feedback al asistente y recomendaciones basicas a partir de valoraciones.
-- Mensajes RDF con una envoltura FIPA-ACL minima y contenido definido con la ontologia del repositorio.
-
-Agentes del diseno PDT:
-
-- `AgenteCatalogo`: responde busquedas sobre el catalogo RDF en memoria y acepta altas `DarAltaProductoExterno`.
-- `AgenteComerciante`: atiende `RealizarPedido`, genera factura, coordina logistica, cobro, feedback y vendedores externos.
-- `AgenteLogistico`: selecciona un centro con stock suficiente, transforma el pedido en `LoteEnvio` y solicita presupuesto al transportista.
-- `AgenteFinanciero`: confirma cobros, reembolsos y pagos a vendedores externos.
-- `AgenteFeedback`: registra compras completadas y valoraciones.
-- `AgenteDevolucion`: valida solicitudes de devolucion contra pedidos completados, simula recogida por mensajeria interna y solicita reembolso al financiero.
-
-Componentes auxiliares:
-
-- `DirectoryService`: registro y descubrimiento para poder desplegar componentes en procesos o maquinas distintas.
-- `Transportista`: responde a `DemanarOfertaTransport` con una `OfertaTransport`.
-- `ProveedorPagos`: pasarela externa simulada para cobros, reembolsos y pagos.
-- `VendedorExterno`: anuncia productos externos al catalogo y recibe avisos de envio de los productos que gestiona.
-- `AsistenteVirtual`: cliente/interfaz que actua como intermediario del usuario.
-- `assistant_demo.py`: cliente de prueba que actua como `AsistenteVirtual`.
-- `devolucion_demo.py`: cliente de prueba que compra un producto y solicita su devolucion.
-
-Limitaciones de momento:
-
-- El cobro, los reembolsos y los pagos externos se simulan en memoria.
-- Las recomendaciones son basicas y se calculan en memoria a partir de compras/valoraciones registradas.
-- El servicio de directorio se comunica mediante RDF/FIPA-ACL, pero el registro sigue siendo en memoria; los agentes envian `request` con acciones `DSO.RegistrarAgente`, `DSO.BuscarAgente`, `DSO.BuscarTodosAgentes` y `DSO.EliminarAgente`.
-- El catalogo de datos es pequeno y esta generado en codigo para facilitar la demo; las reservas logisticas se guardan en `src/data`.
-- La seleccion de transportista es simple, aunque ya admite varios transportistas registrados.
-
-Ejecucion local:
+## Arranque rapido
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r src/requirements.txt
-
-PYTHONPATH=src python -m agents.transportista --port 9003
-PYTHONPATH=src python -m agents.agente_logistico --port 9002 --transport-url http://127.0.0.1:9003/comm
-PYTHONPATH=src python -m agents.agente_financiero --port 9005
-PYTHONPATH=src python -m agents.agente_feedback --port 9007
-PYTHONPATH=src python -m agents.vendedor_externo --port 9008
-PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --logistics-url http://127.0.0.1:9002/comm --financiero-url http://127.0.0.1:9005/comm --feedback-url http://127.0.0.1:9007/comm --vendedor-externo-url http://127.0.0.1:9008/comm
-PYTHONPATH=src python -m agents.agente_catalogo --port 9006
-PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --shop-url http://127.0.0.1:9001/comm --financiero-url http://127.0.0.1:9005/comm
-PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
-PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
-```
-
-Con servicio de directorio:
-
-```bash
-PYTHONPATH=src python -m agents.directorio --port 9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --open --hostaddr 127.0.0.1
-PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
-PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
-```
-
-Tambien se puede levantar todo el stack local con:
-
-```bash
+# Desde la raiz del repo, con venv activado:
 cd src
 bash develop.sh
 ```
 
-**Juegos de prueba para la entrega:** ver [JUEGOS_PRUEBA.md](JUEGOS_PRUEBA.md) (escenarios reproducibles, evidencias y justificación).
+Interfaz web: `http://127.0.0.1:9010/iface`
 
-Para una demostracion distribuida, cada agente puede arrancarse en una maquina distinta usando `--open --hostaddr <ip>` y pasando `--dir http://<ip-directorio>:9000`.
+## Scripts de despliegue
 
+| Script | Uso |
+| --- | --- |
+| `develop.sh` | Levanta el stack completo en la maquina actual |
+| `distributed.sh` | Levanta **un solo agente** para despliegue en varias maquinas |
 
-Update, en windows:
-.\.venv\Scripts\Activate.ps1
+Ejemplo distribuido (en cada maquina):
 
-Componentes:
-$env:PYTHONPATH="src"; python -m agents.directorio --port 9000
-$env:PYTHONPATH="src"; python -m agents.transportista --port 9003 --dir http://127.0.0.1:9000 --tarifa-base 2.00 --tarifa-kg 2.50 --tarifa-dia 0.20 --verbose
-$env:PYTHONPATH="src"; python -m agents.transportista --port 9011 --dir http://127.0.0.1:9000 --tarifa-base 8.00 --tarifa-kg 1.00 --tarifa-dia 2.00 --verbose
-$env:PYTHONPATH="src"; python -m agents.proveedor_pagos --port 9004 --dir http://127.0.0.1:9000 --verbose
+```bash
+DIR_HOST=<ip-directorio> HOSTADDR=<ip-esta-maquina> ./distributed.sh <agente> [puerto]
+```
 
-!!!! 
-$env:PYTHONPATH = "." 
-python -m agents.transportista_externo --port 9014 --preu 5.50 --dies 3 --dir http://127.0.0.1:9000
-!!!
+Guia completa: [doc/distributed-demo.md](../doc/distributed-demo.md)
 
-$env:PYTHONPATH="src"; python -m agents.agente_logistico --port 9002 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_financiero --port 9005 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_comerciante --port 9001 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_catalogo --port 9006 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_feedback --port 9007 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.vendedor_externo --port 9008 --dir http://127.0.0.1:9000 --verbose
-$env:PYTHONPATH="src"; python -m agents.agente_devolucion --port 9009 --dir http://127.0.0.1:9000 --verbose
+Agentes soportados por `distributed.sh`:
 
-Demo:
-$env:PYTHONPATH="src"; python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
-$env:PYTHONPATH="src"; python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
-$env:PYTHONPATH="src"; python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
+`directorio`, `transportista_express`, `transportista_eco`,
+`transportista_externo`, `cl_bcn`, `cl_mad`, `proveedor_pagos`,
+`financiero`, `feedback`, `vendedor_externo`, `comerciante`, `catalogo`,
+`devolucion`, `asistente`
 
-$env:PYTHONPATH="src"; python -m agents.asistente --port 9010
+## Clientes de prueba (CLI)
+
+```bash
+PYTHONPATH=. python -m assistant_demo \
+  --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
+
+PYTHONPATH=. python -m feedback_demo \
+  --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+
+PYTHONPATH=. python -m devolucion_demo \
+  --catalog-url http://127.0.0.1:9006/comm \
+  --shop-url http://127.0.0.1:9001/comm \
+  --devolucion-url http://127.0.0.1:9009/comm
+```
+
+## Juegos de prueba
+
+Escenarios reproducibles para la entrega y defensa:
+[JUEGOS_PRUEBA.md](JUEGOS_PRUEBA.md)
+
+## Tests
+
+```bash
+PYTHONPATH=. python -m unittest discover -s tests -v
+```
