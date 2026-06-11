@@ -125,62 +125,208 @@ DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.10 bash src/develop.sh
 
 ## Ejecucion distribuida
 
-Para la demo en varias maquinas o contenedores, usar
-`src/distributed.sh`. Este script lanza **un solo agente** por ejecucion,
-exporta `PYTHONPATH` automaticamente y aplica los mismos parametros de lotes
-y timeouts que `develop.sh`.
+Para ejecutar los agentes en varios ordenadores, todos deben estar en la misma
+red y poder acceder al ordenador del directorio. La ejecucion completa consiste
+en abrir una terminal por agente y arrancarlos en el orden indicado. En local se
+puede probar igual usando `127.0.0.1` como IP de todos los agentes.
+
+La regla basica de IPs es:
+
+- `DIR_HOST`: IP del ordenador donde corre `DirectoryService`.
+- `HOSTADDR`: IP del ordenador donde se esta arrancando ese agente.
+- `PROVEEDOR_HOSTADDR`: IP del proveedor de pagos, solo si `AgenteFinanciero`
+  esta en otra maquina.
+
+En Linux se puede ver la IP de cada maquina con:
 
 ```bash
-cd src
-DIR_HOST=<ip-directorio> HOSTADDR=<ip-esta-maquina> ./distributed.sh <agente> [puerto]
+hostname -I
 ```
 
-El primer agente que debe arrancar es el directorio. El resto de maquinas
-deben indicar `DIR_HOST` para registrarse contra el directorio y `HOSTADDR`
-para anunciar una URL accesible desde la red:
+Desde la raiz del repositorio (`practica-ecsdi`), usar `bash src/distributed.sh`
+para evitar problemas de permisos de ejecucion. Los agentes que necesitan una
+URL fija de otro agente que aun no ha arrancado se lanzan directamente con
+`python -m`.
 
-| Maquina | Comando |
-| --- | --- |
-| Directorio (10.0.0.10) | `HOSTADDR=10.0.0.10 ./distributed.sh directorio 9000` |
-| Comerciante (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh comerciante 9001` |
-| Catalogo (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh catalogo 9006` |
-| Feedback (10.0.0.15) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.15 ./distributed.sh feedback 9007` |
-| Centro logistico BCN (10.0.0.11) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.11 ./distributed.sh cl_bcn 9002` |
-| Centro logistico MAD (10.0.0.12) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.12 ./distributed.sh cl_mad 9012` |
-| Transportista Express (10.0.0.13) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.13 ./distributed.sh transportista_express 9003` |
-| Transportista Eco (10.0.0.14) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.14 ./distributed.sh transportista_eco 9011` |
-| Transportista externo (10.0.0.20, opcional) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.20 ./distributed.sh transportista_externo 9014` |
-| Proveedor de pagos (10.0.0.16) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.16 ./distributed.sh proveedor_pagos 9004` |
-| Financiero (10.0.0.17) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.17 PROVEEDOR_HOSTADDR=10.0.0.16 ./distributed.sh financiero 9005` |
-| Vendedor externo (10.0.0.18) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.18 ./distributed.sh vendedor_externo 9008` |
-| Devolucion (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./distributed.sh devolucion 9009` |
-| Asistente / UI (10.0.0.19) | `DIR_HOST=10.0.0.10 HOSTADDR=10.0.0.19 ./distributed.sh asistente 9010` |
+Ejemplo suponiendo:
 
-Despues de arrancar los agentes, abrir la interfaz en:
+- Directorio, PC1: `10.0.0.1`
+- Transportistas, PC2/PC3/PC4: `10.0.0.2`, `10.0.0.3`, `10.0.0.4`
+- Centros logisticos, PC5/PC6: `10.0.0.5`, `10.0.0.6`
+- Proveedor de pagos, PC7: `10.0.0.7`
+- Financiero, PC8: `10.0.0.8`
+- Feedback, PC9: `10.0.0.9`
+- Comerciante, PC10: `10.0.0.10`
+- Catalogo, PC11: `10.0.0.11`
+- Vendedor externo, PC12: `10.0.0.12`
+- Devolucion, PC13: `10.0.0.13`
+- Asistente/UI, PC14: `10.0.0.14`
+
+En cada terminal:
+
+```bash
+source .venv/bin/activate
+```
+
+Orden recomendado de arranque. El orden evita que agentes como `catalogo`,
+`comerciante` o `asistente` caigan a URLs locales `127.0.0.1` al no encontrar
+sus dependencias en el directorio:
+
+Terminal 1 - Directorio (PC1):
+
+```bash
+HOSTADDR=10.0.0.1 bash src/distributed.sh directorio 9000
+```
+
+Terminal 2 - Transportistas (PC2, PC3 y opcional PC4):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.2 bash src/distributed.sh transportista_express 9003
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.3 bash src/distributed.sh transportista_eco 9011
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.4 bash src/distributed.sh transportista_externo 9014
+```
+
+Terminal 3 - Centros logisticos (PC5 y PC6):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.5 bash src/distributed.sh cl_bcn 9002
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.6 bash src/distributed.sh cl_mad 9012
+```
+
+Terminal 4 - Proveedor de pagos (PC7):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.7 bash src/distributed.sh proveedor_pagos 9004
+```
+
+Terminal 5 - Agente financiero (PC8):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.8 PROVEEDOR_HOSTADDR=10.0.0.7 bash src/distributed.sh financiero 9005
+```
+
+Terminal 6 - Agente feedback (PC9):
+
+```bash
+PYTHONPATH=src python -m agents.agente_feedback \
+  --port 9007 \
+  --dir http://10.0.0.1:9000 \
+  --open \
+  --hostaddr 10.0.0.9 \
+  --assistant-url http://10.0.0.14:9010
+```
+
+Este agente se lanza directamente con `python -m` porque `distributed.sh` no
+expone `--assistant-url`. Asi el feedback puede conocer la URL del asistente
+aunque el asistente arranque mas tarde.
+
+Terminal 7 - Catalogo (PC11):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.11 bash src/distributed.sh catalogo 9006
+```
+
+Terminal 8 - Comerciante (PC10):
+
+```bash
+PYTHONPATH=src python -m agents.agente_comerciante \
+  --port 9001 \
+  --dir http://10.0.0.1:9000 \
+  --open \
+  --hostaddr 10.0.0.10 \
+  --vendedor-externo-url http://10.0.0.12:9008
+```
+
+Este agente se lanza directamente con `python -m` porque el vendedor externo
+arranca despues y asi el comerciante no cae al fallback `127.0.0.1:9008`.
+
+Terminal 9 - Vendedor externo (PC12):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.12 bash src/distributed.sh vendedor_externo 9008
+```
+
+Terminal 10 - Agente devolucion (PC13):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.13 bash src/distributed.sh devolucion 9009
+```
+
+Terminal 11 - Asistente/UI (PC14):
+
+```bash
+DIR_HOST=10.0.0.1 HOSTADDR=10.0.0.14 bash src/distributed.sh asistente 9010
+```
+
+Despues se abre la interfaz en el navegador:
 
 ```text
-http://10.0.0.19:9010/iface
+http://10.0.0.14:9010/iface
 ```
 
-Variables utiles:
+Comprobaciones utiles:
 
-| Variable | Uso |
-| --- | --- |
-| `DIR_HOST` | IP/host del directorio. |
-| `DIR_PORT` | Puerto del directorio, por defecto `9000`. |
-| `DIR_URL` | URL completa del directorio; sobrescribe `DIR_HOST`/`DIR_PORT`. |
-| `HOSTADDR` | IP/host con el que el agente se anuncia al directorio. |
-| `PROVEEDOR_HOSTADDR` | IP/host del proveedor de pagos cuando no comparte maquina con financiero. |
-| `FEEDBACK_DELAY` | Retardo antes de pedir valoracion. |
-| `RECOMMENDATION_PERIOD` | Periodo de recomendaciones proactivas. |
-| `TRANSPORTISTA_PREU` / `TRANSPORTISTA_DIES` | Tarifa fija y dias del transportista externo. |
+- Directorio: `http://10.0.0.1:9000/status`
+- Feedback: `http://10.0.0.9:9007/status`
+- Asistente/UI: `http://10.0.0.14:9010/iface`
+- Si algun log muestra `127.0.0.1`, ese agente no descubrio su dependencia:
+  reiniciarlo despues de arrancar la dependencia correspondiente.
+- Si aparece `No route to host`, no es un error del codigo: las maquinas no se
+  ven por red o hay firewall.
 
-Agentes soportados por `distributed.sh`:
+Demos por consola opcionales:
 
-`directorio`, `transportista_express`, `transportista_eco`,
-`transportista_externo`, `cl_bcn`, `cl_mad`, `proveedor_pagos`,
-`financiero`, `feedback`, `vendedor_externo`, `comerciante`, `catalogo`,
-`devolucion`, `asistente`.
+Si se ejecutan contra agentes distribuidos, sustituir `127.0.0.1` por la IP de
+la maquina donde corre cada agente.
+
+Demo compra:
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m assistant_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm
+```
+
+La demo tambien acepta parametros para cambiar la busqueda y los datos de
+entrega:
+
+```bash
+PYTHONPATH=src python -m assistant_demo \
+  --search-name iphone \
+  --max-price 1300 \
+  --city Barcelona \
+  --street "Carrer Mallorca 401" \
+  --postal-code 08013 \
+  --country Espana \
+  --priority 1
+```
+
+Demo feedback (valoracion; con `--simulate-notify` no hace falta compra previa):
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --simulate-notify
+```
+
+Tras `assistant_demo`, valorar el pedido devuelto:
+
+```bash
+PYTHONPATH=src python -m feedback_demo --feedback-url http://127.0.0.1:9007/comm --pedido-id PED-XXXXXXXX --product-id P-IPHONE19
+```
+
+Estado de opiniones pendientes: `http://127.0.0.1:9007/status`
+
+Demo devolucion completa (compra un producto y solicita su devolucion):
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=src python -m devolucion_demo --catalog-url http://127.0.0.1:9006/comm --shop-url http://127.0.0.1:9001/comm --devolucion-url http://127.0.0.1:9009/comm
+```
+
+Para devolver un pedido ya completado que siga en memoria en la tienda:
+
+```bash
+PYTHONPATH=src python -m devolucion_demo --pedido-id PED-XXXXXXXX --product-id P-IPHONE19 --devolucion-url http://127.0.0.1:9009/comm
+```
 
 ## Ejecucion en Windows PowerShell
 
