@@ -3,6 +3,10 @@
 Proyecto de la practica de ECSDI basado en un sistema multiagente de
 comercio electronico.
 
+**English description:**
+
+This repository contains an educational multi-agent e-commerce prototype. It models catalog search, order orchestration, logistics coordination, payment processing, returns management, and customer feedback using RDF/OWL and FIPA-ACL over HTTP.
+
 ## Estructura del proyecto
 
 - `ontology/`: ontologia OWL/RDF del dominio de comercio electronico.
