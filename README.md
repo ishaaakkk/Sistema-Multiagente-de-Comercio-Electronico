@@ -1,6 +1,6 @@
-### Practica ECSDI
+### Practica de Ingeniería del Conocimiento y Sistemas Distribuidos Inteligentes
 
-Proyecto de la practica de ECSDI basado en un sistema multiagente de
+Proyecto de la practica de Ingeniería del Conocimiento y Sistemas Distribuidos Inteligentes, basado en un sistema multiagente de
 comercio electronico.
 
 **English description:**
